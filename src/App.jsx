@@ -34,6 +34,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { AdminAttendanceProvider } from "@/contexts/AdminAttendanceContext";
 import FeedsSection from "@/pages/FeedsSection";
 import EmployeeLeavePage from "./pages/EmployeeLeavePage";
+import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab"
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
@@ -134,7 +135,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-              <AttendanceSection />
+              {isEmployee ? <AttendanceTab /> : <AttendanceSection />}
             </Layout>
           </ProtectedRoute>
         }
