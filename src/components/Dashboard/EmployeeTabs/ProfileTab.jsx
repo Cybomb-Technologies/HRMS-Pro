@@ -14,7 +14,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 
 const ProfileTab = () => {
-  const { user } = useAuth();
+  const { user, token, logout } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,31 +38,52 @@ const ProfileTab = () => {
     if (employeeId) {
       fetchProfile(employeeId);
     }
-  }, [user]);
+  }, [user, token]);
 
   const fetchProfile = async (employeeId) => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:5000/api/employees/${employeeId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add authorization header only if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/employee-profiles/${employeeId}`, {
+        headers,
       });
       
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // Handle authentication errors
+        if (response.status === 401) {
+          if (errorData.code === 'TOKEN_EXPIRED') {
+            toast({
+              title: "Session Expired",
+              description: "Please login again.",
+              variant: "destructive",
+            });
+            if (logout) logout();
+            return;
+          }
+        }
+        
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
       
-      const employeeData = await response.json();
+      const result = await response.json();
       
-      if (employeeData) {
-        setProfile(employeeData);
-        setEditData(employeeData);
+      if (result.success && result.data.employee) {
+        setProfile(result.data.employee);
+        setEditData(result.data.employee);
       } else {
-        throw new Error('Failed to load profile data');
+        throw new Error(result.message || 'Failed to load profile data');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -93,24 +114,40 @@ const ProfileTab = () => {
       setSaving(true);
       const employeeId = getEmployeeId();
       
-      // Use employees endpoint for updating all data
-      const response = await fetch(`http://localhost:5000/api/employees/${employeeId}`, {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/employee-profiles/${employeeId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(editData),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        
+        if (response.status === 401) {
+          toast({
+            title: "Session Expired",
+            description: "Please login again.",
+            variant: "destructive",
+          });
+          if (logout) logout();
+          return;
+        }
+        
         throw new Error(errorData.message || 'Failed to update profile');
       }
 
       const result = await response.json();
       
-      if (result.employee) {
-        setProfile(result.employee);
+      if (result.success && result.data) {
+        setProfile(result.data);
         setIsEditing(false);
         toast({
           title: "Profile Updated",
@@ -162,25 +199,38 @@ const ProfileTab = () => {
       const formData = new FormData();
       formData.append('profilePicture', file);
 
-      // Use employees endpoint for profile picture upload
-      const response = await fetch(`http://localhost:5000/api/employees/${employeeId}/profile-picture`, {
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/employee-profiles/${employeeId}/profile-picture`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        
+        if (response.status === 401) {
+          toast({
+            title: "Session Expired",
+            description: "Please login again.",
+            variant: "destructive",
+          });
+          if (logout) logout();
+          return;
+        }
+        
         throw new Error(errorData.message || 'Failed to upload profile picture');
       }
 
       const result = await response.json();
       
       if (result.success) {
-        setProfile(prev => ({ 
-          ...prev, 
-          profilePicture: result.data.profilePicture,
-          profilePhoto: result.data.profilePicture 
-        }));
+        // Refresh profile to get updated data
+        fetchProfile(employeeId);
         toast({
           title: "Profile Picture Updated",
           description: "Your profile picture has been updated successfully.",
@@ -265,7 +315,7 @@ const ProfileTab = () => {
     }
   };
 
-  // Render non-editable field
+  // Render non-editable field (for basic info, personal info, and employment details)
   const renderReadOnlyField = (label, value, icon = null) => {
     return (
       <div className="flex justify-between items-start">
@@ -278,7 +328,7 @@ const ProfileTab = () => {
     );
   };
 
-  // Render editable field
+  // Render editable field (only for specific sections like About Me, Education, Work Experience)
   const renderEditableField = (label, value, field, type = 'text', options = []) => {
     if (!isEditing) {
       return (
@@ -337,7 +387,7 @@ const ProfileTab = () => {
 
   const renderSensitiveField = (label, value, field) => {
     const isVisible = showSensitiveInfo[field];
-    const canEdit = isEditing && isAdminOrHR();
+    const canEdit = isEditing;
     
     return (
       <div className="flex justify-between items-center">
@@ -367,6 +417,11 @@ const ProfileTab = () => {
     );
   };
 
+  const handleRetry = async () => {
+    const employeeId = getEmployeeId();
+    await fetchProfile(employeeId);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -384,8 +439,11 @@ const ProfileTab = () => {
           <div className="text-sm mt-2">{error}</div>
         </div>
         <div className="space-x-2">
-          <Button onClick={() => fetchProfile(getEmployeeId())} variant="outline">
+          <Button onClick={handleRetry} variant="outline">
             Retry
+          </Button>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            Refresh Page
           </Button>
         </div>
       </div>
@@ -396,7 +454,7 @@ const ProfileTab = () => {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center space-y-4">
         <div>No profile data found</div>
-        <Button onClick={() => fetchProfile(getEmployeeId())} variant="outline">
+        <Button onClick={handleRetry} variant="outline">
           Try Again
         </Button>
       </div>
@@ -408,7 +466,7 @@ const ProfileTab = () => {
 
   return (
     <div className="space-y-6">
-      {/* Profile Header Card */}
+      {/* Profile Header Card - NON-EDITABLE NAME SECTION */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>My Profile</CardTitle>
@@ -486,32 +544,10 @@ const ProfileTab = () => {
             </div>
 
             <div className="text-center md:text-left">
-              {isEditing ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input
-                      value={editData.firstName || ''}
-                      onChange={(e) => handleInputChange('firstName', e.target.value)}
-                      placeholder="First Name"
-                    />
-                    <Input
-                      value={editData.lastName || ''}
-                      onChange={(e) => handleInputChange('lastName', e.target.value)}
-                      placeholder="Last Name"
-                    />
-                  </div>
-                  <Input
-                    value={editData.designation || ''}
-                    onChange={(e) => handleInputChange('designation', e.target.value)}
-                    placeholder="Designation"
-                  />
-                </div>
-              ) : (
-                <>
-                  <h2 className="text-2xl font-bold">{fullName}</h2>
-                  <p className="text-muted-foreground">{profile.designation || 'Not specified'}</p>
-                </>
-              )}
+              {/* NON-EDITABLE NAME AND DESIGNATION */}
+              <h2 className="text-2xl font-bold">{fullName}</h2>
+              <p className="text-muted-foreground">{profile.designation || 'Not specified'}</p>
+              
               <div className="flex items-center gap-2 mt-2">
                 <Badge variant={profile.status === 'active' ? 'default' : 'secondary'}>
                   {profile.status || 'Unknown'}
@@ -527,7 +563,7 @@ const ProfileTab = () => {
 
       {/* Main Information Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Basic Information */}
+        {/* Basic Information - NON-EDITABLE */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -536,16 +572,16 @@ const ProfileTab = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {renderEditableField('Work Email', profile.email, 'email', 'email')}
-            {renderEditableField('Personal Email', profile.personal, 'personalemail', 'email')}
+            {renderReadOnlyField('Work Email', profile.email, Mail)}
             {renderReadOnlyField('Employee ID', profile.employeeId, User)}
-            {renderEditableField('Department', profile.department, 'department')}
-            {renderEditableField('Designation', profile.designation, 'designation')}
-            {renderEditableField('Role', profile.role, 'role')}
+            {renderReadOnlyField('Department', profile.department, Building)}
+            {renderReadOnlyField('Designation', profile.designation, Briefcase)}
+            {renderReadOnlyField('Role', profile.role, UserCheck)}
+            {renderReadOnlyField('Reporting Manager', profile.reportingManager, Users)}
           </CardContent>
         </Card>
 
-        {/* Employment Details */}
+        {/* Employment Details - NON-EDITABLE */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -555,16 +591,16 @@ const ProfileTab = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {renderReadOnlyField('Department', profile.department, Building)}
-            {renderEditableField('Location', profile.location, 'location')}
-            {renderEditableField('Date of Joining', formatDate(profile.dateOfJoining), 'dateOfJoining', 'date')}
-            {renderEditableField('Total Experience', profile.totalExperience, 'totalExperience')}
-            {renderEditableField('Employment Type', profile.employmentType, 'employmentType')}
-            {renderEditableField('Status', profile.status, 'status')}
+            {renderReadOnlyField('Location', profile.location, MapPin)}
+            {renderReadOnlyField('Date of Joining', formatDate(profile.dateOfJoining), Calendar)}
+            
+            {renderReadOnlyField('Employment Type', profile.employmentType, Briefcase)}
+            {renderReadOnlyField('Status', profile.status, UserCheck)}
           </CardContent>
         </Card>
       </div>
 
-      {/* Personal Information */}
+      {/* Personal Information - NON-EDITABLE */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -573,22 +609,15 @@ const ProfileTab = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {renderEditableField('Work Phone', profile.workPhone, 'workPhone', 'tel')}
-          {renderEditableField('Personal Mobile', profile.personalMobile, 'personalMobile', 'tel')}
-          {renderEditableField('Personal Email', profile.personalEmail, 'personalEmail', 'email')}
-          {renderEditableField('Date of Birth', formatDate(profile.dateOfBirth), 'dateOfBirth', 'date')}
-          {renderEditableField('Marital Status', profile.maritalStatus, 'maritalStatus', 'select', [
-            { value: 'Single', label: 'Single' },
-            { value: 'Married', label: 'Married' },
-            { value: 'Divorced', label: 'Divorced' },
-            { value: 'Widowed', label: 'Widowed' }
-          ])}
-          {renderEditableField('Extension', profile.extension, 'extension')}
-          {renderEditableField('Seating Location', profile.seatingLocation, 'seatingLocation')}
+          {renderReadOnlyField('Phone', profile.workPhone, Phone)}
+          {renderReadOnlyField('Personal Email', profile.personalEmail, Mail)}
+          {renderReadOnlyField('Date of Birth', formatDate(profile.dateOfBirth), Calendar)}
+          {renderReadOnlyField('Marital Status', profile.maritalStatus, User)}
+          {renderReadOnlyField('Gender', profile.gender, User)}
         </CardContent>
       </Card>
 
-      {/* Identity Information */}
+      {/* Identity Information - SENSITIVE DATA (Read-only for non-admin) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -625,7 +654,7 @@ const ProfileTab = () => {
         </CardContent>
       </Card>
 
-      {/* Contact Details */}
+      {/* Contact Details - EDITABLE */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -665,7 +694,7 @@ const ProfileTab = () => {
         </CardContent>
       </Card>
 
-      {/* Education Section */}
+      {/* Education Section - EDITABLE */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center">
@@ -749,7 +778,7 @@ const ProfileTab = () => {
         </CardContent>
       </Card>
 
-      {/* Work Experience Section */}
+      {/* Work Experience Section - EDITABLE */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center">
@@ -842,7 +871,7 @@ const ProfileTab = () => {
         </CardContent>
       </Card>
 
-      {/* About Me Section */}
+      {/* About Me Section - EDITABLE */}
       {(!isEditing && profile.aboutMe) || isEditing ? (
         <Card>
           <CardHeader>

@@ -1,4 +1,4 @@
-// middleware/authMiddleware.js - FIXED
+// middleware/authMiddleware.js - UPDATED
 const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
@@ -6,7 +6,10 @@ const authMiddleware = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      return res.status(401).json({ message: 'No token, authorization denied' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'No token, authorization denied' 
+      });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
@@ -18,14 +21,37 @@ const authMiddleware = (req, res, next) => {
       role: decoded.role,
       roles: decoded.roles || [decoded.role],
       teamId: decoded.teamId || 1,
-      email: decoded.email || 'user@example.com', // Fallback 
-      name: decoded.name || decoded.email?.split('@')[0] || 'User' // Fallback name
+      email: decoded.email || 'user@example.com',
+      name: decoded.name || decoded.email?.split('@')[0] || 'User',
+      employeeId: decoded.employeeId // Add this line
     };
     
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    res.status(401).json({ message: 'Token is not valid' });
+    
+    // Handle specific JWT errors
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Token expired, please login again',
+        code: 'TOKEN_EXPIRED'
+      });
+    }
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid token',
+        code: 'INVALID_TOKEN'
+      });
+    }
+    
+    res.status(401).json({ 
+      success: false,
+      message: 'Token is not valid',
+      code: 'AUTH_ERROR'
+    });
   }
 };
 
