@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
+import { GraduationCap} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -171,19 +172,27 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
               required 
             />
           </div>
-
           <div>
-            <Label htmlFor="personal email">Personal Email</Label>
+            <Label htmlFor="personalEmail">Personal Email</Label>
             <Input 
-              id="personal email" 
-              name="personal email" 
-              type="personal email" 
+              id="personalEmail" 
+              name="personalEmail" 
+              type="email" 
               value={formData.personalEmail} 
               onChange={handleChange} 
-              
+              placeholder="personal@example.com"
             />
           </div>
-
+          <div>
+            <Label htmlFor="reportingManager">Reporting Manager</Label>
+            <Input 
+              id="reportingManager" 
+              name="reportingManager" 
+              value={formData.reportingManager} 
+              onChange={handleChange} 
+              placeholder="e.g., John Smith"
+            />
+          </div>
           <div>
             <Label htmlFor="department">Department</Label>
             <Input 
@@ -215,7 +224,7 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
               name="workPhone" 
               value={formData.workPhone} 
               onChange={handleChange} 
-              placeholder="+1 (555) 123-4567"
+              placeholder="+91 9876543210 "
             />
           </div>
 
@@ -247,7 +256,22 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
               <option value="Separated">Separated</option>
             </select>
           </div>
-
+          <div>
+            <Label htmlFor="gender">Gender</Label>
+            <select 
+              id="gender" 
+              name="gender" 
+              value={formData.gender} 
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+              <option value="Prefer not to say">Prefer not to say</option>
+            </select>
+          </div>
           <div>
             <Label htmlFor="role">Role</Label>
             <Input 
@@ -462,214 +486,443 @@ const EmployeeViewDialog = ({ employee, isOpen, onClose }) => {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-2xl">
-            <User className="w-6 h-6" />
-            Employee Profile
-          </DialogTitle>
-          <DialogDescription>
-            Complete details for {employee.name}
-          </DialogDescription>
-        </DialogHeader>
+<Dialog open={isOpen} onOpenChange={onClose}>
+  <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2 text-2xl">
+        <User className="w-6 h-6" />
+        Employee Profile
+      </DialogTitle>
+      <DialogDescription>
+        Complete details for {employee.name}
+      </DialogDescription>
+    </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Header Section */}
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* Avatar and Basic Info */}
-            <div className="flex-1">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-2xl">
-                    {employee.name?.split(' ').map(n => n[0]).join('')}
-                  </span>
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-gray-900">{employee.name}</h2>
-                  <p className="text-gray-600">{employee.designation}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline" className={`flex items-center gap-1 ${getStatusColor(employee.status)}`}>
-                      {getStatusIcon(employee.status)}
-                      {employee.status?.replace('-', ' ')}
-                    </Badge>
-                    <Badge variant="secondary" className="bg-blue-50 text-blue-700">
-                      {employee.employeeId}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 gap-4 w-full lg:w-auto">
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border">
-                <Building className="w-6 h-6 text-blue-600 mb-2" />
-                <p className="text-sm text-gray-600">Department</p>
-                <p className="font-semibold text-gray-900">{employee.department}</p>
-              </div>
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border">
-                <MapPin className="w-6 h-6 text-green-600 mb-2" />
-                <p className="text-sm text-gray-600">Location</p>
-                <p className="font-semibold text-gray-900">{employee.location}</p>
-              </div>
-            </div>
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Avatar and Basic Info */}
+        <div className="flex-1">
+  <div className="flex items-center gap-4 mb-4">
+    {/* Profile Picture with better error handling */}
+    <div className="relative">
+      {employee.profilePicture || employee.profilePhoto ? (
+        <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white shadow-lg bg-gradient-to-r from-blue-500 to-purple-600">
+          <img 
+            src={`http://localhost:5000${employee.profilePicture || employee.profilePhoto}`}
+            alt={employee.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Hide the image and show fallback
+              e.target.style.display = 'none';
+            }}
+          />
+          {/* Fallback initials - always present but hidden by default */}
+          <div 
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ display: employee.profilePicture || employee.profilePhoto ? 'none' : 'flex' }}
+          >
+            <span className="text-white font-bold text-2xl">
+              {employee.name?.split(' ').map(n => n[0]).join('')}
+            </span>
           </div>
+        </div>
+      ) : (
+        /* Default avatar with initials when no profile picture */
+        <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+          <span className="text-white font-bold text-2xl">
+            {employee.name?.split(' ').map(n => n[0]).join('')}
+          </span>
+        </div>
+      )}
+    </div>
+    
+    <div className="flex-1">
+      <h2 className="text-2xl font-bold text-gray-900">{employee.name}</h2>
+      <p className="text-gray-600">{employee.designation}</p>
+      <div className="flex items-center gap-2 mt-2">
+        <Badge variant="outline" className={`flex items-center gap-1 ${getStatusColor(employee.status)}`}>
+          {getStatusIcon(employee.status)}
+          {employee.status?.replace('-', ' ')}
+        </Badge>
+        <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+          {employee.employeeId}
+        </Badge>
+        {employee.employmentType && (
+          <Badge variant="outline" className="bg-green-50 text-green-700">
+            {employee.employmentType}
+          </Badge>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
 
-          {/* Detailed Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          <Card className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-0 shadow-sm">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-4 w-full lg:w-auto">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border">
+            <Building className="w-6 h-6 text-blue-600 mb-2" />
+            <p className="text-sm text-gray-600">Department</p>
+            <p className="font-semibold text-gray-900">{employee.department}</p>
+          </div>
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border">
+            <MapPin className="w-6 h-6 text-green-600 mb-2" />
+            <p className="text-sm text-gray-600">Location</p>
+            <p className="font-semibold text-gray-900">{employee.location}</p>
+          </div>
+        
+          <div className="bg-gradient-to-br from-orange-50 to-red-50 p-4 rounded-xl border">
+            <Award className="w-6 h-6 text-orange-600 mb-2" />
+            <p className="text-sm text-gray-600">Experience</p>
+            <p className="font-semibold text-gray-900">{employee.totalExperience || 'Not specified'}</p>
+          </div>
+        </div>
+      </div>
+
+        {/* About Me */}
+        {employee.aboutMe && (
+          <Card className="p-6 bg-gradient-to-br from-teal-50 to-green-50 border-0 shadow-sm md:col-span-2">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
-              <Mail className="w-5 h-5 text-blue-600" />
-              Contact Information
+              <User className="w-5 h-5 text-teal-600" />
+              About Me
             </h3>
-            <div className="space-y-3">
+            <div className="p-3 bg-white rounded-lg border">
+              <p className="text-gray-900 leading-relaxed">{employee.aboutMe}</p>
+            </div>
+          </Card>
+        )}
+
+      {/* Detailed Information */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        {/* Contact Information */}
+        <Card className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <Mail className="w-5 h-5 text-blue-600" />
+            Contact Information
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+              <Mail className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-sm text-gray-600">Work Email</p>
+                <p className="font-medium text-gray-900">{employee.email}</p>
+              </div>
+            </div>
+            {employee.personalEmail && (
               <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
                 <Mail className="w-4 h-4 text-gray-400" />
                 <div>
                   <p className="text-sm text-gray-600">Personal Email</p>
-                  <p className="font-medium text-gray-900">{employee.email}</p>
+                  <p className="font-medium text-gray-900">{employee.personalEmail}</p>
                 </div>
               </div>
-              {employee.email && (
-                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Work Email</p>
-                    <p className="font-medium text-gray-900">{employee.email}</p>
-                  </div>
-                </div>
-              )}
+            )}
+            {employee.workPhone && (
               <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
                 <Phone className="w-4 h-4 text-gray-400" />
                 <div>
                   <p className="text-sm text-gray-600">Work Phone</p>
-                  <p className="font-medium text-gray-900">
-                    {employee.workPhone || 'Not provided'}
-                  </p>
+                  <p className="font-medium text-gray-900">{employee.workPhone}</p>
                 </div>
               </div>
-            </div>
-          </Card>
+            )}
+            {employee.personalMobile && (
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                <Phone className="w-4 h-4 text-gray-400" />
+                <div>
+                  <p className="text-sm text-gray-600">Personal Mobile</p>
+                  <p className="font-medium text-gray-900">{employee.personalMobile}</p>
+                </div>
+              </div>
+            )}
+            {employee.extension && (
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                <Phone className="w-4 h-4 text-gray-400" />
+                <div>
+                  <p className="text-sm text-gray-600">Extension</p>
+                  <p className="font-medium text-gray-900">{employee.extension}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
 
-        
-          <Card className="p-6 bg-gradient-to-br from-orange-50 to-amber-50 border-0 shadow-sm">
+        {/* Personal Details */}
+        <Card className="p-6 bg-gradient-to-br from-orange-50 to-amber-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <User className="w-5 h-5 text-orange-600" />
+            Personal Details
+          </h3>
+          <div className="space-y-3">
+            {employee.dateOfBirth && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">Date of Birth</span>
+                <span className="font-medium text-gray-900">
+                  {formatDate(employee.dateOfBirth)}
+                  {employee.age && ` (${employee.age} years)`}
+                </span>
+              </div>
+            )}
+            {employee.maritalStatus && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">Marital Status</span>
+                <span className="font-medium text-gray-900">{employee.maritalStatus}</span>
+              </div>
+            )}
+            {employee.gender && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">Gender</span>
+                <span className="font-medium text-gray-900">{employee.gender}</span>
+              </div>
+            )}
+            {employee.nickName && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">Nickname</span>
+                <span className="font-medium text-gray-900">{employee.nickName}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Work Information */}
+        <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <Briefcase className="w-5 h-5 text-indigo-600" />
+            Work Details
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+              <Building className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-sm text-gray-600">Department</p>
+                <p className="font-medium text-gray-900">{employee.department}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+              <User className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-sm text-gray-600">Designation</p>
+                <p className="font-medium text-gray-900">{employee.designation}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+              <Target className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-sm text-gray-600">Role</p>
+                <p className="font-medium text-gray-900">{employee.role || 'Not specified'}</p>
+              </div>
+            </div>
+            {employee.zohoRole && (
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                <User className="w-4 h-4 text-gray-400" />
+                <div>
+                  <p className="text-sm text-gray-600">Zoho Role</p>
+                  <p className="font-medium text-gray-900">{employee.zohoRole}</p>
+                </div>
+              </div>
+            )}
+            {employee.reportingManager && (
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                <User className="w-4 h-4 text-gray-400" />
+                <div>
+                  <p className="text-sm text-gray-600">Reporting Manager</p>
+                  <p className="font-medium text-gray-900">{employee.reportingManager}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Employment Information */}
+        <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <UserCheck className="w-5 h-5 text-green-600" />
+            Employment Details
+          </h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+              <span className="text-sm text-gray-600">Employment Type</span>
+              <span className="font-medium text-gray-900">{employee.employmentType || 'Not specified'}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+              <span className="text-sm text-gray-600">Source of Hire</span>
+              <span className="font-medium text-gray-900">{employee.sourceOfHire || 'Not specified'}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+              <span className="text-sm text-gray-600">Date of Joining</span>
+              <span className="font-medium text-gray-900">{formatDate(employee.dateOfJoining)}</span>
+            </div>
+            {employee.seatingLocation && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">Seating Location</span>
+                <span className="font-medium text-gray-900">{employee.seatingLocation}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Identity Information */}
+        <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <Key className="w-5 h-5 text-purple-600" />
+            Identity Information
+          </h3>
+          <div className="space-y-3">
+            {employee.pan && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">PAN Number</span>
+                <span className="font-medium text-gray-900">{employee.pan}</span>
+              </div>
+            )}
+            {employee.aadhaar && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">Aadhaar Number</span>
+                <span className="font-medium text-gray-900">{employee.aadhaar}</span>
+              </div>
+            )}
+            {employee.uan && (
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                <span className="text-sm text-gray-600">UAN Number</span>
+                <span className="font-medium text-gray-900">{employee.uan}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Address Information */}
+        {(employee.address || employee.presentAddress || employee.permanentAddress) && (
+          <Card className="p-6 bg-gradient-to-br from-cyan-50 to-blue-50 border-0 shadow-sm">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
-              <User className="w-5 h-5 text-orange-600" />
-              Personal Details
+              <MapPin className="w-5 h-5 text-cyan-600" />
+              Address Information
             </h3>
             <div className="space-y-3">
-              {employee.dateOfBirth && (
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Date of Birth</span>
-                  <span className="font-medium text-gray-900">
-                    {formatDate(employee.dateOfBirth)}
-                    {employee.age && ` (${employee.age} years)`}
-                  </span>
+              {employee.presentAddress && (
+                <div className="p-3 bg-white rounded-lg border">
+                  <p className="text-sm text-gray-600 mb-1">Present Address</p>
+                  <p className="font-medium text-gray-900">{employee.presentAddress}</p>
                 </div>
               )}
-              {employee.maritalStatus && (
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Marital Status</span>
-                  <span className="font-medium text-gray-900">{employee.maritalStatus}</span>
+              {employee.permanentAddress && (
+                <div className="p-3 bg-white rounded-lg border">
+                  <p className="text-sm text-gray-600 mb-1">Permanent Address</p>
+                  <p className="font-medium text-gray-900">{employee.permanentAddress}</p>
+                </div>
+              )}
+              {employee.address && (
+                <div className="p-3 bg-white rounded-lg border">
+                  <p className="text-sm text-gray-600 mb-2">Detailed Address</p>
+                  <div className="text-sm text-gray-900">
+                    {employee.address.street && <p>{employee.address.street}</p>}
+                    {employee.address.city && <p>{employee.address.city}</p>}
+                    {employee.address.state && <p>{employee.address.state}</p>}
+                    {employee.address.country && <p>{employee.address.country}</p>}
+                    {employee.address.zipCode && <p>ZIP: {employee.address.zipCode}</p>}
+                  </div>
                 </div>
               )}
             </div>
           </Card>
+        )}
+      </div>
 
-            {/* Work Information */}
-            <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-0 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
-                <Briefcase className="w-5 h-5 text-indigo-600" />
-                Work Details
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                  <Building className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Department</p>
-                    <p className="font-medium text-gray-900">{employee.department}</p>
-                  </div>
+      {/* Education Section */}
+      {employee.education?.length > 0 && (
+        <Card className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <GraduationCap className="w-5 h-5 text-indigo-600" />
+            Education
+          </h3>
+          <div className="space-y-3">
+            {employee.education.map((edu, index) => (
+              <div key={index} className="p-4 bg-white rounded-lg border">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-semibold text-gray-900">{edu.degree}</h4>
+                  {edu.dateOfCompletion && (
+                    <span className="text-sm text-gray-500">
+                      {formatDate(edu.dateOfCompletion)}
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                  <User className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Designation</p>
-                    <p className="font-medium text-gray-900">{employee.designation}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                  <Target className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Role</p>
-                    <p className="font-medium text-gray-900">{employee.role || 'Not specified'}</p>
-                  </div>
-                </div>
+                <p className="text-gray-700 mb-1">{edu.instituteName}</p>
+                {edu.specialization && (
+                  <p className="text-sm text-gray-600">Specialization: {edu.specialization}</p>
+                )}
               </div>
-            </Card>
-
-            {/* Employment Information */}
-            <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-0 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
-                <UserCheck className="w-5 h-5 text-green-600" />
-                Employment Details
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Employment Type</span>
-                  <span className="font-medium text-gray-900">{employee.employmentType || 'Not specified'}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Source of Hire</span>
-                  <span className="font-medium text-gray-900">{employee.sourceOfHire || 'Not specified'}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Date of Joining</span>
-                  <span className="font-medium text-gray-900">{formatDate(employee.dateOfJoining)}</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Additional Information */}
-            <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-0 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
-                <Award className="w-5 h-5 text-purple-600" />
-                Experience & Location
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Total Experience</span>
-                  <span className="font-medium text-gray-900">{employee.totalExperience || 'Not specified'}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Work Location</span>
-                  <span className="font-medium text-gray-900">{employee.location}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-                  <span className="text-sm text-gray-600">Employee Status</span>
-                  <Badge className={`${getStatusColor(employee.status)}`}>
-                    {employee.status?.replace('-', ' ')}
-                  </Badge>
-                </div>
-              </div>
-            </Card>
+            ))}
           </div>
+        </Card>
+      )}
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
-            <Button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-              <Mail className="w-4 h-4 mr-2" />
-              Send Message
-            </Button>
-            <Button variant="outline" className="flex-1">
-              <Calendar className="w-4 h-4 mr-2" />
-              Schedule Meeting
-            </Button>
+      {/* Work Experience Section */}
+      {employee.workExperience?.length > 0 && (
+        <Card className="p-6 bg-gradient-to-br from-slate-50 to-gray-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <Briefcase className="w-5 h-5 text-slate-600" />
+            Work Experience
+          </h3>
+          <div className="space-y-3">
+            {employee.workExperience.map((exp, index) => (
+              <div key={index} className="p-4 bg-white rounded-lg border">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-semibold text-gray-900">{exp.jobTitle}</h4>
+                  <div className="text-right text-sm text-gray-500">
+                    <p>{formatDate(exp.fromDate)} - {exp.toDate ? formatDate(exp.toDate) : 'Present'}</p>
+                    {exp.relevant !== undefined && (
+                      <Badge variant={exp.relevant ? "default" : "outline"} className="mt-1">
+                        {exp.relevant ? 'Relevant' : 'Not Relevant'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-2">{exp.companyName}</p>
+                {exp.jobDescription && (
+                  <p className="text-sm text-gray-600">{exp.jobDescription}</p>
+                )}
+              </div>
+            ))}
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </Card>
+      )}
+
+      {/* Dependents Section */}
+      {employee.dependents?.length > 0 && (
+        <Card className="p-6 bg-gradient-to-br from-rose-50 to-pink-50 border-0 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+            <Users className="w-5 h-5 text-rose-600" />
+            Dependents
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {employee.dependents.map((dependent, index) => (
+              <div key={index} className="p-3 bg-white rounded-lg border">
+                <p className="font-medium text-gray-900 mb-1">{dependent.name}</p>
+                <p className="text-sm text-gray-600">Relationship: {dependent.relationship}</p>
+                {dependent.dateOfBirth && (
+                  <p className="text-sm text-gray-600">
+                    Date of Birth: {formatDate(dependent.dateOfBirth)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 pt-4 border-t">
+        <Button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+          <Mail className="w-4 h-4 mr-2" />
+          Send Message
+        </Button>
+        <Button variant="outline" className="flex-1">
+          <Calendar className="w-4 h-4 mr-2" />
+          Schedule Meeting
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
   );
 };
 

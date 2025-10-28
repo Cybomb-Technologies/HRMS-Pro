@@ -30,6 +30,8 @@ exports.addEmployee = async (req, res) => {
       dateOfBirth,
       maritalStatus,
       totalExperience,
+       gender, 
+      reportingManager,
       employeeId, 
       password 
     } = req.body;
@@ -86,6 +88,8 @@ exports.addEmployee = async (req, res) => {
       dateOfJoining,
       dateOfBirth,
       maritalStatus,
+      gender, 
+      reportingManager,
       totalExperience
     });
     
@@ -111,7 +115,7 @@ exports.addEmployee = async (req, res) => {
       tempPassword: !password ? employeePassword : undefined,
       message: `Employee ${name} created successfully. Login email: ${normalizedEmail}`
     });
-  } catch (err) {
+    } catch (err) {
     console.error('Error adding employee:', err);
     res.status(500).json({ error: err.message });
   }
@@ -129,8 +133,14 @@ exports.loginEmployee = async (req, res) => {
       });
     }
 
-    // Normalize email
-    const normalizedEmail = normalizedEmail.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmployeeId = employeeId.trim();
+    
+    const [existingEmployeeByEmail, existingEmployeeById, existingUser] = await Promise.all([
+      Employee.findOne({ email: normalizedEmail }),
+      Employee.findOne({ employeeId: normalizedEmployeeId }),
+      User.findOne({ email: normalizedEmail })
+    ]);
 
     // Find user by workEmail
     const user = await User.findOne({ email: normalizedEmail });

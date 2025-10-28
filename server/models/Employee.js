@@ -137,26 +137,7 @@ const employeeSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Virtual for calculating tenure
-employeeSchema.virtual('tenure').get(function() {
-  if (!this.dateOfJoining) return '0 years';
-  const now = new Date();
-  const joinDate = new Date(this.dateOfJoining);
-  const diffYears = now.getFullYear() - joinDate.getFullYear();
-  const diffMonths = now.getMonth() - joinDate.getMonth();
-  
-  let totalMonths = (diffYears * 12) + diffMonths;
-  if (now.getDate() < joinDate.getDate()) {
-    totalMonths--;
-  }
-  
-  const years = Math.floor(totalMonths / 12);
-  const months = totalMonths % 12;
-  
-  if (years === 0) return `${months} month${months !== 1 ? 's' : ''}`;
-  if (months === 0) return `${years} year${years !== 1 ? 's' : ''}`;
-  return `${years} year${years !== 1 ? 's' : ''} ${months} month${months !== 1 ? 's' : ''}`;
-});
+
 
 // Virtual for age calculation
 employeeSchema.virtual('age').get(function() {
@@ -238,7 +219,7 @@ employeeSchema.methods.getCompleteProfile = function() {
       employmentType: this.employmentType,
       status: this.status,
       dateOfJoining: this.dateOfJoining,
-      tenure: this.tenure
+      
     },
     personalInfo: {
       dateOfBirth: this.dateOfBirth,

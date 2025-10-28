@@ -14,7 +14,9 @@ const checkIn = async (req, res) => {
       address, 
       accuracy,
       photo,
-      teamId 
+      teamId,
+      faceVerified, 
+      faceMatchDistance 
     } = req.body;
 
     console.log('Received check-in request:', { employeeId, employee });
@@ -105,7 +107,9 @@ const checkIn = async (req, res) => {
         isLate: isLate,
         lateMinutes: lateMinutes,
         teamId,
-        location: address || 'Office'
+        location: address || 'Office',
+        faceVerified: faceVerified || false, 
+        faceMatchDistance: faceMatchDistance || null 
       });
       await attendance.save();
     }
