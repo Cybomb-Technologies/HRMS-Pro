@@ -1896,4 +1896,6 @@ const startCamera = async () => {
   );
 };
 
+
+
 export default AttendanceTab;
