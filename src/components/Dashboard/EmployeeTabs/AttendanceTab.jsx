@@ -7,27 +7,21 @@ import {
   LogIn, 
   LogOut, 
   Clock, 
-  Camera, 
-  BarChart3,
-  Calendar as CalendarIcon,
+  Camera,
+  CheckCircle,
+  AlertTriangle,
+  Users as MultipleUsers,
   Loader2,
   User,
   XCircle,
   Image as ImageIcon,
-  TrendingUp,
-  Users,
-  Building,
-  CheckCircle,
-  AlertTriangle,
-  Users as MultipleUsers
+  TrendingUp
 } from 'lucide-react';
-import { format, differenceInHours, differenceInMinutes, differenceInSeconds, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { format, differenceInHours, differenceInMinutes, differenceInSeconds, isSameDay } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/hooks/useAttendance';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import faceRecognitionService from '@/lib/faceRecognitionService';
 
 const AttendanceTab = () => {
@@ -55,11 +49,9 @@ const AttendanceTab = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentShift, setCurrentShift] = useState(null);
-  const [shiftSchedule, setShiftSchedule] = useState([]);
   
   // Face recognition states
-  const [faceRecognitionStatus, setFaceRecognitionStatus] = useState('idle'); // 'idle', 'loading', 'ready', 'failed', 'no-profile'
+  const [faceRecognitionStatus, setFaceRecognitionStatus] = useState('idle');
   const [faceVerificationLoading, setFaceVerificationLoading] = useState(false);
   const [faceVerificationResult, setFaceVerificationResult] = useState(null);
   const [detectedFaces, setDetectedFaces] = useState(0);
@@ -83,25 +75,18 @@ const AttendanceTab = () => {
       }
 
       try {
-        console.log('=== FACE RECOGNITION INITIALIZATION STARTED ===');
-        console.log('Employee ID:', user.employeeId);
         setFaceRecognitionStatus('loading');
         
-        // Try multiple sources for profile picture in user context
         let profilePicture = user?.profilePicture || user?.profilePhoto;
-        console.log('Profile picture from user context:', profilePicture);
         
         // If no profile picture in context, try to fetch it from API
         if (!profilePicture) {
-          console.log('No profile picture in context, fetching from API...');
           const employeeProfile = await fetchEmployeeProfile();
           
           if (employeeProfile) {
             profilePicture = employeeProfile.profilePicture;
-            console.log('Profile picture from API fetch:', profilePicture);
             
             if (profilePicture) {
-              console.log('✅ Profile picture found:', profilePicture);
               // Update user context with the fetched profile picture
               if (setUser) {
                 setUser(prevUser => ({
@@ -112,43 +97,30 @@ const AttendanceTab = () => {
                 }));
               }
             } else {
-              console.warn('❌ Profile picture not found in employee data after fetch');
               setFaceRecognitionStatus('no-profile');
               return;
             }
           } else {
-            console.warn('❌ Failed to fetch employee profile data');
             setFaceRecognitionStatus('failed');
             return;
           }
-        } else {
-          console.log('✅ Using profile picture from user context:', profilePicture);
         }
 
         // Final validation of profile picture URL
         if (!profilePicture) {
-          console.warn('❌ No profile picture available after all attempts');
           setFaceRecognitionStatus('no-profile');
           return;
         }
 
-        // Ensure the URL is absolute and correct
-        let absoluteProfilePicture = profilePicture;
-
         // Fix URL if it points to frontend instead of backend
+        let absoluteProfilePicture = profilePicture;
         if (profilePicture.includes('localhost:3000')) {
           absoluteProfilePicture = profilePicture.replace('localhost:3000', 'localhost:5000');
-          console.log('Fixed backend URL:', absoluteProfilePicture);
         } else if (!profilePicture.startsWith('http') && !profilePicture.startsWith('data:')) {
-          // Make relative URL absolute - point to backend server
           absoluteProfilePicture = `http://localhost:5000${profilePicture.startsWith('/') ? '' : '/'}${profilePicture}`;
-          console.log('Converted to backend URL:', absoluteProfilePicture);
         }
 
-        console.log('Initializing face recognition service...');
         await faceRecognitionService.init();
-        
-        console.log('✅ Models loaded successfully, now registering employee face...');
         
         try {
           // Register employee's face descriptor from profile picture
@@ -159,7 +131,6 @@ const AttendanceTab = () => {
           
           if (faceRecognitionService.isEmployeeRegistered(user.employeeId)) {
             setFaceRecognitionStatus('ready');
-            console.log('✅ Face recognition initialized successfully');
             
             toast({
               title: 'Face Recognition Ready',
@@ -169,10 +140,9 @@ const AttendanceTab = () => {
             });
           } else {
             setFaceRecognitionStatus('failed');
-            console.warn('❌ Face recognition initialized but employee face not loaded');
           }
         } catch (faceError) {
-          console.error('❌ Error registering face descriptor:', faceError);
+          console.error('Error registering face descriptor:', faceError);
           setFaceRecognitionStatus('failed');
           
           toast({
@@ -182,10 +152,8 @@ const AttendanceTab = () => {
           });
         }
       } catch (error) {
-        console.error('❌ Failed to initialize face recognition:', error);
+        console.error('Failed to initialize face recognition:', error);
         setFaceRecognitionStatus('failed');
-      } finally {
-        console.log('=== FACE RECOGNITION INITIALIZATION COMPLETED ===');
       }
     };
 
@@ -200,20 +168,17 @@ const AttendanceTab = () => {
   useEffect(() => {
     const loadAllData = async () => {
       if (isAuthenticated && user?.employeeId) {
-        console.log('Loading all data for employee:', user.employeeId);
         setAuthChecked(true);
         
         try {
           await Promise.all([
             fetchTodayAttendance(),
-            fetchRecentAttendance(),
-            fetchShiftDetails()
+            fetchRecentAttendance()
           ]);
         } catch (error) {
           console.error('Error loading initial data:', error);
         }
       } else {
-        console.log('User not authenticated or missing employeeId');
         setAuthChecked(true);
       }
     };
@@ -257,28 +222,25 @@ const AttendanceTab = () => {
   // FACE DETECTION LOGIC
   // ==============================
 
-const startFaceDetection = () => {
-  if (!videoRef.current || faceDetectionActive) {
-    console.log('Face detection already active or video not ready');
-    return;
-  }
-
-  console.log('Starting continuous face detection...');
-  setFaceDetectionActive(true);
-  
-  const interval = setInterval(async () => {
-    if (videoRef.current && 
-        videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA &&
-        videoRef.current.videoWidth > 0 &&
-        videoRef.current.videoHeight > 0) {
-      await detectFacesInFrame();
-    } else {
-      console.log('Video not ready for face detection');
+  const startFaceDetection = () => {
+    if (!videoRef.current || faceDetectionActive) {
+      return;
     }
-  }, 1500); // Check for faces every 1.5 seconds
 
-  setFaceDetectionInterval(interval);
-};
+    setFaceDetectionActive(true);
+    
+    const interval = setInterval(async () => {
+      if (videoRef.current && 
+          videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA &&
+          videoRef.current.videoWidth > 0 &&
+          videoRef.current.videoHeight > 0) {
+        await detectFacesInFrame();
+      }
+    }, 1500);
+
+    setFaceDetectionInterval(interval);
+  };
+
   const stopFaceDetection = () => {
     if (faceDetectionInterval) {
       clearInterval(faceDetectionInterval);
@@ -288,59 +250,42 @@ const startFaceDetection = () => {
     setDetectedFaces(0);
   };
 
-const detectFacesInFrame = async () => {
-  try {
-    if (!videoRef.current || !canvasRef.current) {
-      console.log('Video or canvas not ready');
-      return;
-    }
-
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    
-    // Set canvas dimensions to match video
-    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
-      console.log('Video dimensions not ready');
-      return;
-    }
-    
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    
-    // Draw current video frame to canvas
-    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-
-    console.log('Detecting faces in frame...');
-    
-    // Detect faces in the current frame
-    const result = await faceRecognitionService.human.detect(canvas);
-    
-    console.log('Face detection result:', result);
-    
-    if (result?.face && Array.isArray(result.face)) {
-      setDetectedFaces(result.face.length);
-      console.log(`Faces detected: ${result.face.length}`);
-      
-      // If multiple faces detected, show warning
-      if (result.face.length > 1) {
-        console.warn(`Multiple faces detected: ${result.face.length}`);
+  const detectFacesInFrame = async () => {
+    try {
+      if (!videoRef.current || !canvasRef.current) {
+        return;
       }
-    } else {
+
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+        return;
+      }
+      
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      
+      context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+      const result = await faceRecognitionService.human.detect(canvas);
+      
+      if (result?.face && Array.isArray(result.face)) {
+        setDetectedFaces(result.face.length);
+      } else {
+        setDetectedFaces(0);
+      }
+    } catch (error) {
+      console.error('Error detecting faces:', error);
       setDetectedFaces(0);
-      console.log('No faces detected');
     }
-  } catch (error) {
-    console.error('Error detecting faces:', error);
-    setDetectedFaces(0);
-  }
-};
+  };
 
   const performFaceVerification = async () => {
     if (faceRecognitionStatus !== 'ready') {
       throw new Error('FACE_RECOGNITION_UNAVAILABLE');
     }
 
-    // Check for multiple faces before verification
     if (detectedFaces > 1) {
       throw new Error('MULTIPLE_FACES_DETECTED');
     }
@@ -349,7 +294,6 @@ const detectFacesInFrame = async () => {
       throw new Error('NO_FACE_DETECTED');
     }
 
-    // Capture current frame for verification
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
     canvas.width = videoRef.current.videoWidth;
@@ -383,10 +327,7 @@ const detectFacesInFrame = async () => {
       const endTime = checkOutTime || new Date();
       const totalSeconds = differenceInSeconds(endTime, checkInTime);
       
-      // Calculate break duration (default 1 hour)
-      const breakSeconds = 60 * 60; // 1 hour in seconds
-      
-      // Subtract break time if working more than 4 hours (typical for lunch break)
+      const breakSeconds = 60 * 60;
       const netSeconds = totalSeconds > (4 * 60 * 60) ? Math.max(0, totalSeconds - breakSeconds) : totalSeconds;
       
       const hours = Math.floor(netSeconds / 3600);
@@ -406,7 +347,6 @@ const detectFacesInFrame = async () => {
       const token = localStorage.getItem('hrms_token');
       let employeeId = user?.employeeId;
       
-      // Fallback to get employeeId from localStorage if not in context
       if (!employeeId) {
         const storedUser = localStorage.getItem('hrms_user');
         if (storedUser) {
@@ -416,11 +356,8 @@ const detectFacesInFrame = async () => {
       }
 
       if (!employeeId) {
-        console.error('No employeeId available for profile fetch');
         return null;
       }
-
-      console.log('Fetching employee profile for:', employeeId);
 
       const response = await fetch(`http://localhost:5000/api/employee-profiles/${employeeId}`, {
         headers: {
@@ -429,15 +366,9 @@ const detectFacesInFrame = async () => {
         }
       });
 
-      console.log('Profile fetch response status:', response.status);
-
       if (response.ok) {
         const responseData = await response.json();
-        console.log('Full API response:', responseData);
-        
-        // Extract employee data from nested response
         const employeeData = responseData.data?.employee || responseData.employee || responseData;
-        console.log('Extracted employee data:', employeeData);
         
         let profilePicture = employeeData.profilePicture || 
                        employeeData.profilePhoto ||
@@ -445,16 +376,8 @@ const detectFacesInFrame = async () => {
                        employeeData.avatar || 
                        employeeData.imageUrl;
 
-        // Fix the URL if it contains localhost:3000 but should be localhost:5000
         if (profilePicture && profilePicture.includes('localhost:3000')) {
           profilePicture = profilePicture.replace('localhost:3000', 'localhost:5000');
-          console.log('Fixed profile picture URL:', profilePicture);
-        }
-        
-        console.log('Final profile picture URL:', profilePicture);
-        
-        if (!profilePicture) {
-          console.warn('No profile picture found in employee data fields');
         }
         
         return {
@@ -465,9 +388,6 @@ const detectFacesInFrame = async () => {
           ...employeeData
         };
       } else {
-        console.error('Failed to fetch employee profile:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
         return null;
       }
     } catch (error) {
@@ -476,131 +396,14 @@ const detectFacesInFrame = async () => {
     }
   };
 
-  const fetchShiftDetails = async () => {
-    try {
-      const token = localStorage.getItem('hrms_token');
-      
-      // Get employeeId from multiple sources for fallback
-      let employeeId = user?.employeeId;
-      if (!employeeId) {
-        const storedUser = localStorage.getItem('hrms_user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          employeeId = parsedUser.employeeId;
-        }
-      }
-
-      console.log('Fetching shift details for employeeId:', employeeId);
-      
-      if (!employeeId) {
-        console.error('No employeeId available for shift fetch');
-        setCurrentShift(null);
-        setShiftSchedule([]);
-        return;
-      }
-
-      const response = await fetch(`http://localhost:5000/api/employees/employeesShifts?employeeId=${employeeId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Shift API Response:', data);
-        
-        let currentShift = null;
-        
-        // Find the most recent active shift assignment
-        if (data.success && data.assignments && data.assignments.length > 0) {
-          // Sort by effectiveDate to get the most recent assignment
-          const sortedAssignments = data.assignments.sort((a, b) => 
-            new Date(b.effectiveDate) - new Date(a.effectiveDate)
-          );
-          
-          currentShift = sortedAssignments[0]; // Take the most recent active assignment
-          console.log('Found current shift assignment:', currentShift);
-        }
-        
-        if (currentShift) {
-          setCurrentShift(currentShift);
-          
-          // Generate dynamic weekly schedule based on the actual shift
-          const weekStart = startOfWeek(new Date());
-          const weekEnd = endOfWeek(new Date());
-          const weekDays = eachDayOfInterval({ 
-            start: weekStart, 
-            end: weekEnd 
-          });
-          
-          const schedule = weekDays.map(day => ({
-            day: format(day, 'EEEE'),
-            date: day,
-            shift: currentShift,
-            status: getDayScheduleStatus(day)
-          }));
-          
-          setShiftSchedule(schedule);
-        } else {
-          console.log('No active shift assignment found for current user');
-          setCurrentShift(null);
-          setShiftSchedule([]);
-        }
-      } else {
-        console.error('Failed to fetch shift assignments:', response.status);
-        setCurrentShift(null);
-        setShiftSchedule([]);
-      }
-    } catch (error) {
-      console.error('Error fetching shift assignments:', error);
-      setCurrentShift(null);
-      setShiftSchedule([]);
-    }
-  };
-
-  const getDayScheduleStatus = (day) => {
-    const today = new Date();
-    if (isSameDay(day, today)) {
-      return checkInTime ? (checkOutTime ? 'completed' : 'in-progress') : 'scheduled';
-    }
-    if (day < today) {
-      // Check if this day exists in attendance records
-      const dayAttendance = attendance?.find(record => {
-        try {
-          const recordDate = new Date(record.date);
-          return isSameDay(recordDate, day);
-        } catch (error) {
-          return false;
-        }
-      });
-      return dayAttendance ? 'completed' : 'absent';
-    }
-    if (day > today) return 'scheduled';
-    return 'scheduled';
-  };
-
   const fetchTodayAttendance = async () => {
     try {
       if (user?.employeeId) {
-        console.log('Fetching today attendance for:', user.employeeId);
-        
         const todayAtt = await getTodayAttendance(user.employeeId);
-        console.log('Today attendance raw response:', todayAtt);
-        
         setTodayAttendance(todayAtt);
         
         if (todayAtt && todayAtt._id) {
-          console.log('Found attendance record:', {
-            checkIn: todayAtt.checkIn,
-            checkOut: todayAtt.checkOut,
-            duration: todayAtt.duration
-          });
-          
-          // Simple time setting - just store the time strings
-          // The UI can display these directly without complex date parsing
           if (todayAtt.checkIn) {
-            // Create a date object for time calculations
             const now = new Date();
             const [time, period] = todayAtt.checkIn.split(' ');
             const [hours, minutes] = time.split(':');
@@ -628,7 +431,6 @@ const detectFacesInFrame = async () => {
             setCheckOutTime(checkOutDate);
           }
           
-          // Use duration from backend if available, otherwise calculate
           if (todayAtt.duration) {
             setWorkingHours(todayAtt.duration);
           } else if (todayAtt.checkIn && todayAtt.checkOut && checkInTime && checkOutTime) {
@@ -638,20 +440,15 @@ const detectFacesInFrame = async () => {
           }
           
         } else {
-          console.log('No attendance record found for today');
           setCheckInTime(null);
           setCheckOutTime(null);
           setWorkingHours('0h 0m');
         }
-      } else {
-        console.log('No employeeId available for fetching attendance');
       }
     } catch (error) {
       console.error('Error in fetchTodayAttendance:', error);
       
-      // Check if it's a 404 (no record) vs other errors
       if (error.response?.status === 404) {
-        console.log('No attendance record exists for today (404)');
         setCheckInTime(null);
         setCheckOutTime(null);
         setWorkingHours('0h 0m');
@@ -675,8 +472,6 @@ const detectFacesInFrame = async () => {
         endDate: new Date().toISOString().split('T')[0],
         employeeId: user?.employeeId
       };
-      
-      console.log('Fetching attendance with filters:', filters);
       
       await fetchAttendance(filters);
       
@@ -751,59 +546,47 @@ const detectFacesInFrame = async () => {
     });
   };
 
-const startCamera = async () => {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('Camera not supported on this device');
-    }
+  const startCamera = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera not supported on this device');
+      }
 
-    setShowCamera(true);
-    setIsCapturing(true);
-    setDetectedFaces(0);
-    setFaceVerificationResult(null);
+      setShowCamera(true);
+      setIsCapturing(true);
+      setDetectedFaces(0);
+      setFaceVerificationResult(null);
 
-    console.log('Requesting camera access...');
-    
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { 
-        facingMode: "user",
-        width: { ideal: 640 },
-        height: { ideal: 480 }
-      } 
-    });
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
+      });
       
-      // Wait for video to be ready
-      videoRef.current.onloadedmetadata = () => {
-        console.log('Video metadata loaded, starting playback...');
-        videoRef.current.play().then(() => {
-          console.log('Video playback started');
-          // Start face detection after a short delay to ensure video is playing
-          setTimeout(() => {
-            startFaceDetection();
-          }, 500);
-        }).catch(error => {
-          console.error('Error playing video:', error);
-        });
-      };
-      
-      videoRef.current.onerror = (error) => {
-        console.error('Video error:', error);
-      };
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play().then(() => {
+            setTimeout(() => {
+              startFaceDetection();
+            }, 500);
+          });
+        };
+      }
+    } catch (error) {
+      console.error('Error starting camera:', error);
+      toast({
+        title: 'Camera Access Required',
+        description: 'Please allow camera access to continue with attendance.',
+        variant: 'destructive'
+      });
+      setShowCamera(false);
+      setIsCapturing(false);
     }
-  } catch (error) {
-    console.error('Error starting camera:', error);
-    toast({
-      title: 'Camera Access Required',
-      description: 'Please allow camera access to continue with attendance.',
-      variant: 'destructive'
-    });
-    setShowCamera(false);
-    setIsCapturing(false);
-  }
-};
+  };
 
   const stopCamera = () => {
     stopFaceDetection();
@@ -843,37 +626,21 @@ const startCamera = async () => {
 
   const handleCheckIn = async () => {
     try {
-      // Get authentication data from multiple sources
       const token = localStorage.getItem('hrms_token');
       const storedUser = localStorage.getItem('hrms_user');
       
       let employeeId = user?.employeeId;
       
-      console.log('Auth check:', {
-        hasContextUser: !!user,
-        contextEmployeeId: user?.employeeId,
-        hasStoredUser: !!storedUser,
-        hasToken: !!token
-      });
-
-      // If no employeeId from context, try localStorage
       if (!employeeId && storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           employeeId = parsedUser.employeeId;
-          console.log('Using stored user employeeId:', employeeId);
         } catch (parseError) {
           console.error('Error parsing stored user:', parseError);
         }
       }
 
-      // Final check - if still no employeeId, show error
       if (!employeeId) {
-        console.error('No employeeId found in any source:', {
-          context: user,
-          stored: storedUser ? JSON.parse(storedUser) : null
-        });
-        
         toast({
           title: 'Employee ID Missing',
           description: 'Unable to find your employee ID. Please log in again.',
@@ -891,7 +658,6 @@ const startCamera = async () => {
         return;
       }
 
-      // Check if face recognition is ready
       if (faceRecognitionStatus !== 'ready') {
         toast({
           title: 'Face Recognition Required',
@@ -901,7 +667,6 @@ const startCamera = async () => {
         return;
       }
 
-      console.log('Proceeding with check-in for employeeId:', employeeId);
       setIsProcessing(true);
       await startCamera();
     } catch (error) {
@@ -922,7 +687,6 @@ const startCamera = async () => {
       setFaceVerificationLoading(true);
       setFaceVerificationResult(null);
 
-      // Check face detection status before proceeding
       if (detectedFaces === 0) {
         throw new Error('NO_FACE_DETECTED');
       }
@@ -931,24 +695,19 @@ const startCamera = async () => {
         throw new Error('MULTIPLE_FACES_DETECTED');
       }
 
-      // Capture photo from camera
       const photo = await capturePhoto();
       const location = await getCurrentLocation();
 
       let verificationResult = null;
       
-      // Only proceed if face recognition is ready
       if (faceRecognitionStatus === 'ready') {
         try {
           verificationResult = await performFaceVerification();
           
-          // STRICT REQUIREMENT: Only allow check-in if face is verified
           if (!verificationResult.matched) {
             throw new Error('FACE_VERIFICATION_FAILED');
           }
         } catch (faceError) {
-          console.error('Face verification failed:', faceError);
-          
           if (faceError.message === 'FACE_VERIFICATION_FAILED') {
             throw new Error('Face verification failed. Cannot check in.');
           } else {
@@ -956,11 +715,9 @@ const startCamera = async () => {
           }
         }
       } else {
-        // If face recognition is not available, don't allow check-in
         throw new Error('FACE_RECOGNITION_UNAVAILABLE');
       }
 
-      // Prepare check-in data (only reached if face verification passed)
       const checkInData = {
         employeeId: user.employeeId,
         employee: user.name || user.employeeName || user.email?.split('@')[0] || 'Employee',
@@ -972,13 +729,11 @@ const startCamera = async () => {
         photo: photo,
         teamId: user.teamId || 1,
         department: user.department || 'General',
-        faceVerified: true, // Always true now since we require verification
+        faceVerified: true,
         faceMatchSimilarity: verificationResult?.similarity,
         verificationMethod: 'face_recognition',
         detectedFaces: detectedFaces
       };
-
-      console.log('Check-in data:', checkInData);
 
       await checkIn(checkInData);
       
@@ -995,7 +750,6 @@ const startCamera = async () => {
 
       await fetchTodayAttendance();
       await fetchRecentAttendance();
-      await fetchShiftDetails();
 
     } catch (error) {
       console.error('Check-in error:', error);
@@ -1024,7 +778,6 @@ const startCamera = async () => {
 
   const handleCheckOut = async () => {
     try {
-      // Enhanced authentication check
       if (!isAuthenticated || !user?.employeeId) {
         const token = localStorage.getItem('hrms_token');
         if (!token) {
@@ -1046,7 +799,6 @@ const startCamera = async () => {
         return;
       }
 
-      // Check if face recognition is ready
       if (faceRecognitionStatus !== 'ready') {
         toast({
           title: 'Face Recognition Required',
@@ -1076,7 +828,6 @@ const startCamera = async () => {
       setFaceVerificationLoading(true);
       setFaceVerificationResult(null);
 
-      // Check face detection status before proceeding
       if (detectedFaces === 0) {
         throw new Error('NO_FACE_DETECTED');
       }
@@ -1090,18 +841,14 @@ const startCamera = async () => {
 
       let verificationResult = null;
       
-      // Only proceed if face recognition is ready
       if (faceRecognitionStatus === 'ready') {
         try {
           verificationResult = await performFaceVerification();
           
-          // STRICT REQUIREMENT: Only allow check-out if face is verified
           if (!verificationResult.matched) {
             throw new Error('FACE_VERIFICATION_FAILED');
           }
         } catch (faceError) {
-          console.error('Face verification failed:', faceError);
-          
           if (faceError.message === 'FACE_VERIFICATION_FAILED') {
             throw new Error('Face verification failed. Cannot check out.');
           } else {
@@ -1109,7 +856,6 @@ const startCamera = async () => {
           }
         }
       } else {
-        // If face recognition is not available, don't allow check-out
         throw new Error('FACE_RECOGNITION_UNAVAILABLE');
       }
 
@@ -1121,7 +867,7 @@ const startCamera = async () => {
         address: location.address,
         accuracy: location.accuracy,
         photo: photo,
-        faceVerified: true, // Always true now since we require verification
+        faceVerified: true,
         faceMatchSimilarity: verificationResult?.similarity,
         verificationMethod: 'face_recognition',
         detectedFaces: detectedFaces
@@ -1146,7 +892,6 @@ const startCamera = async () => {
 
       await fetchTodayAttendance();
       await fetchRecentAttendance();
-      await fetchShiftDetails();
 
     } catch (error) {
       console.error('Check-out error:', error);
@@ -1212,7 +957,6 @@ const startCamera = async () => {
 
   const FaceVerificationStatus = () => {
     if (!faceVerificationLoading && !faceVerificationResult) {
-      // Show face recognition status when not actively verifying
       if (faceRecognitionStatus === 'loading') {
         return (
           <div className="flex items-center justify-center p-3 bg-blue-50 rounded-lg">
@@ -1278,35 +1022,23 @@ const startCamera = async () => {
         present: 0,
         absent: 0,
         late: 0,
-        halfDay: 0,
-        onTimeRate: '0%',
-        avgHours: '0h'
+        onTimeRate: '0%'
       };
     }
 
     const presentRecords = attendance.filter(record => record.status === 'present');
     const lateRecords = attendance.filter(record => record.status === 'late');
-    const halfDayRecords = attendance.filter(record => record.status === 'half-day');
     
     const totalRecords = attendance.length;
     const onTimeRate = totalRecords > 0 ? Math.round(((presentRecords.length - lateRecords.length) / totalRecords) * 100) : 0;
-    
-    // Calculate average hours (simplified)
-    const avgHours = presentRecords.length > 0 ? '8.2h' : '0h';
 
     return {
       present: presentRecords.length,
       absent: attendance.filter(record => record.status === 'absent').length,
       late: lateRecords.length,
-      halfDay: halfDayRecords.length,
-      onTimeRate: `${onTimeRate}%`,
-      avgHours
+      onTimeRate: `${onTimeRate}%`
     };
   };
-
-  // ==============================
-  // COMPONENTS
-  // ==============================
 
   const DayWithStatus = ({ date, ...props }) => {
     const status = getDayStatus(date);
@@ -1375,7 +1107,7 @@ const startCamera = async () => {
     </div>
   );
 
-  const renderView = (viewType) => (
+  const renderAttendanceList = () => (
     <div className="space-y-2">
       {attendanceLoading ? (
         <LoadingSkeleton />
@@ -1435,51 +1167,6 @@ const startCamera = async () => {
       )}
     </div>
   );
-
-  const ShiftScheduleItem = ({ day, index }) => {
-    const getStatusBadge = (status) => {
-      const statusConfig = {
-        'completed': { label: 'Completed', color: 'bg-green-100 text-green-800 border-green-200' },
-        'in-progress': { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-        'scheduled': { label: 'Scheduled', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-        'absent': { label: 'Absent', color: 'bg-red-100 text-red-800 border-red-200' }
-      };
-      
-      const config = statusConfig[status] || statusConfig.scheduled;
-      
-      return (
-        <Badge variant="outline" className={`text-xs ${config.color}`}>
-          {config.label}
-        </Badge>
-      );
-    };
-
-    return (
-      <div className={`flex items-center justify-between p-3 ${index !== 0 ? 'border-t' : ''}`}>
-        <div className="flex items-center space-x-3">
-          <div className="flex flex-col items-center">
-            <span className="text-xs font-medium text-muted-foreground">
-              {day.day.substring(0, 3).toUpperCase()}
-            </span>
-            <span className="text-sm font-semibold">
-              {format(day.date, 'dd')}
-            </span>
-          </div>
-          
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">
-              {day.shift?.shiftName || 'General Shift'}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {day.shift?.startTime || '09:00'} - {day.shift?.endTime || '18:00'}
-            </span>
-          </div>
-        </div>
-        
-        {getStatusBadge(day.status)}
-      </div>
-    );
-  };
 
   // ==============================
   // MAIN RENDER
@@ -1563,191 +1250,151 @@ const startCamera = async () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Check In/Out */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Today's Status */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center">
-                <Clock className="w-5 h-5 mr-2" />
-                Today's Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Check In</p>
-                  <p className="text-lg font-semibold">
-                    {checkInTime ? format(checkInTime, 'p') : '--:--'}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Check Out</p>
-                  <p className="text-lg font-semibold">
-                    {checkOutTime ? format(checkOutTime, 'p') : '--:--'}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Working Hours</p>
-                <p className="text-xl font-bold text-primary">{workingHours}</p>
-              </div>
+      <div className="grid grid-cols-1 gap-6">
+    {/* First Row: Today's Status (1/3) and Calendar (2/3) */}
+<div className="flex flex-col space-y-6">
+  {/* First Row: Today's Status and Calendar */}
+  <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-6">
+    
+    {/* Left Card: Today's Status - takes 2 columns (2/3) */}
+    <div className="lg:flex-1">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center">
+            <Clock className="w-5 h-5 mr-2" />
+            Today's Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Check In</p>
+              <p className="text-lg font-semibold">
+                {checkInTime ? format(checkInTime, 'p') : '--:--'}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Check Out</p>
+              <p className="text-lg font-semibold">
+                {checkOutTime ? format(checkOutTime, 'p') : '--:--'}
+              </p>
+            </div>
+            <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">Working Hours</p>
+            <p className="text-xl font-bold text-primary">{workingHours}</p>
+          </div>
+          </div>
+          
+          
 
-              <div className="flex space-x-2 pt-2">
-                {!checkInTime ? (
-                  <Button 
-                    onClick={handleCheckIn}
-                    disabled={isProcessing || faceRecognitionStatus !== 'ready'}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <LogIn className="w-4 h-4 mr-2" />
-                        Check In
-                      </>
-                    )}
-                  </Button>
-                ) : !checkOutTime ? (
-                  <Button 
-                    onClick={handleCheckOut}
-                    disabled={isProcessing || faceRecognitionStatus !== 'ready'}
-                    className="flex-1 bg-red-600 hover:bg-red-700"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Check Out
-                      </>
-                    )}
-                  </Button>
+          <div className="flex space-x-2 pt-2">
+            {!checkInTime ? (
+              <Button 
+                onClick={handleCheckIn}
+                disabled={isProcessing || faceRecognitionStatus !== 'ready'}
+                className="flex-1 bg-green-600 hover:bg-green-700"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Processing...
+                  </>
                 ) : (
-                  <div className="text-center w-full py-2 px-3 bg-green-100 text-green-800 rounded-md border border-green-200">
-                    <CheckCircle className="w-4 h-4 inline mr-2" />
-                    Completed for Today
-                  </div>
+                  <>
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Check In
+                  </>
                 )}
-              </div>
-
-              {/* Face Recognition Status */}
-              {faceRecognitionStatus === 'loading' && (
-                <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded border border-blue-200">
-                  <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
-                  Initializing face recognition...
-                </div>
-              )}
-
-              {faceRecognitionStatus === 'no-profile' && (
-                <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
-                  <User className="w-3 h-3 inline mr-1" />
-                  Profile picture required for face recognition
-                </div>
-              )}
-
-              {faceRecognitionStatus === 'failed' && (
-                <div className="text-xs text-red-700 bg-red-50 p-2 rounded border border-red-200">
-                  <XCircle className="w-3 h-3 inline mr-1" />
-                  Face recognition unavailable - cannot check in/out
-                </div>
-              )}
-
-              {faceRecognitionStatus === 'ready' && (
-                <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
-                  <CheckCircle className="w-3 h-3 inline mr-1" />
-                  Face recognition ready
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Calendar & History */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Calendar */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center">
-                  <CalendarIcon className="w-5 h-5 mr-2" />
-                  Calendar
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  className="rounded-md border"
-                  components={{
-                    Day: DayWithStatus
-                  }}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Shift Schedule */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center">
-                  <Building className="w-5 h-5 mr-2" />
-                  This Week's Schedule
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {shiftSchedule.length > 0 ? (
-                  <div className="space-y-1">
-                    {shiftSchedule.map((day, index) => (
-                      <ShiftScheduleItem key={index} day={day} index={index} />
-                    ))}
-                  </div>
+              </Button>
+            ) : !checkOutTime ? (
+              <Button 
+                onClick={handleCheckOut}
+                disabled={isProcessing || faceRecognitionStatus !== 'ready'}
+                className="flex-1 bg-red-600 hover:bg-red-700"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Processing...
+                  </>
                 ) : (
-                  <div className="text-center p-6 text-muted-foreground">
-                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No shift schedule available</p>
-                  </div>
+                  <>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Check Out
+                  </>
                 )}
-              </CardContent>
-            </Card>
+              </Button>
+            ) : (
+              <div className="text-center w-full py-2 px-3 bg-green-100 text-green-800 rounded-md border border-green-200">
+                <CheckCircle className="w-4 h-4 inline mr-2" />
+                Completed for Today
+              </div>
+            )}
           </div>
 
-          {/* Attendance History */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center">
-                <Users className="w-5 h-5 mr-2" />
-                Recent Attendance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="list" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="list">List View</TabsTrigger>
-                  <TabsTrigger value="detailed">Detailed View</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="list" className="mt-4">
-                  {renderView('list')}
-                </TabsContent>
-                
-                <TabsContent value="detailed" className="mt-4">
-                  {renderView('detailed')}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          {/* Face Recognition Status */}
+          {faceRecognitionStatus === 'loading' && (
+            <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded border border-blue-200">
+              <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+              Initializing face recognition...
+            </div>
+          )}
+
+          {faceRecognitionStatus === 'no-profile' && (
+            <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+              <User className="w-3 h-3 inline mr-1" />
+              Profile picture required for face recognition
+            </div>
+          )}
+
+          {faceRecognitionStatus === 'failed' && (
+            <div className="text-xs text-red-700 bg-red-50 p-2 rounded border border-red-200">
+              <XCircle className="w-3 h-3 inline mr-1" />
+              Face recognition unavailable - cannot check in/out
+            </div>
+          )}
+
+          {faceRecognitionStatus === 'ready' && (
+            <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+              <CheckCircle className="w-3 h-3 inline mr-1" />
+              Face recognition ready
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Right Card: Calendar - takes 1 column (1/3) */}
+    <div className="lg:w-1/3">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Calendar</CardTitle>
+        </CardHeader>
+        <CardContent className="">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={setDate}
+            className="rounded-md border"
+            components={{
+              Day: DayWithStatus
+            }}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  </div>
+</div>
+    {/* Second Row: Recent Attendance - takes full width (1 column) */}
+    <Card>
+        <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Recent Attendance</CardTitle>
+        </CardHeader>
+        <CardContent>
+            {renderAttendanceList()}
+        </CardContent>
+    </Card>
+</div>
 
       {/* Camera Modal with Face Detection */}
       <Dialog open={showCamera} onOpenChange={stopCamera}>
@@ -1761,41 +1408,31 @@ const startCamera = async () => {
                   Face Recognition Active
                 </Badge>
               )}
-              {faceRecognitionStatus === 'loading' && (
-                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                  Initializing...
-                </Badge>
-              )}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
             <div className="relative bg-black rounded-lg overflow-hidden">
-  <video
-    ref={videoRef}
-    autoPlay
-    playsInline
-    muted
-    className="w-full h-auto max-h-[300px] object-cover"
-    onLoadedMetadata={() => console.log('Video metadata loaded')}
-    onCanPlay={() => console.log('Video can play')}
-    onPlay={() => console.log('Video started playing')}
-  />
-  <canvas ref={canvasRef} className="hidden" />
-  
-  {/* Face detection overlay */}
-  {detectedFaces > 0 && (
-    <div className="absolute top-2 right-2">
-      <div className={`px-2 py-1 rounded text-xs font-medium ${
-        detectedFaces === 1 ? 'bg-green-500 text-white' : 
-        detectedFaces > 1 ? 'bg-red-500 text-white' : 'bg-gray-500 text-white'
-      }`}>
-        {detectedFaces} face{detectedFaces !== 1 ? 's' : ''} detected
-      </div>
-    </div>
-  )}
-</div>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-auto max-h-[300px] object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              
+              {detectedFaces > 0 && (
+                <div className="absolute top-2 right-2">
+                  <div className={`px-2 py-1 rounded text-xs font-medium ${
+                    detectedFaces === 1 ? 'bg-green-500 text-white' : 
+                    detectedFaces > 1 ? 'bg-red-500 text-white' : 'bg-gray-500 text-white'
+                  }`}>
+                    {detectedFaces} face{detectedFaces !== 1 ? 's' : ''} detected
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Face Detection Status */}
             <FaceDetectionStatus />
@@ -1895,7 +1532,5 @@ const startCamera = async () => {
     </div>
   );
 };
-
-
 
 export default AttendanceTab;
