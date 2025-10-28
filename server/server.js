@@ -28,6 +28,7 @@ app.use('/api/employees', employeeShiftRoutes);
 app.use("/api/announcements", require("./routes/announcementRoutes.js"));
 app.use("/api/notifications", require("./routes/notificationRoutes.js"));
 app.use("/api/payroll", require("./routes/payrollRoutes.js"));
+app.use("/api/offer-letters", require("./routes/offerLetterRoutes.js"));
 app.use('/api/employee-profiles', employeeProfileRoutes);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
