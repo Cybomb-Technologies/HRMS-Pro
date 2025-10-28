@@ -59,10 +59,10 @@ const Header = ({ onMenuClick }) => {
 
   // FIXED: Get current employee ID - HANDLES BOTH USER COLLECTION AND EMPLOYEE COLLECTION
   const getCurrentEmployeeId = async () => {
-    console.log("🔍 CURRENT USER:", user);
+    
 
     if (!user?.email) {
-      console.error("❌ No user email found");
+      
       return null;
     }
 
@@ -71,7 +71,7 @@ const Header = ({ onMenuClick }) => {
       user._id &&
       ["admin", "hr", "manager", "employer"].includes(user.role)
     ) {
-      console.log("✅ Using user._id for admin user:", user._id);
+     
       return user._id.toString();
     }
 
@@ -83,21 +83,18 @@ const Header = ({ onMenuClick }) => {
         const employee = employees.find((emp) => emp.email === user.email);
 
         if (employee) {
-          console.log(
-            "✅ Found employee in Employee collection:",
-            employee.employeeId
-          );
+          
           return employee.employeeId;
         }
       }
     } catch (error) {
-      console.error("❌ Error fetching employees:", error);
+     
     }
 
     // Final fallback
     const fallbackId =
       user?.employeeId || user?.id || user?._id?.toString() || user?.email;
-    console.log("🔍 Final fallback ID:", fallbackId);
+    
     return fallbackId;
   };
 
@@ -113,51 +110,49 @@ const Header = ({ onMenuClick }) => {
       }
     }
 
-    console.log("🔄 Loading notifications for employeeId:", employeeId);
+    
 
     if (!employeeId) {
-      console.error("❌ No employeeId found for user");
+      
       return;
     }
 
     setLoading(true);
     try {
-      console.log("📞 Calling notifications.get with employeeId:", employeeId);
+      
       const response = await notifications.get(employeeId);
-      console.log("📦 Raw API Response:", response);
+    
 
       let notifs = [];
 
       // Handle response - should be direct array after AppContext fix
       if (Array.isArray(response)) {
         notifs = response;
-        console.log("✅ Using direct array response, count:", notifs.length);
+       
       } else {
-        console.log("❌ Unexpected response format:", response);
+       
       }
 
-      console.log("🎯 Final notifications to display:", notifs);
+      
 
       // Get unread count
       let count = 0;
       try {
-        console.log("🔢 Calling getUnreadCount with employeeId:", employeeId);
+       
         const countResponse = await notifications.getUnreadCount(employeeId);
-        console.log("📊 Unread count response:", countResponse);
+        
         count = countResponse.count || countResponse || 0;
       } catch (countError) {
-        console.error("❌ Error getting unread count:", countError);
+        
         // Fallback: calculate from array
         count = notifs.filter((notif) => !notif.isRead).length;
       }
 
       setNotificationList(notifs);
       setUnreadCount(count);
-      console.log(
-        `✅ SUCCESS: Loaded ${notifs.length} notifications, ${count} unread`
-      );
+      c
     } catch (error) {
-      console.error("❌ Error loading notifications:", error);
+      
     } finally {
       setLoading(false);
     }
@@ -165,11 +160,11 @@ const Header = ({ onMenuClick }) => {
 
   const handleMarkAsRead = async (notificationId) => {
     try {
-      console.log("📝 Marking notification as read:", notificationId);
+     
       await notifications.markAsRead(notificationId);
       await loadNotifications(); // Reload to update counts
     } catch (error) {
-      console.error("❌ Error marking notification as read:", error);
+     
       toast({
         title: "Error",
         description: "Failed to mark notification as read",
@@ -185,10 +180,7 @@ const Header = ({ onMenuClick }) => {
     }
 
     try {
-      console.log(
-        "📝 Marking all notifications as read for:",
-        currentEmployeeId
-      );
+      
       await notifications.markAllAsRead(currentEmployeeId);
       await loadNotifications();
       toast({
@@ -196,7 +188,7 @@ const Header = ({ onMenuClick }) => {
         description: "All notifications marked as read",
       });
     } catch (error) {
-      console.error("❌ Error marking all notifications as read:", error);
+      
       toast({
         title: "Error",
         description: "Failed to mark all notifications as read",

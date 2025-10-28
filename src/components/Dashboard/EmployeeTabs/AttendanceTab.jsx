@@ -132,19 +132,18 @@ const AttendanceTab = () => {
           return;
         }
 
-        // Ensure the URL is absolute
-      // Ensure the URL is absolute and correct
-let absoluteProfilePicture = profilePicture;
+        // Ensure the URL is absolute and correct
+        let absoluteProfilePicture = profilePicture;
 
-// Fix URL if it points to frontend instead of backend
-if (profilePicture.includes('localhost:3000')) {
-  absoluteProfilePicture = profilePicture.replace('localhost:3000', 'localhost:5000');
-  console.log('Fixed backend URL:', absoluteProfilePicture);
-} else if (!profilePicture.startsWith('http') && !profilePicture.startsWith('data:')) {
-  // Make relative URL absolute - point to backend server
-  absoluteProfilePicture = `http://localhost:5000${profilePicture.startsWith('/') ? '' : '/'}${profilePicture}`;
-  console.log('Converted to backend URL:', absoluteProfilePicture);
-}
+        // Fix URL if it points to frontend instead of backend
+        if (profilePicture.includes('localhost:3000')) {
+          absoluteProfilePicture = profilePicture.replace('localhost:3000', 'localhost:5000');
+          console.log('Fixed backend URL:', absoluteProfilePicture);
+        } else if (!profilePicture.startsWith('http') && !profilePicture.startsWith('data:')) {
+          // Make relative URL absolute - point to backend server
+          absoluteProfilePicture = `http://localhost:5000${profilePicture.startsWith('/') ? '' : '/'}${profilePicture}`;
+          console.log('Converted to backend URL:', absoluteProfilePicture);
+        }
 
         console.log('Initializing face recognition service...');
         await faceRecognitionService.init();
@@ -258,21 +257,28 @@ if (profilePicture.includes('localhost:3000')) {
   // FACE DETECTION LOGIC
   // ==============================
 
-  const startFaceDetection = () => {
-    if (!videoRef.current || faceDetectionActive) return;
+const startFaceDetection = () => {
+  if (!videoRef.current || faceDetectionActive) {
+    console.log('Face detection already active or video not ready');
+    return;
+  }
 
-    console.log('Starting continuous face detection...');
-    setFaceDetectionActive(true);
-    
-    const interval = setInterval(async () => {
-      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-        await detectFacesInFrame();
-      }
-    }, 1000); // Check for faces every second
+  console.log('Starting continuous face detection...');
+  setFaceDetectionActive(true);
+  
+  const interval = setInterval(async () => {
+    if (videoRef.current && 
+        videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA &&
+        videoRef.current.videoWidth > 0 &&
+        videoRef.current.videoHeight > 0) {
+      await detectFacesInFrame();
+    } else {
+      console.log('Video not ready for face detection');
+    }
+  }, 1500); // Check for faces every 1.5 seconds
 
-    setFaceDetectionInterval(interval);
-  };
-
+  setFaceDetectionInterval(interval);
+};
   const stopFaceDetection = () => {
     if (faceDetectionInterval) {
       clearInterval(faceDetectionInterval);
@@ -282,42 +288,56 @@ if (profilePicture.includes('localhost:3000')) {
     setDetectedFaces(0);
   };
 
-  const detectFacesInFrame = async () => {
-    try {
-      if (!videoRef.current || !canvasRef.current) return;
-
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      
-      // Set canvas dimensions to match video
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      
-      // Draw current video frame to canvas
-      context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-
-      // Detect faces in the current frame
-      const result = await faceRecognitionService.human.detect(canvas);
-      
-      if (result?.face?.length >= 0) {
-        setDetectedFaces(result.face.length);
-        
-        // If multiple faces detected, show warning
-        if (result.face.length > 1) {
-          console.warn(`Multiple faces detected: ${result.face.length}`);
-        }
-      } else {
-        setDetectedFaces(0);
-      }
-    } catch (error) {
-      console.error('Error detecting faces:', error);
-      setDetectedFaces(0);
+const detectFacesInFrame = async () => {
+  try {
+    if (!videoRef.current || !canvasRef.current) {
+      console.log('Video or canvas not ready');
+      return;
     }
-  };
+
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    
+    // Set canvas dimensions to match video
+    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      console.log('Video dimensions not ready');
+      return;
+    }
+    
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    
+    // Draw current video frame to canvas
+    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+    console.log('Detecting faces in frame...');
+    
+    // Detect faces in the current frame
+    const result = await faceRecognitionService.human.detect(canvas);
+    
+    console.log('Face detection result:', result);
+    
+    if (result?.face && Array.isArray(result.face)) {
+      setDetectedFaces(result.face.length);
+      console.log(`Faces detected: ${result.face.length}`);
+      
+      // If multiple faces detected, show warning
+      if (result.face.length > 1) {
+        console.warn(`Multiple faces detected: ${result.face.length}`);
+      }
+    } else {
+      setDetectedFaces(0);
+      console.log('No faces detected');
+    }
+  } catch (error) {
+    console.error('Error detecting faces:', error);
+    setDetectedFaces(0);
+  }
+};
 
   const performFaceVerification = async () => {
     if (faceRecognitionStatus !== 'ready') {
-      throw new Error('Face recognition not available. Using standard verification.');
+      throw new Error('FACE_RECOGNITION_UNAVAILABLE');
     }
 
     // Check for multiple faces before verification
@@ -348,7 +368,7 @@ if (profilePicture.includes('localhost:3000')) {
     }
 
     if (!verificationResult.matched) {
-      throw new Error('Face verification failed. Please try again.');
+      throw new Error('FACE_VERIFICATION_FAILED');
     }
 
     return verificationResult;
@@ -419,17 +439,17 @@ if (profilePicture.includes('localhost:3000')) {
         const employeeData = responseData.data?.employee || responseData.employee || responseData;
         console.log('Extracted employee data:', employeeData);
         
-let profilePicture = employeeData.profilePicture || 
-                   employeeData.profilePhoto ||
-                   employeeData.photo || 
-                   employeeData.avatar || 
-                   employeeData.imageUrl;
+        let profilePicture = employeeData.profilePicture || 
+                       employeeData.profilePhoto ||
+                       employeeData.photo || 
+                       employeeData.avatar || 
+                       employeeData.imageUrl;
 
-// Fix the URL if it contains localhost:3000 but should be localhost:5000
-if (profilePicture && profilePicture.includes('localhost:3000')) {
-  profilePicture = profilePicture.replace('localhost:3000', 'localhost:5000');
-  console.log('Fixed profile picture URL:', profilePicture);
-}
+        // Fix the URL if it contains localhost:3000 but should be localhost:5000
+        if (profilePicture && profilePicture.includes('localhost:3000')) {
+          profilePicture = profilePicture.replace('localhost:3000', 'localhost:5000');
+          console.log('Fixed profile picture URL:', profilePicture);
+        }
         
         console.log('Final profile picture URL:', profilePicture);
         
@@ -731,40 +751,59 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
     });
   };
 
-  const startCamera = async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Camera not supported on this device');
-      }
-
-      setShowCamera(true);
-      setIsCapturing(true);
-      setDetectedFaces(0);
-      setFaceVerificationResult(null);
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-    } catch (error) {
-      console.error('Error starting camera:', error);
-      toast({
-        title: 'Camera Access Required',
-        description: 'Please allow camera access to continue with attendance.',
-        variant: 'destructive'
-      });
-      setShowCamera(false);
-      setIsCapturing(false);
+const startCamera = async () => {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Camera not supported on this device');
     }
-  };
+
+    setShowCamera(true);
+    setIsCapturing(true);
+    setDetectedFaces(0);
+    setFaceVerificationResult(null);
+
+    console.log('Requesting camera access...');
+    
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: "user",
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      } 
+    });
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      
+      // Wait for video to be ready
+      videoRef.current.onloadedmetadata = () => {
+        console.log('Video metadata loaded, starting playback...');
+        videoRef.current.play().then(() => {
+          console.log('Video playback started');
+          // Start face detection after a short delay to ensure video is playing
+          setTimeout(() => {
+            startFaceDetection();
+          }, 500);
+        }).catch(error => {
+          console.error('Error playing video:', error);
+        });
+      };
+      
+      videoRef.current.onerror = (error) => {
+        console.error('Video error:', error);
+      };
+    }
+  } catch (error) {
+    console.error('Error starting camera:', error);
+    toast({
+      title: 'Camera Access Required',
+      description: 'Please allow camera access to continue with attendance.',
+      variant: 'destructive'
+    });
+    setShowCamera(false);
+    setIsCapturing(false);
+  }
+};
 
   const stopCamera = () => {
     stopFaceDetection();
@@ -852,6 +891,16 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
         return;
       }
 
+      // Check if face recognition is ready
+      if (faceRecognitionStatus !== 'ready') {
+        toast({
+          title: 'Face Recognition Required',
+          description: 'Face recognition is not available. Please ensure your profile picture is set up correctly.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
       console.log('Proceeding with check-in for employeeId:', employeeId);
       setIsProcessing(true);
       await startCamera();
@@ -887,22 +936,31 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
       const location = await getCurrentLocation();
 
       let verificationResult = null;
-      let faceVerified = false;
       
-      // Only attempt face verification if it's ready
+      // Only proceed if face recognition is ready
       if (faceRecognitionStatus === 'ready') {
         try {
           verificationResult = await performFaceVerification();
-          faceVerified = verificationResult && verificationResult.matched;
+          
+          // STRICT REQUIREMENT: Only allow check-in if face is verified
+          if (!verificationResult.matched) {
+            throw new Error('FACE_VERIFICATION_FAILED');
+          }
         } catch (faceError) {
-          console.warn('Face verification failed, proceeding with standard check-in:', faceError);
-          // Continue with standard verification
+          console.error('Face verification failed:', faceError);
+          
+          if (faceError.message === 'FACE_VERIFICATION_FAILED') {
+            throw new Error('Face verification failed. Cannot check in.');
+          } else {
+            throw new Error(`Face verification error: ${faceError.message}`);
+          }
         }
       } else {
-        console.warn('Face recognition not available, proceeding with standard check-in');
+        // If face recognition is not available, don't allow check-in
+        throw new Error('FACE_RECOGNITION_UNAVAILABLE');
       }
 
-      // Prepare check-in data
+      // Prepare check-in data (only reached if face verification passed)
       const checkInData = {
         employeeId: user.employeeId,
         employee: user.name || user.employeeName || user.email?.split('@')[0] || 'Employee',
@@ -914,9 +972,9 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
         photo: photo,
         teamId: user.teamId || 1,
         department: user.department || 'General',
-        faceVerified: faceVerified,
+        faceVerified: true, // Always true now since we require verification
         faceMatchSimilarity: verificationResult?.similarity,
-        verificationMethod: faceVerified ? 'face_recognition' : 'standard',
+        verificationMethod: 'face_recognition',
         detectedFaces: detectedFaces
       };
 
@@ -931,7 +989,7 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
       
       toast({ 
         title: '✅ Checked In Successfully!', 
-        description: `Checked in at ${format(now, 'p')}${faceVerified ? ' (Face Verified)' : ' (Standard Verification)'}`,
+        description: `Checked in at ${format(now, 'p')} (Face Verified)`,
         duration: 5000
       });
 
@@ -947,6 +1005,10 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
         errorMessage = 'Multiple faces detected. Only one person should be in the frame.';
       } else if (error.message === 'NO_FACE_DETECTED') {
         errorMessage = 'No face detected. Please ensure your face is clearly visible.';
+      } else if (error.message === 'FACE_VERIFICATION_FAILED') {
+        errorMessage = 'Face verification failed. Cannot check in. Please try again.';
+      } else if (error.message === 'FACE_RECOGNITION_UNAVAILABLE') {
+        errorMessage = 'Face recognition is not available. Cannot check in.';
       }
 
       toast({ 
@@ -984,6 +1046,16 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
         return;
       }
 
+      // Check if face recognition is ready
+      if (faceRecognitionStatus !== 'ready') {
+        toast({
+          title: 'Face Recognition Required',
+          description: 'Face recognition is not available. Please ensure your profile picture is set up correctly.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
       setIsProcessing(true);
       await startCamera();
     } catch (error) {
@@ -1017,19 +1089,28 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
       const location = await getCurrentLocation();
 
       let verificationResult = null;
-      let faceVerified = false;
       
-      // Only attempt face verification if it's ready
+      // Only proceed if face recognition is ready
       if (faceRecognitionStatus === 'ready') {
         try {
           verificationResult = await performFaceVerification();
-          faceVerified = verificationResult && verificationResult.matched;
+          
+          // STRICT REQUIREMENT: Only allow check-out if face is verified
+          if (!verificationResult.matched) {
+            throw new Error('FACE_VERIFICATION_FAILED');
+          }
         } catch (faceError) {
-          console.warn('Face verification failed, proceeding with standard check-out:', faceError);
-          // Continue with standard verification
+          console.error('Face verification failed:', faceError);
+          
+          if (faceError.message === 'FACE_VERIFICATION_FAILED') {
+            throw new Error('Face verification failed. Cannot check out.');
+          } else {
+            throw new Error(`Face verification error: ${faceError.message}`);
+          }
         }
       } else {
-        console.warn('Face recognition not available, proceeding with standard check-out');
+        // If face recognition is not available, don't allow check-out
+        throw new Error('FACE_RECOGNITION_UNAVAILABLE');
       }
 
       const checkOutData = {
@@ -1040,9 +1121,9 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
         address: location.address,
         accuracy: location.accuracy,
         photo: photo,
-        faceVerified: faceVerified,
+        faceVerified: true, // Always true now since we require verification
         faceMatchSimilarity: verificationResult?.similarity,
-        verificationMethod: faceVerified ? 'face_recognition' : 'standard',
+        verificationMethod: 'face_recognition',
         detectedFaces: detectedFaces
       };
 
@@ -1059,7 +1140,7 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
       
       toast({ 
         title: '✅ Checked Out Successfully!', 
-        description: `Checked out at ${format(now, 'p')}. Total: ${hours}h ${minutes}m${faceVerified ? ' (Face Verified)' : ' (Standard Verification)'}`,
+        description: `Checked out at ${format(now, 'p')}. Total: ${hours}h ${minutes}m (Face Verified)`,
         duration: 5000
       });
 
@@ -1075,6 +1156,10 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
         errorMessage = 'Multiple faces detected. Only one person should be in the frame.';
       } else if (error.message === 'NO_FACE_DETECTED') {
         errorMessage = 'No face detected. Please ensure your face is clearly visible.';
+      } else if (error.message === 'FACE_VERIFICATION_FAILED') {
+        errorMessage = 'Face verification failed. Cannot check out. Please try again.';
+      } else if (error.message === 'FACE_RECOGNITION_UNAVAILABLE') {
+        errorMessage = 'Face recognition is not available. Cannot check out.';
       }
 
       toast({ 
@@ -1514,7 +1599,7 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
                 {!checkInTime ? (
                   <Button 
                     onClick={handleCheckIn}
-                    disabled={isProcessing}
+                    disabled={isProcessing || faceRecognitionStatus !== 'ready'}
                     className="flex-1 bg-green-600 hover:bg-green-700"
                   >
                     {isProcessing ? (
@@ -1532,7 +1617,7 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
                 ) : !checkOutTime ? (
                   <Button 
                     onClick={handleCheckOut}
-                    disabled={isProcessing}
+                    disabled={isProcessing || faceRecognitionStatus !== 'ready'}
                     className="flex-1 bg-red-600 hover:bg-red-700"
                   >
                     {isProcessing ? (
@@ -1571,9 +1656,9 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
               )}
 
               {faceRecognitionStatus === 'failed' && (
-                <div className="text-xs text-muted-foreground bg-yellow-50 p-2 rounded border border-yellow-200">
-                  <Camera className="w-3 h-3 inline mr-1" />
-                  Face recognition not available. Using standard verification.
+                <div className="text-xs text-red-700 bg-red-50 p-2 rounded border border-red-200">
+                  <XCircle className="w-3 h-3 inline mr-1" />
+                  Face recognition unavailable - cannot check in/out
                 </div>
               )}
 
@@ -1676,11 +1761,6 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
                   Face Recognition Active
                 </Badge>
               )}
-              {(faceRecognitionStatus === 'failed' || faceRecognitionStatus === 'no-profile') && (
-                <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700">
-                  Standard Verification
-                </Badge>
-              )}
               {faceRecognitionStatus === 'loading' && (
                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
                   <Loader2 className="w-3 h-3 animate-spin mr-1" />
@@ -1692,27 +1772,30 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
           
           <div className="space-y-4">
             <div className="relative bg-black rounded-lg overflow-hidden">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-auto max-h-[300px] object-cover"
-              />
-              <canvas ref={canvasRef} className="hidden" />
-              
-              {/* Face detection overlay */}
-              {detectedFaces > 0 && (
-                <div className="absolute top-2 right-2">
-                  <div className={`px-2 py-1 rounded text-xs font-medium ${
-                    detectedFaces === 1 ? 'bg-green-500 text-white' : 
-                    detectedFaces > 1 ? 'bg-red-500 text-white' : 'bg-gray-500 text-white'
-                  }`}>
-                    {detectedFaces} face{detectedFaces !== 1 ? 's' : ''} detected
-                  </div>
-                </div>
-              )}
-            </div>
+  <video
+    ref={videoRef}
+    autoPlay
+    playsInline
+    muted
+    className="w-full h-auto max-h-[300px] object-cover"
+    onLoadedMetadata={() => console.log('Video metadata loaded')}
+    onCanPlay={() => console.log('Video can play')}
+    onPlay={() => console.log('Video started playing')}
+  />
+  <canvas ref={canvasRef} className="hidden" />
+  
+  {/* Face detection overlay */}
+  {detectedFaces > 0 && (
+    <div className="absolute top-2 right-2">
+      <div className={`px-2 py-1 rounded text-xs font-medium ${
+        detectedFaces === 1 ? 'bg-green-500 text-white' : 
+        detectedFaces > 1 ? 'bg-red-500 text-white' : 'bg-gray-500 text-white'
+      }`}>
+        {detectedFaces} face{detectedFaces !== 1 ? 's' : ''} detected
+      </div>
+    </div>
+  )}
+</div>
 
             {/* Face Detection Status */}
             <FaceDetectionStatus />
@@ -1812,5 +1895,7 @@ if (profilePicture && profilePicture.includes('localhost:3000')) {
     </div>
   );
 };
+
+
 
 export default AttendanceTab;
