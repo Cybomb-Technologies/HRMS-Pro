@@ -81,7 +81,7 @@ export const AppProvider = ({ children }) => {
   const notificationApi = {
     get: async (employeeId) => {
       try {
-        console.log("🔄 Fetching notifications for employee:", employeeId);
+       
         const response = await fetch(
           `${API_BASE_URL}/notifications/${employeeId}`
         );
@@ -96,15 +96,10 @@ export const AppProvider = ({ children }) => {
         }
 
         const data = await response.json();
-        console.log("📦 Full backend response:", data);
-
+        
         // CORRECTED: Extract notifications array from response
         const notifications = data.notifications || [];
-        console.log(
-          "✅ Extracted notifications:",
-          notifications.length,
-          "items"
-        );
+        
 
         return notifications;
       } catch (error) {
@@ -115,7 +110,7 @@ export const AppProvider = ({ children }) => {
 
     markAsRead: async (notificationId) => {
       try {
-        console.log("📝 Marking notification as read:", notificationId);
+       
         const response = await fetch(
           `${API_BASE_URL}/notifications/${notificationId}/read`,
           {
@@ -131,7 +126,7 @@ export const AppProvider = ({ children }) => {
 
     markAllAsRead: async (employeeId) => {
       try {
-        console.log("📝 Marking all notifications as read for:", employeeId);
+       
         const response = await fetch(
           `${API_BASE_URL}/notifications/${employeeId}/read-all`,
           {
@@ -147,7 +142,7 @@ export const AppProvider = ({ children }) => {
 
     getUnreadCount: async (employeeId) => {
       try {
-        console.log("🔢 Getting unread count for:", employeeId);
+       
         const response = await fetch(
           `${API_BASE_URL}/notifications/${employeeId}/unread-count`
         );
