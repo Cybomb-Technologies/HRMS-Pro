@@ -32,6 +32,7 @@ router.get('/photo/:id/:type', getAttendancePhoto);
 router.get('/today/:employeeId', getTodayAttendance);
 router.post('/manual-request', createManualRequest);
 
+
 // Timesheet routes
 router.get('/timesheets', getTimesheets);
 router.post('/timesheets/submit', submitTimesheet);
