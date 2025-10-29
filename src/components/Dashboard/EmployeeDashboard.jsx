@@ -47,12 +47,12 @@ const EmployeeDashboard = () => {
     { id: 'attendance', label: 'Attendance', icon: Clock, component: EmployeeAttendanceTab },
     { id: 'teams', label: 'Teams', icon: TeamsIcon, component: EmployeeTeamsTab },
     { id: 'leave', label: 'Leave', icon: Calendar, component: EmployeeLeaveTab },
-    { id: 'approvals', label: 'Approvals', icon: CheckSquare, component: EmployeeApprovalsTab },
-    { id: 'timelogs', label: 'Timelogs', icon: Timer, component: EmployeeTimelogsTab },
+    { id: 'approvals', label: 'Approvals', icon: CheckSquare, component: EmployeeApprovalsTab },    
     { id: 'timesheets', label: 'Timesheets', icon: Timer, component: EmployeeTimesheetsTab },
+    { id: 'timelogs', label: 'Timelogs', icon: Timer, component: EmployeeTimelogsTab },
     { id: 'files', label: 'Files', icon: FileText, component: EmployeeFilesTab },
-    { id: 'hr_process', label: 'HR Process', icon: Briefcase, component: EmployeeHRProcessTab },
-    { id: 'career_history', label: 'Career History', icon: TrendingUp, component: EmployeeCareerHistoryTab },
+    // { id: 'hr_process', label: 'HR Process', icon: Briefcase, component: EmployeeHRProcessTab },
+    // { id: 'career_history', label: 'Career History', icon: TrendingUp, component: EmployeeCareerHistoryTab },
     
   ];
 

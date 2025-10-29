@@ -33,13 +33,22 @@ const identityDocumentSchema = new mongoose.Schema({
   identificationNumber: { type: String } // Store the actual ID number
 });
 
+// Updated document schema with section support
 const documentSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  type: { type: String, required: true },
-  filePath: { type: String },
+  originalName: { type: String }, // Original filename
+  section: { 
+    type: String, 
+    required: true,
+    enum: ['identity', 'education', 'work_experience', 'banking']
+  },
+  filePath: { type: String, required: true },
   uploadDate: { type: Date, default: Date.now },
   fileSize: { type: Number },
-  mimeType: { type: String }
+  mimeType: { type: String },
+  fileType: { type: String }, // pdf, doc, docx, etc.
+  uploadedBy: { type: String }, // Employee ID who uploaded
+  status: { type: String, default: 'active' } // active, deleted
 });
 
 const addressSchema = new mongoose.Schema({
@@ -54,6 +63,15 @@ const emergencyContactSchema = new mongoose.Schema({
   name: String,
   relationship: String,
   phone: String
+});
+
+// Banking information schema
+const bankingInfoSchema = new mongoose.Schema({
+  bankName: String,
+  accountNumber: String,
+  ifscCode: String,
+  branch: String,
+  accountHolderName: String
 });
 
 // Main Employee Schema
@@ -102,6 +120,9 @@ const employeeSchema = new mongoose.Schema({
   pan: String,
   aadhaar: String,
   
+  // Banking Information
+  bankingInfo: bankingInfoSchema,
+  
   // Address Information
   address: addressSchema,
   presentAddress: String,
@@ -117,7 +138,7 @@ const employeeSchema = new mongoose.Schema({
   workExperience: [workExperienceSchema],
   dependents: [dependentSchema],
   identityDocuments: [identityDocumentSchema],
-  documents: [documentSchema],
+  documents: [documentSchema], // Updated to use new document schema
   
   // Profile and Media
   profilePhoto: String,
@@ -131,13 +152,19 @@ const employeeSchema = new mongoose.Schema({
   modifiedTime: { type: Date, default: Date.now },
   
   // Experience
-  totalExperience: String
+  totalExperience: String,
+
+  // Document upload status
+  documentUploadStatus: {
+    identity: { type: Boolean, default: false },
+    education: { type: Boolean, default: false },
+    work_experience: { type: Boolean, default: false },
+    banking: { type: Boolean, default: false }
+  }
 
 }, {
   timestamps: true
 });
-
-
 
 // Virtual for age calculation
 employeeSchema.virtual('age').get(function() {
@@ -162,6 +189,18 @@ employeeSchema.virtual('fullName').get(function() {
   return this.name;
 });
 
+// Virtual to get documents by section
+employeeSchema.virtual('documentsBySection').get(function() {
+  const sections = {};
+  this.documents.forEach(doc => {
+    if (!sections[doc.section]) {
+      sections[doc.section] = [];
+    }
+    sections[doc.section].push(doc);
+  });
+  return sections;
+});
+
 // Pre-save middleware to ensure name is populated
 employeeSchema.pre('save', function(next) {
   if (!this.name && this.firstName && this.lastName) {
@@ -172,26 +211,43 @@ employeeSchema.pre('save', function(next) {
   next();
 });
 
-// Indexes for faster queries
-employeeSchema.index({ employeeId: 1 });
-employeeSchema.index({ email: 1 });
-employeeSchema.index({ department: 1 });
-employeeSchema.index({ location: 1 });
-employeeSchema.index({ status: 1 });
-employeeSchema.index({ 'education.instituteName': 1 });
-employeeSchema.index({ 'workExperience.companyName': 1 });
+// Method to add documents
+employeeSchema.methods.addDocuments = function(documents) {
+  this.documents.push(...documents);
+  
+  // Update document upload status
+  documents.forEach(doc => {
+    if (this.documentUploadStatus.hasOwnProperty(doc.section)) {
+      this.documentUploadStatus[doc.section] = true;
+    }
+  });
+  
+  return this.save();
+};
 
-// Ensure virtual fields are serialized
-employeeSchema.set('toJSON', { 
-  virtuals: true,
-  transform: function(doc, ret) {
-    // Remove password from JSON output
-    delete ret.password;
-    return ret;
+// Method to remove document
+employeeSchema.methods.removeDocument = function(documentId) {
+  const document = this.documents.id(documentId);
+  if (!document) {
+    throw new Error('Document not found');
   }
-});
+  
+  this.documents.pull(documentId);
+  
+  // Update document upload status if no documents left in section
+  const section = document.section;
+  const hasOtherDocuments = this.documents.some(doc => doc.section === section && doc._id.toString() !== documentId);
+  if (!hasOtherDocuments) {
+    this.documentUploadStatus[section] = false;
+  }
+  
+  return this.save();
+};
 
-employeeSchema.set('toObject', { virtuals: true });
+// Method to get documents by section
+employeeSchema.methods.getDocumentsBySection = function(section) {
+  return this.documents.filter(doc => doc.section === section && doc.status === 'active');
+};
 
 // Static method to find by employeeId
 employeeSchema.statics.findByEmployeeId = function(employeeId) {
@@ -201,6 +257,11 @@ employeeSchema.statics.findByEmployeeId = function(employeeId) {
 // Static method to find active employees
 employeeSchema.statics.findActive = function() {
   return this.find({ status: 'active' });
+};
+
+// Static method to find employees by document status
+employeeSchema.statics.findByDocumentStatus = function(section, status = true) {
+  return this.find({ [`documentUploadStatus.${section}`]: status });
 };
 
 // Instance method to get complete profile
@@ -231,7 +292,8 @@ employeeSchema.methods.getCompleteProfile = function() {
       workPhone: this.workPhone,
       personalMobile: this.personalMobile,
       location: this.location
-    }
+    },
+    documentStatus: this.documentUploadStatus
   };
 };
 

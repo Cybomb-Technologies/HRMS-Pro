@@ -1,33 +1,39 @@
 // routes/timesheetRoutes.js
 const express = require('express');
 const router = express.Router();
+const { authMiddleware } = require('../middleware/authMiddleware'); // Add this import
 const {
   getTimesheets,
+  getTimesheetById,
   createTimesheet,
   updateTimesheet,
   submitTimesheet,
   updateTimesheetStatus,
   getTimesheetStats
 } = require('../controllers/timesheetController');
-const { protect } = require('../middleware/authMiddleware');
 
-// All routes are protected
-router.use(protect);
+// Apply authMiddleware to ALL timesheet routes
+router.use(authMiddleware); // This will apply to all routes below
 
-router.route('/')
-  .get(getTimesheets)
-  .post(createTimesheet);
+// GET /api/timesheets - Get all timesheets
+router.get('/', getTimesheets);
 
-router.route('/stats')
-  .get(getTimesheetStats);
+// GET /api/timesheets/stats - Get timesheet statistics
+router.get('/stats', getTimesheetStats);
 
-router.route('/:id')
-  .put(updateTimesheet);
+// GET /api/timesheets/:id - Get timesheet by ID
+router.get('/:id', getTimesheetById);
 
-router.route('/:id/submit')
-  .put(submitTimesheet);
+// POST /api/timesheets - Create new timesheet
+router.post('/', createTimesheet);
 
-router.route('/:id/status')
-  .put(updateTimesheetStatus);
+// PUT /api/timesheets/:id - Update timesheet
+router.put('/:id', updateTimesheet);
+
+// PUT /api/timesheets/:id/submit - Submit timesheet
+router.put('/:id/submit', submitTimesheet);
+
+// PUT /api/timesheets/:id/status - Approve/reject timesheet (admin only)
+router.put('/:id/status', updateTimesheetStatus);
 
 module.exports = router;
