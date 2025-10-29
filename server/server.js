@@ -50,6 +50,7 @@ app.use('/api/employees', employeeShiftRoutes);
 app.use("/api/announcements", require("./routes/announcementRoutes.js"));
 app.use("/api/notifications", require("./routes/notificationRoutes.js"));
 app.use("/api/payroll", require("./routes/payrollRoutes.js"));
+app.use("/api/offer-letters", require("./routes/offerLetterRoutes.js"));
 app.use('/api/employee-profiles', employeeProfileRoutes);
 app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
 const PORT = process.env.PORT || 5000;
