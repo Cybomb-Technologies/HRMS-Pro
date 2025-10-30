@@ -3,7 +3,27 @@ const User = require('../models/User.js');
 const bcrypt = require('bcryptjs');
 const fs = require('fs').promises;
 const path = require('path');
+// GET single employee by employeeId
+exports.getEmployeeById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const employee = await Employee.findOne({ employeeId: id });
+    if (!employee) {
+      return res.status(404).json({ 
+        error: 'Employee not found' 
+      });
+    }
 
+    res.json(employee);
+  } catch (err) {
+    console.error('Error fetching employee:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch employee',
+      details: err.message 
+    });
+  }
+};
 // GET all employees
 exports.getEmployees = async (req, res) => {
   try {
@@ -38,9 +58,15 @@ exports.addEmployee = async (req, res) => {
       password 
     } = req.body;
 
+    
+     
     // Normalize email to lowercase
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedEmployeeId = employeeId.trim();
+
+    // Validate role
+    const validRoles = ['employee', 'hr', 'admin', 'employer'];
+    const userRole = role && validRoles.includes(role) ? role : 'employee';
 
     // Check for duplicates
     const [existingEmployeeByEmail, existingEmployeeById, existingUser] = await Promise.all([
@@ -82,7 +108,7 @@ exports.addEmployee = async (req, res) => {
       workPhone,
       department, 
       designation,
-      role,
+      role: userRole,
       employmentType,
       status,
       sourceOfHire,
@@ -96,18 +122,27 @@ exports.addEmployee = async (req, res) => {
     });
     
     await newEmployee.save();
+     // Update department headcount
+    if (newEmployee.department) {
+      const Department = require('../models/Department');
+      const dept = await Department.findOne({ departmentId: newEmployee.department });
+      if (dept) {
+        await dept.calculateHeadcount();
+      }
+    }
 
     // Hash password before saving user
     const employeePassword = password || "Password123";
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(employeePassword, saltRounds);
 
-    // Create user with hashed password
+    // Create user with the role from request body
     const newUser = new User({ 
       email: normalizedEmail, 
       password: hashedPassword,
-      role: 'employee', 
-      employeeId: normalizedEmployeeId
+      role: userRole,
+      employeeId: normalizedEmployeeId,
+      name: name
     });
     
     await newUser.save();
@@ -115,9 +150,9 @@ exports.addEmployee = async (req, res) => {
     res.status(201).json({ 
       employee: newEmployee,
       tempPassword: !password ? employeePassword : undefined,
-      message: `Employee ${name} created successfully. Login email: ${normalizedEmail}`
+      message: `Employee ${name} created successfully with role: ${userRole}. Login email: ${normalizedEmail}`
     });
-    } catch (err) {
+  } catch (err) {
     console.error('Error adding employee:', err);
     res.status(500).json({ error: err.message });
   }
@@ -167,13 +202,15 @@ exports.loginEmployee = async (req, res) => {
       user: {
         email: user.email,
         role: user.role,
-        employeeId: user.employeeId
+        employeeId: user.employeeId,
+        name: user.name
       },
       employee: {
         name: employee.name,
         department: employee.department,
         designation: employee.designation,
-        employeeId: employee.employeeId
+        employeeId: employee.employeeId,
+        role: employee.role
       }
     });
 
@@ -192,7 +229,7 @@ exports.deleteEmployee = async (req, res) => {
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found' });
     }
-
+const oldDepartment = employee.department;
     // Delete all documents from file system
     if (employee.documents && employee.documents.length > 0) {
       const deletePromises = employee.documents.map(async (doc) => {
@@ -209,6 +246,15 @@ exports.deleteEmployee = async (req, res) => {
     await Employee.findOneAndDelete({ employeeId: id });
     await User.findOneAndDelete({ employeeId: id });
 
+     // Update department headcount
+    if (oldDepartment) {
+      const Department = require('../models/Department');
+      const dept = await Department.findOne({ departmentId: oldDepartment });
+      if (dept) {
+        await dept.calculateHeadcount();
+      }
+    }
+
     res.json({ message: 'Employee deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -223,6 +269,23 @@ exports.updateEmployee = async (req, res) => {
     const employee = await Employee.findOne({ employeeId: id });
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+    const oldDepartment = employee.department;
+    // Validate and update role if provided
+    if (updateData.role) {
+      const validRoles = ['employee', 'hr', 'admin', 'employer'];
+      if (!validRoles.includes(updateData.role)) {
+        return res.status(400).json({ 
+          message: 'Invalid role',
+          details: 'Role must be one of: employee, hr, admin, employer'
+        });
+      }
+      
+      // Update role in both Employee and User collections
+      await User.findOneAndUpdate(
+        { employeeId: id },
+        { role: updateData.role }
+      );
     }
 
     // If password is being updated, hash it and update User collection
@@ -250,13 +313,23 @@ exports.updateEmployee = async (req, res) => {
       );
     }
 
+    // Update name in User collection if changed
+    if (updateData.name) {
+      await User.findOneAndUpdate(
+        { employeeId: id },
+        { name: updateData.name }
+      );
+    }
+
     // Update other fields in Employee collection
     Object.keys(updateData).forEach(key => {
       employee[key] = updateData[key];
     });
 
     await employee.save();
-
+ if (oldDepartment !== employee.department) {
+      await exports.updateDepartmentHeadcount(id, oldDepartment);
+    }
     res.status(200).json({ 
       message: 'Employee updated successfully', 
       employee 
@@ -460,49 +533,153 @@ exports.deleteDocument = async (req, res) => {
   }
 };
 
-// Get employee documents by section
+// Get employee documents
 exports.getEmployeeDocuments = async (req, res) => {
   try {
-    const { empId } = req.params;
-    const { section } = req.query;
+    const { id } = req.params;
 
-    console.log('Fetching documents for:', { empId, section }); // Debug log
-
-    const employee = await Employee.findOne({ employeeId: empId });
+    const employee = await Employee.findOne({ employeeId: id });
     if (!employee) {
       return res.status(404).json({
         error: 'Employee not found'
       });
     }
 
-    let documents;
-    if (section) {
-      documents = employee.getDocumentsBySection(section);
-    } else {
-      // Return all active documents
-      documents = employee.documents.filter(doc => doc.status === 'active');
-    }
-
-    console.log('Found documents:', documents.length); // Debug log
-
     res.json({
-      employeeId: empId,
-      documents: documents.map(doc => ({
-        id: doc._id,
+      employeeId: id,
+      documents: employee.documents.filter(doc => doc.status === 'active').map(doc => ({
+        _id: doc._id,
         name: doc.name,
         section: doc.section,
         fileSize: doc.fileSize,
         uploadDate: doc.uploadDate,
-        fileType: doc.fileType
-      })),
-      documentStatus: employee.documentUploadStatus
+        fileType: doc.fileType,
+        mimeType: doc.mimeType
+      }))
     });
-
   } catch (err) {
     console.error('Get documents error:', err);
     res.status(500).json({
       error: 'Failed to fetch documents',
       details: err.message
     });
+  }
+};
+
+// Download document via employee API
+exports.downloadEmployeeDocument = async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+
+    const employee = await Employee.findOne({ employeeId: id });
+    if (!employee) {
+      return res.status(404).json({
+        error: 'Employee not found'
+      });
+    }
+
+    const document = employee.documents.id(docId);
+    if (!document) {
+      return res.status(404).json({
+        error: 'Document not found'
+      });
+    }
+
+    // Check if file exists
+    try {
+      await fs.access(document.filePath);
+    } catch (err) {
+      console.error('File not found on server:', document.filePath);
+      return res.status(404).json({
+        error: 'File not found on server'
+      });
+    }
+
+    // Set headers for download
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.name}"`);
+    res.setHeader('Content-Length', document.fileSize);
+    
+    // Stream the file
+    const fileStream = require('fs').createReadStream(document.filePath);
+    fileStream.pipe(res);
+
+  } catch (err) {
+    console.error('Document download error:', err);
+    res.status(500).json({
+      error: 'Failed to download document',
+      details: err.message
+    });
+  }
+};
+
+// Delete document via employee API
+exports.deleteEmployeeDocument = async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+
+    const employee = await Employee.findOne({ employeeId: id });
+    if (!employee) {
+      return res.status(404).json({
+        error: 'Employee not found'
+      });
+    }
+    
+
+    const document = employee.documents.id(docId);
+    if (!document) {
+      return res.status(404).json({
+        error: 'Document not found'
+      });
+    }
+
+    // Delete file from filesystem
+    try {
+      await fs.unlink(document.filePath);
+    } catch (err) {
+      console.warn(`Could not delete file: ${document.filePath}`, err.message);
+    }
+
+    // Remove document from employee record
+    await employee.removeDocument(docId);
+
+    res.json({
+      message: 'Document deleted successfully'
+    });
+
+  } catch (err) {
+    console.error('Document deletion error:', err);
+    res.status(500).json({
+      error: 'Failed to delete document',
+      details: err.message
+    });
+  }
+};
+// Update department headcount when employee is created/updated/deleted
+exports.updateDepartmentHeadcount = async (employeeId, oldDepartment = null) => {
+  try {
+    const Employee = require('../models/Employee');
+    const Department = require('../models/Department');
+    
+    const employee = await Employee.findOne({ employeeId });
+    if (!employee) return;
+
+    // Update old department headcount if department changed
+    if (oldDepartment && oldDepartment !== employee.department) {
+      const oldDept = await Department.findOne({ departmentId: oldDepartment });
+      if (oldDept) {
+        await oldDept.calculateHeadcount();
+      }
+    }
+
+    // Update new department headcount
+    if (employee.department) {
+      const newDept = await Department.findOne({ departmentId: employee.department });
+      if (newDept) {
+        await newDept.calculateHeadcount();
+      }
+    }
+  } catch (error) {
+    console.error('Error updating department headcount:', error);
   }
 };

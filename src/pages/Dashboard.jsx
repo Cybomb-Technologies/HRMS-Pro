@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import EmployeeDashboard from '@/components/Dashboard/EmployeeDashboard';
 import HRDashboard from '@/components/Dashboard/HRDashboard';
 import EmployerDashboard from '@/components/Dashboard/EmployerDashboard';
+import AdminDashboard from '@/components/Dashboard/AdminDashboard';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -15,6 +16,8 @@ const Dashboard = () => {
         return <HRDashboard />;
       case 'employer':
         return <EmployerDashboard />;
+      case 'admin':
+        return <AdminDashboard />;
       default:
         return <div className="text-center p-8">Loading dashboard...</div>;
     }
