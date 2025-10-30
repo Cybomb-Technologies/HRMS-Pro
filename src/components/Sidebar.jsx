@@ -25,8 +25,10 @@ import {
 
 const allMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['admin', 'hr', 'employee'] },
+  {icon: Shield, label: 'Announcements', path: '/feeds', roles: ['admin', 'hr',]},
+  { icon: Building2, label: 'Organization', path: '/organization', roles: ['admin', 'hr'] }, 
   { icon: Users, label: 'Teams', path: '/teams', roles: ['admin', 'hr'] },
-  { icon: Building2, label: 'Organization', path: '/organization', roles: ['admin', 'hr'] },
+  
   { icon: UserCheck, label: 'Employees', path: '/employees', roles: ['admin', 'hr'] },
   { icon: UserPlus, label: 'Onboarding', path: '/onboarding', roles: ['admin', 'hr'] },
   { icon: UserMinus, label: 'Offboarding', path: '/offboarding', roles: ['admin', 'hr'] },
@@ -37,8 +39,8 @@ const allMenuItems = [
   { icon: CheckSquare, label: 'Approvals', path: '/approvals', roles: ['admin', 'hr'] },
   { icon: FileText, label: 'HR Letters', path: '/hr-letters', roles: ['admin', 'hr'] },
   { icon: Settings, label: 'Settings', path: '/settings', roles: ['admin', 'hr', 'employee'] },
-  { icon: Shield, label: 'Audit', path: '/audit', roles: ['admin'] },
-  {icon: Shield, label: 'Announcements', path: '/feeds', roles: ['admin', 'hr',]}
+  // { icon: Shield, label: 'Audit', path: '/audit', roles: ['admin'] },
+  
 ];
 
 const Sidebar = ({ isOpen, onToggle }) => {

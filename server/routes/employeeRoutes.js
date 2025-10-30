@@ -8,27 +8,29 @@ const {
   uploadDocuments,
   downloadDocument,
   deleteDocument,
-  getEmployeeDocuments
+  getEmployeeDocuments,
+  deleteEmployeeDocument,
+  downloadEmployeeDocument,
+  getEmployeeById 
 } = require('../controllers/employeeController.js');
 const { getEmployeeShiftAssignments } = require("../controllers/employeeShiftController.js");
 const upload = require('../middleware/uploadMiddleware');
 
 // Existing routes
 router.get('/', getEmployees);
+router.get('/:id', getEmployeeById);
 router.post('/', addEmployee);
 router.put('/:id', updateEmployee);
 router.delete('/:id', deleteEmployee);
 router.get('/employeesShifts', getEmployeeShiftAssignments);
 
-// New document routes - FIXED: Handle both empId and section
+// Document routes - FIXED and consistent
 router.post('/documents', 
-  // Custom middleware to ensure empId and section are available
   (req, res, next) => {
-    // Get empId and section from query params
     const empId = req.query.empId;
     const section = req.query.section;
     
-    console.log('Middleware received:', { empId, section }); // Debug log
+    console.log('Middleware received:', { empId, section });
     
     if (!empId || !section) {
       return res.status(400).json({
@@ -37,7 +39,6 @@ router.post('/documents',
       });
     }
     
-    // Add empId and section to req for multer and controller to access
     req.empId = empId;
     req.section = section;
     next();
@@ -46,8 +47,13 @@ router.post('/documents',
   uploadDocuments
 );
 
+// Consistent document routes using the same path structure
+router.get('/:id/documents', getEmployeeDocuments); // Get all documents for employee
+router.get('/:id/documents/:docId/download', downloadEmployeeDocument); // Download specific document
+router.delete('/:id/documents/:docId', deleteEmployeeDocument); // Delete specific document
+
+// Legacy routes (you can remove these if not used elsewhere)
 router.get('/documents/:docId', downloadDocument);
 router.delete('/documents/:docId', deleteDocument);
-router.get('/:empId/documents', getEmployeeDocuments);
 
 module.exports = router;

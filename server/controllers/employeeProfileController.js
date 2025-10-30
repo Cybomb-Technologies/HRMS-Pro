@@ -114,7 +114,82 @@ const createOrUpdateProfile = async (req, res) => {
     });
   }
 };
+// Add to employeeProfileController.js
 
+// Download document
+const downloadDocument = async (req, res) => {
+  try {
+    const { employeeId, documentId } = req.params;
+
+    const employee = await Employee.findOne({ employeeId });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    const document = employee.documents.id(documentId);
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    // Check if file exists
+    if (!document.filePath || !fs.existsSync(document.filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Set headers for download
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.name}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(document.filePath);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    console.error('Error downloading document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while downloading document',
+      error: error.message
+    });
+  }
+};
+
+// Get employee documents
+const getEmployeeDocuments = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const employee = await Employee.findOne({ employeeId });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      documents: employee.documents || []
+    });
+
+  } catch (error) {
+    console.error('Error fetching documents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching documents',
+      error: error.message
+    });
+  }
+};
 // Get employee profile
 const getProfile = async (req, res) => {
   try {
@@ -512,5 +587,7 @@ module.exports = {
   deleteIdentityDocument,
   uploadProfilePicture,
   addEducation,
-  addWorkExperience
+  addWorkExperience,
+  getEmployeeDocuments,
+  downloadDocument
 };

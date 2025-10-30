@@ -5,6 +5,8 @@ const connectDB = require("./config/db.js");
 const employeeShiftRoutes = require('./routes/employeeShiftRoutes');
 const employeeProfileRoutes = require('./routes/employeeProfileRoutes');
 const path = require('path');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+
 dotenv.config();
 connectDB();
 
@@ -38,6 +40,7 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
+app.use('/api/admin/dashboard', dashboardRoutes);
 app.use("/api/auth", require("./routes/authRoutes.js"));
 app.use("/api/employees", require("./routes/employeeRoutes.js"));
 app.use("/api/onboarding", require("./routes/onboardingRoutes.js"));
@@ -53,5 +56,7 @@ app.use("/api/payroll", require("./routes/payrollRoutes.js"));
 app.use("/api/offer-letters", require("./routes/offerLetterRoutes.js"));
 app.use('/api/employee-profiles', employeeProfileRoutes);
 app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
+app.use("/api/organization", require("./routes/organizationRoutes.js"));
+app.use('/api/policies', require('./routes/policies'));
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

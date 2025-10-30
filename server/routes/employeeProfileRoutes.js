@@ -10,7 +10,9 @@ const {
   deleteDocument,
   uploadIdentityDocument, 
   deleteIdentityDocument, 
-  uploadProfilePicture 
+  uploadProfilePicture,
+  downloadDocument,
+  getEmployeeDocuments
 } = require('../controllers/employeeProfileController');
 
 const router = express.Router();
@@ -89,6 +91,8 @@ const uploadProfilePicMiddleware = multer({
 
 // GET employee profile
 router.get('/:employeeId', getProfile);
+router.get('/:employeeId/documents', getEmployeeDocuments);
+router.get('/:employeeId/documents/:documentId/download', downloadDocument);
 
 // PUT create or update employee profile
 router.put('/:employeeId', createOrUpdateProfile);
