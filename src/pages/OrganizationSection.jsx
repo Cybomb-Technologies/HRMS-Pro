@@ -129,7 +129,11 @@ const timezones = [
   'Pacific/Saipan', 'Pacific/Tahiti', 'Pacific/Tarawa', 'Pacific/Tongatapu', 'Pacific/Wake', 'Pacific/Wallis'
 ];
 
-
+const getProfilePictureUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `http://localhost:5000${profilePicture}`;
+  };
 const OrganizationForm = ({ item, type, employees, departments, onSave, onCancel }) => {
   const [formData, setFormData] = useState(item || {});
   const [loading, setLoading] = useState(false);
@@ -415,11 +419,15 @@ const EmployeeListModal = ({ type, item, employees, onClose }) => {
                   <Card className="p-4 hover:shadow-md transition-shadow">
                     <div className="flex items-center space-x-3">
                       <div className="flex-shrink-0">
-                        {employee.profilePhoto ? (
+                        {employee.profilePicture || employee.profilePhoto ? (
                           <img
-                            src={employee.profilePhoto}
+                            src={getProfilePictureUrl(employee.profilePicture || employee.profilePhoto)}
                             alt={employee.name}
-                            className="w-12 h-12 rounded-full object-cover"
+                            className="w-12 h-12 rounded-xl object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
                           />
                         ) : (
                           <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">

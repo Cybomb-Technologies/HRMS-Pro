@@ -58,7 +58,7 @@ import {
 } from 'lucide-react';
 
 // ================== Employee Form ==================
-const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
+const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => {
   const [formData, setFormData] = useState(
     employee || { 
       employeeId: suggestedId || '', 
@@ -93,6 +93,22 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
   const [loading, setLoading] = useState(true);
   const [generatePassword, setGeneratePassword] = useState(!employee);
   const [passwordCopied, setPasswordCopied] = useState(false);
+
+  // Get allowed roles based on current user's role
+  const getAllowedRoles = () => {
+    switch (userRole) {
+      case 'admin':
+        return ['employee', 'hr', 'admin', 'employer'];
+      case 'employer':
+        return ['employee', 'hr', 'admin', 'employer'];
+      case 'hr':
+        return ['employee'];
+      default:
+        return ['employee'];
+    }
+  };
+
+  const allowedRoles = getAllowedRoles();
 
   // Fetch dropdown data
   useEffect(() => {
@@ -206,6 +222,17 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Role validation based on current user's permissions
+    if (!allowedRoles.includes(formData.role)) {
+      toast({
+        title: 'Permission Denied',
+        description: `You don't have permission to create users with role: ${formData.role}`,
+        variant: 'destructive'
+      });
+      return;
+    }
+
     await onSave(formData);
   };
 
@@ -387,12 +414,17 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
+            disabled={userRole === 'hr'} // HR can only create employees
           >
-            <option value="employee">Employee</option>
-            <option value="hr">HR</option>
-            <option value="admin">Admin</option>
-            <option value="employer">Employer</option>
+            {allowedRoles.map(role => (
+              <option key={role} value={role}>
+                {role.charAt(0).toUpperCase() + role.slice(1)}
+              </option>
+            ))}
           </select>
+          {userRole === 'hr' && (
+            <p className="text-xs text-gray-500 mt-1">HR can only create employees</p>
+          )}
         </div>
 
         <div>
@@ -603,13 +635,14 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId }) => {
 const DocumentsSection = ({ employee }) => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewingDocument, setViewingDocument] = useState(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   const fetchDocuments = async () => {
     if (!employee?.employeeId) return;
     
     try {
       setLoading(true);
-      // Use the correct endpoint: /api/employees/EMP1001/documents
       const response = await fetch(`http://localhost:5000/api/employees/${employee.employeeId}/documents`);
       if (response.ok) {
         const data = await response.json();
@@ -636,7 +669,6 @@ const DocumentsSection = ({ employee }) => {
     if (!employee?.employeeId) return;
     
     try {
-      // Use the correct endpoint: /api/employees/EMP1001/documents/docId/download
       const response = await fetch(`http://localhost:5000/api/employees/${employee.employeeId}/documents/${documentId}/download`);
       if (response.ok) {
         const blob = await response.blob();
@@ -661,6 +693,36 @@ const DocumentsSection = ({ employee }) => {
       toast({
         title: 'Error',
         description: 'Failed to download document',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const viewDocument = async (documentId, documentName) => {
+    if (!employee?.employeeId) return;
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/employees/${employee.employeeId}/documents/${documentId}/download`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        
+        // Set the document for viewing
+        setViewingDocument({
+          id: documentId,
+          name: documentName,
+          url: url,
+          blob: blob
+        });
+        setIsViewDialogOpen(true);
+      } else {
+        throw new Error('Failed to load document');
+      }
+    } catch (error) {
+      console.error('Error viewing document:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to view document',
         variant: 'destructive',
       });
     }
@@ -693,6 +755,42 @@ const DocumentsSection = ({ employee }) => {
     }
   };
 
+  // Clean up blob URLs when component unmounts or document changes
+  useEffect(() => {
+    return () => {
+      if (viewingDocument?.url) {
+        window.URL.revokeObjectURL(viewingDocument.url);
+      }
+    };
+  }, [viewingDocument]);
+
+  const getFileIcon = (fileName) => {
+    const extension = fileName?.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <FileText className="w-5 h-5 text-red-500" />;
+      case 'doc':
+      case 'docx':
+        return <FileText className="w-5 h-5 text-blue-500" />;
+      case 'xls':
+      case 'xlsx':
+        return <FileText className="w-5 h-5 text-green-500" />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return <FileText className="w-5 h-5 text-purple-500" />;
+      default:
+        return <FileText className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  const canViewInBrowser = (fileName) => {
+    const extension = fileName?.split('.').pop()?.toLowerCase();
+    const viewableTypes = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'txt'];
+    return viewableTypes.includes(extension);
+  };
+
   if (loading) {
     return (
       <Card className="p-6">
@@ -711,81 +809,178 @@ const DocumentsSection = ({ employee }) => {
   }
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <FileText className="w-5 h-5" />
-          Documents
-          {documents.length > 0 && (
-            <Badge variant="secondary" className="ml-2">
-              {documents.length}
-            </Badge>
-          )}
-        </h3>
-      </div>
-
-      {documents.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-          <p>No documents uploaded yet</p>
+    <>
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Documents
+            {documents.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {documents.length}
+              </Badge>
+            )}
+          </h3>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {documents.map((doc) => (
-            <div key={doc._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="font-medium">{doc.name}</p>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>{doc.section}</span>
-                    <span>•</span>
-                    <span>{doc.fileSize ? `${(doc.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}</span>
-                    <span>•</span>
-                    <span>{new Date(doc.uploadDate).toLocaleDateString()}</span>
+
+        {documents.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>No documents uploaded yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {documents.map((doc) => (
+              <div key={doc._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  {getFileIcon(doc.name)}
+                  <div>
+                    <p className="font-medium">{doc.name}</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>{doc.section}</span>
+                      <span>•</span>
+                      <span>{doc.fileSize ? `${(doc.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}</span>
+                      <span>•</span>
+                      <span>{new Date(doc.uploadDate).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => downloadDocument(doc._id, doc.name)}
-                  className="flex items-center gap-1"
-                >
-                  <Download className="w-4 h-4" />
-                  Download
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50">
-                      <Trash2 className="w-4 h-4" />
+                <div className="flex gap-2">
+                  {canViewInBrowser(doc.name) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => viewDocument(doc._id, doc.name)}
+                      className="flex items-center gap-1"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will permanently delete the document "{doc.name}". This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => deleteDocument(doc._id)}
-                        className="bg-red-600 hover:bg-red-700"
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadDocument(doc._id, doc.name)}
+                    className="flex items-center gap-1"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete the document "{doc.name}". This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => deleteDocument(doc._id)}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* View Document Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              View Document: {viewingDocument?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Previewing document in browser
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto">
+            {viewingDocument && (
+              <div className="space-y-4">
+                {/* PDF Viewer */}
+                {viewingDocument.name?.toLowerCase().endsWith('.pdf') && (
+                  <iframe
+                    src={viewingDocument.url}
+                    className="w-full h-96 border rounded-lg"
+                    title={viewingDocument.name}
+                  />
+                )}
+                
+                {/* Image Viewer */}
+                {(viewingDocument.name?.toLowerCase().endsWith('.jpg') || 
+                  viewingDocument.name?.toLowerCase().endsWith('.jpeg') || 
+                  viewingDocument.name?.toLowerCase().endsWith('.png') || 
+                  viewingDocument.name?.toLowerCase().endsWith('.gif')) && (
+                  <div className="flex justify-center">
+                    <img
+                      src={viewingDocument.url}
+                      alt={viewingDocument.name}
+                      className="max-w-full max-h-96 object-contain border rounded-lg"
+                    />
+                  </div>
+                )}
+                
+                {/* Text File Viewer */}
+                {viewingDocument.name?.toLowerCase().endsWith('.txt') && (
+                  <iframe
+                    src={viewingDocument.url}
+                    className="w-full h-96 border rounded-lg"
+                    title={viewingDocument.name}
+                  />
+                )}
+                
+                {/* Unsupported file type message */}
+                {!canViewInBrowser(viewingDocument.name) && (
+                  <div className="text-center py-8">
+                    <FileText className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-500 mb-4">
+                      This file type cannot be previewed in the browser.
+                    </p>
+                    <Button
+                      onClick={() => downloadDocument(viewingDocument.id, viewingDocument.name)}
+                      className="flex items-center gap-2 mx-auto"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download to View
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => downloadDocument(viewingDocument?.id, viewingDocument?.name)}
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Download
+            </Button>
+            <Button onClick={() => setIsViewDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -880,7 +1075,7 @@ const EmployeeViewDialog = ({ employee, isOpen, onClose }) => {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+ <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
@@ -1293,531 +1488,426 @@ const EmployeeViewDialog = ({ employee, isOpen, onClose }) => {
               </div>
             </Card>
           )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
-            <Button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-              <Mail className="w-4 h-4 mr-2" />
-              Send Message
-            </Button>
-            <Button variant="outline" className="flex-1">
-              <Calendar className="w-4 h-4 mr-2" />
-              Schedule Meeting
-            </Button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 };
 
-// ================== Employee Section ==================
+// ================== Main Component ==================
 const EmployeeSection = () => {
+  const [employees, setEmployees] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({ status: 'all', department: 'all', location: 'all', employmentType: 'all' });
-  const [isModalOpen, setModalOpen] = useState(false);
-  const [isViewModalOpen, setViewModalOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [userRole, setUserRole] = useState('employee'); // Default role
+   const getProfilePictureUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `http://localhost:5000${profilePicture}`;
+  };
+  // FIXED: Get current user's role from hrms_user instead of currentUser
+  useEffect(() => {
+    const currentUser = JSON.parse(localStorage.getItem('hrms_user') || '{}');
+    console.log('Current user from localStorage:', currentUser); // Debug log
+    setUserRole(currentUser.role || 'employee');
+  }, []);
 
-  // ================== Fetch Employees ==================
   const fetchEmployees = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:5000/api/employees');
-      
-      if (!res.ok) {
-        throw new Error(`Failed to fetch employees: ${res.status}`);
+      const response = await fetch('http://localhost:5000/api/employees');
+      if (response.ok) {
+        const data = await response.json();
+        const employeesArray = Array.isArray(data) ? data : data.data || [];
+        setEmployees(employeesArray);
+        setFilteredEmployees(employeesArray);
+      } else {
+        console.error('Failed to fetch employees');
+        setEmployees([]);
+        setFilteredEmployees([]);
       }
-      
-      const data = await res.json();
-      setEmployees(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to fetch employees:', err);
-      toast({ 
-        title: 'Error', 
-        description: 'Failed to fetch employees',
-        variant: 'destructive'
-      });
+    } catch (error) {
+      console.error('Error fetching employees:', error);
       setEmployees([]);
+      setFilteredEmployees([]);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { 
-    fetchEmployees(); 
+  useEffect(() => {
+    fetchEmployees();
   }, []);
 
-  // ================== Suggested ID ==================
-  const suggestedId = useMemo(() => {
-    try {
-      if (!employees || !Array.isArray(employees) || employees.length === 0) return 'EMP001';
-      
-      const validEmployees = employees.filter(emp => emp && emp.employeeId);
-      if (validEmployees.length === 0) return 'EMP001';
-      
-      const lastEmployee = validEmployees[validEmployees.length - 1];
-      if (!lastEmployee.employeeId?.startsWith('EMP')) return 'EMP001';
-      
-      const lastIdNum = parseInt(lastEmployee.employeeId.replace('EMP', ''), 10);
-      return isNaN(lastIdNum) ? 'EMP001' : `EMP${String(lastIdNum + 1).padStart(3, '0')}`;
-    } catch (error) {
-      console.error('Error generating suggested ID:', error);
-      return 'EMP001';
-    }
-  }, [employees]);
+  useEffect(() => {
+    const filtered = employees.filter(employee =>
+      employee.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.designation?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredEmployees(filtered);
+  }, [searchTerm, employees]);
 
-  // ================== Save Employee ==================
+  const generateEmployeeId = () => {
+    const existingIds = employees.map(emp => emp.employeeId).filter(id => id);
+    const numericIds = existingIds
+      .map(id => {
+        const match = id.match(/EMP(\d+)/);
+        return match ? parseInt(match[1]) : 0;
+      })
+      .filter(id => id > 0);
+    
+    const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+    return `EMP${String(maxId + 1).padStart(4, '0')}`;
+  };
+
   const handleSaveEmployee = async (employeeData) => {
     try {
-      let res;
-      if (editingEmployee) {
-        // Update
-        res = await fetch(`http://localhost:5000/api/employees/${employeeData.employeeId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(employeeData)
-        });
-      } else {
-        // Add
-        res = await fetch('http://localhost:5000/api/employees', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(employeeData)
-        });
-      }
+      const url = editingEmployee 
+        ? `http://localhost:5000/api/employees/${editingEmployee.employeeId}`
+        : 'http://localhost:5000/api/employees';
       
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || errorData.message || 'Operation failed');
-      }
-
-      const result = await res.json();
+      const method = editingEmployee ? 'PUT' : 'POST';
       
-      toast({ 
-        title: editingEmployee ? 'Employee Updated' : 'Employee Added', 
-        description: editingEmployee ? 
-          `${employeeData.name} updated successfully.` : 
-          `${employeeData.name} added successfully. Login email: ${employeeData.email}`,
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(employeeData),
       });
-      
-      setModalOpen(false);
-      setEditingEmployee(null);
-      fetchEmployees(); // Refresh list
-    } catch (err) {
-      console.error('Error saving employee:', err);
-      toast({ 
-        title: 'Error', 
-        description: err.message,
-        variant: 'destructive'
+
+      if (response.ok) {
+        toast({
+          title: editingEmployee ? 'Employee updated' : 'Employee created',
+          description: editingEmployee ? 'Employee details updated successfully' : 'New employee added successfully',
+        });
+        setShowForm(false);
+        setEditingEmployee(null);
+        fetchEmployees();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to save employee');
+      }
+    } catch (error) {
+      console.error('Error saving employee:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save employee',
+        variant: 'destructive',
       });
     }
   };
 
-  // ================== Delete Employee ==================
   const handleDeleteEmployee = async (employeeId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/employees/${employeeId}`, { 
-        method: 'DELETE' 
+      const response = await fetch(`http://localhost:5000/api/employees/${employeeId}`, {
+        method: 'DELETE',
       });
-      
-      if (!res.ok) {
-        throw new Error('Delete failed');
+
+      if (response.ok) {
+        toast({
+          title: 'Employee deleted',
+          description: 'Employee has been deleted successfully',
+        });
+        fetchEmployees();
+      } else {
+        throw new Error('Failed to delete employee');
       }
-      
-      toast({ 
-        title: 'Deleted', 
-        description: 'Employee removed successfully' 
-      });
-      fetchEmployees();
-    } catch (err) {
-      console.error('Error deleting employee:', err);
-      toast({ 
-        title: 'Error', 
-        description: err.message,
-        variant: 'destructive'
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete employee',
+        variant: 'destructive',
       });
     }
   };
 
-  // ================== View Employee ==================
+  const handleEditEmployee = (employee) => {
+    setEditingEmployee(employee);
+    setShowForm(true);
+  };
+
   const handleViewEmployee = (employee) => {
     setViewingEmployee(employee);
-    setViewModalOpen(true);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleCancelForm = () => {
+    setShowForm(false);
+    setEditingEmployee(null);
   };
 
   const getStatusColor = (status) => {
-    if (!status) return 'bg-gray-100 text-gray-800';
-    
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'on-leave': return 'bg-blue-100 text-blue-800';
-      case 'on-probation': return 'bg-yellow-100 text-yellow-800';
-      case 'terminated': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'on-leave': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'on-probation': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'terminated': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const getProfilePictureUrl = (profilePicture) => {
-    if (!profilePicture) return null;
-    if (profilePicture.startsWith('http')) return profilePicture;
-    return `http://localhost:5000${profilePicture}`;
+  const getRoleColor = (role) => {
+    switch (role) {
+      case 'admin': return 'bg-red-100 text-red-800 border-red-200';
+      case 'hr': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'employer': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'employee': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
   };
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
-  };
-
-  // Safe filtering with null checks
-  const filteredEmployees = employees.filter(emp => {
-    if (!emp || typeof emp !== 'object') return false;
-    
-    const searchLower = searchTerm.toLowerCase();
-    
-    // Safe property access
-    const name = emp.name || '';
-    const email = emp.email || '';
-    const employeeId = emp.employeeId || '';
-    const department = emp.department || '';
-    const location = emp.location || '';
-    const status = emp.status || '';
-    const employmentType = emp.employmentType || '';
-
-    const matchesSearch =
-      name.toLowerCase().includes(searchLower) ||
-      email.toLowerCase().includes(searchLower) ||
-      employeeId.toLowerCase().includes(searchLower);
-    
-    const matchesStatus = filters.status === 'all' || status === filters.status;
-    const matchesDept = filters.department === 'all' || department === filters.department;
-    const matchesLocation = filters.location === 'all' || location === filters.location;
-    const matchesEmploymentType = filters.employmentType === 'all' || employmentType === filters.employmentType;
-    
-    return matchesSearch && matchesStatus && matchesDept && matchesLocation && matchesEmploymentType;
-  });
-
-  // Safe filter options
-  const filterOptions = {
-    status: ['all', 'active', 'on-probation', 'on-leave', 'terminated'],
-    department: ['all', ...new Set(employees.filter(e => e?.department).map(e => e.department))].filter(Boolean),
-    location: ['all', ...new Set(employees.filter(e => e?.location).map(e => e.location))].filter(Boolean),
-    employmentType: ['all', 'Permanent', 'Contract', 'Intern', 'Temporary'],
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Loading employees...</span>
-      </div>
-    );
-  }
+  // Check if current user can add employees
+  const canAddEmployee = ['admin', 'hr', 'employer'].includes(userRole);
 
   return (
     <>
       <Helmet>
-        <title>Employees - HRMS Pro</title>
+        <title>Employees | HR Management System</title>
       </Helmet>
 
-      {/* Edit/Add Dialog */}
-      <Dialog open={isModalOpen} onOpenChange={(open) => { 
-        if (!open) setEditingEmployee(null); 
-        setModalOpen(open); 
-      }}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <Users className="w-8 h-8 text-blue-600" />
+                Employee Management
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Manage your team members, their roles, and employment details
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="Search employees..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 w-full sm:w-64"
+                />
+              </div>
+              {canAddEmployee && (
+                <Button 
+                  onClick={() => setShowForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Employee
+                </Button>
+              )}
+            </div>
+          </div>
+          {/* Main Content */}
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  {/* Employee List */}
+  <div className="lg:col-span-3">
+    <Card className="p-6 bg-white/80 backdrop-blur-sm border-0 shadow-sm">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-gray-900">All Employees</h2>
+        <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+          {filteredEmployees.length} employees
+        </Badge>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">Loading employees...</span>
+        </div>
+      ) : filteredEmployees.length === 0 ? (
+        <div className="text-center py-12">
+          <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchTerm ? 'No employees found' : 'No employees yet'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {searchTerm
+              ? 'Try adjusting your search terms'
+              : 'Get started by adding your first employee'}
+          </p>
+          {canAddEmployee && !searchTerm && (
+            <Button
+              onClick={() => setShowForm(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Employee
+            </Button>
+          )}
+        </div>
+      ) : (
+        // 🔹 Updated layout to 3-column grid
+ <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {filteredEmployees.map((employee) => (
+    <motion.div
+      key={employee.employeeId}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200 flex flex-col"
+    >
+      {/* Header with dropdown in top right */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-4 flex-1">
+          <div className="relative">
+            {employee.profilePicture || employee.profilePhoto ? (
+              <img
+                src={getProfilePictureUrl(employee.profilePicture || employee.profilePhoto)}
+                alt={employee.name}
+                className="w-12 h-12 rounded-xl object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div
+              className={`w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center ${
+                (employee.profilePicture || employee.profilePhoto) ? 'hidden' : 'flex'
+              }`}
+            >
+              <span className="text-white font-bold text-sm">
+                {employee.name.split(' ').map((n) => n?.[0] || '').join('')}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900 truncate">
+              {employee.name}
+            </h3>
+            <div className="flex flex-wrap gap-1 mt-1">
+              <Badge variant="outline" className={getStatusColor(employee.status)}>
+                {employee.status?.replace('-', ' ')}
+              </Badge>
+              <Badge variant="outline" className={getRoleColor(employee.role)}>
+                {employee.role}
+              </Badge>
+            </div>
+          </div>
+        </div>
+
+        {/* Dropdown menu in top right */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="ml-2 flex-shrink-0">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => handleViewEmployee(employee)}>
+              <Eye className="w-4 h-4 mr-2" />
+              View Details
+            </DropdownMenuItem>
+            {canAddEmployee && (
+              <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+            )}
+            {canAddEmployee && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-700"
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete {employee.name}'s record. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDeleteEmployee(employee.employeeId)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Employee details */}
+      <div className="flex flex-col gap-1 text-sm text-gray-500 mb-3">
+        <span className="flex items-center gap-1">
+          <Briefcase className="w-3 h-3" />
+          {employee.designation}
+        </span>
+        <span className="flex items-center gap-1">
+          <Building className="w-3 h-3" />
+          {employee.department}
+        </span>
+        <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit">
+          {employee.employeeId}
+        </span>
+      </div>
+    </motion.div>
+  ))}
+</div>
+      )}
+    </Card>
+  </div>
+</div>
+
+        </div>
+      </div>
+
+      {/* Add/Edit Employee Dialog */}
+      <Dialog open={showForm} onOpenChange={handleCancelForm}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingEmployee ? 'Edit Employee' : 'Add New Employee'}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-2xl">
+              <Users className="w-6 h-6" />
+              {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+            </DialogTitle>
             <DialogDescription>
-              {editingEmployee ? 'Update employee details' : 'Fill in new employee information'}
+              {editingEmployee 
+                ? `Update ${editingEmployee.name}'s details` 
+                : 'Fill in the details to add a new employee to your organization'
+              }
             </DialogDescription>
           </DialogHeader>
-          <EmployeeForm 
-            employee={editingEmployee} 
-            onSave={handleSaveEmployee} 
-            onCancel={() => setModalOpen(false)} 
-            suggestedId={suggestedId} 
+          <EmployeeForm
+            employee={editingEmployee}
+            onSave={handleSaveEmployee}
+            onCancel={handleCancelForm}
+            suggestedId={generateEmployeeId()}
+            userRole={userRole}
           />
         </DialogContent>
       </Dialog>
 
-      {/* View Dialog */}
-      <EmployeeViewDialog 
-        employee={viewingEmployee} 
-        isOpen={isViewModalOpen} 
-        onClose={() => setViewModalOpen(false)} 
+      {/* View Employee Dialog */}
+      <EmployeeViewDialog
+        employee={viewingEmployee}
+        isOpen={isViewDialogOpen}
+        onClose={() => {
+          setIsViewDialogOpen(false);
+          setViewingEmployee(null);
+        }}
       />
-
-      <div className="space-y-8">
-        {/* Header + Add */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5 }} 
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Employees</h1>
-            <p className="text-muted-foreground mt-2">Manage employee profiles and track lifecycle</p>
-          </div>
-          <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-            <Button 
-              onClick={() => { 
-                setEditingEmployee(null); 
-                setModalOpen(true); 
-              }} 
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            >
-              <Plus className="w-4 h-4 mr-2" /> Add Employee
-            </Button>
-          </div>
-        </motion.div>
-
-        {/* Filters */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5, delay: 0.1 }} 
-          className="flex flex-col sm:flex-row gap-4"
-        >
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search employees..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
-              className="pl-10" 
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <select 
-              name="status" 
-              value={filters.status} 
-              onChange={handleFilterChange} 
-              className="px-3 py-2 border rounded-lg bg-background capitalize"
-            >
-              {filterOptions.status.map(option => (
-                <option key={option} value={option}>
-                  {option.replace('-', ' ')}
-                </option>
-              ))}
-            </select>
-            <select 
-              name="department" 
-              value={filters.department} 
-              onChange={handleFilterChange} 
-              className="px-3 py-2 border rounded-lg bg-background"
-            >
-              {filterOptions.department.map(option => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <select 
-              name="location" 
-              value={filters.location} 
-              onChange={handleFilterChange} 
-              className="px-3 py-2 border rounded-lg bg-background"
-            >
-              {filterOptions.location.map(option => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <select 
-              name="employmentType" 
-              value={filters.employmentType} 
-              onChange={handleFilterChange} 
-              className="px-3 py-2 border rounded-lg bg-background"
-            >
-              {filterOptions.employmentType.map(option => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-        </motion.div>
-
-        {/* Employee Cards */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5, delay: 0.3 }} 
-          className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-        >
-          {filteredEmployees.map((employee, index) => (
-            <motion.div 
-              key={employee.employeeId || index} 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-            >
-              <Card className="p-6 card-hover cursor-pointer group">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      {employee.profilePicture || employee.profilePhoto ? (
-                        <img
-                          src={getProfilePictureUrl(employee.profilePicture || employee.profilePhoto)}
-                          alt={employee.name}
-                          className="w-12 h-12 rounded-full object-cover shadow-md"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div 
-                        className={`w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md ${
-                          (employee.profilePicture || employee.profilePhoto) ? 'hidden' : 'flex'
-                        }`}
-                      >
-                        <span className="text-white font-medium text-sm">
-                          {(employee.name || '')
-                            .split(' ')
-                            .map(n => n?.[0] || '')
-                            .join('')
-                            .toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">
-                        {employee.name || 'Unknown Employee'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {employee.employeeId || 'No ID'}
-                      </p>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        <Badge className={`${getStatusColor(employee.status)} capitalize`}>
-                          {(employee.status || 'active').replace('-', ' ')}
-                        </Badge>
-                        {employee.employmentType && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                            {employee.employmentType}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <AlertDialog>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => handleViewEmployee(employee)}>
-                          <Eye className="mr-2 h-4 w-4" /> View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { 
-                          setEditingEmployee(employee); 
-                          setModalOpen(true); 
-                        }}>
-                          <Edit className="mr-2 h-4 w-4" /> Edit
-                        </DropdownMenuItem>
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem className="text-red-600"> 
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete 
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will delete {employee.name || 'this employee'}'s profile.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteEmployee(employee.employeeId)}>
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Department</p>
-                      <p className="text-sm font-medium text-foreground">
-                        {employee.department || 'Not specified'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Designation</p>
-                      <p className="text-sm font-medium text-foreground">
-                        {employee.designation || 'Not specified'}
-                      </p>
-                    </div>
-                  </div>
-                  {(employee.role || employee.dateOfJoining) && (
-                    <div className="grid grid-cols-2 gap-4">
-                      {employee.role && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Role</p>
-                          <p className="text-sm font-medium text-foreground">{employee.role}</p>
-                        </div>
-                      )}
-                      {employee.dateOfJoining && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Join Date</p>
-                          <p className="text-sm font-medium text-foreground">
-                            {new Date(employee.dateOfJoining).toLocaleDateString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-center space-x-4 pt-2 border-t border-border">
-                    <div className="flex items-center space-x-1 text-muted-foreground">
-                      <Mail className="w-3 h-3" />
-                      <span className="text-xs">{employee.email || 'No email'}</span>
-                    </div>
-                    <div className="flex items-center space-x-1 text-muted-foreground">
-                      <MapPin className="w-3 h-3" />
-                      <span className="text-xs">{employee.location || 'No location'}</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {filteredEmployees.length === 0 && !loading && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            transition={{ duration: 0.5 }} 
-            className="text-center py-12"
-          >
-            <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              {employees.length === 0 ? 'No employees found' : 'No employees match your search'}
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              {employees.length === 0 ? 'Get started by adding your first employee' : 'Try adjusting your search criteria'}
-            </p>
-            <Button 
-              onClick={() => { setEditingEmployee(null); setModalOpen(true); }} 
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            >
-              <Plus className="w-4 h-4 mr-2" /> Add Employee
-            </Button>
-          </motion.div>
-        )}
-      </div>
     </>
   );
 };

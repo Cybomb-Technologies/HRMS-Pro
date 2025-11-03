@@ -1,6 +1,8 @@
 // controllers/offerLetterController.js
 const OfferLetter = require('../models/OfferLetter');
 const GeneratedLetter = require('../models/GeneratedLetter');
+const { generatePDF } = require('../utils/pdfGenerator');
+const { sendOfferLetterEmail } = require('../utils/emailService');
 
 // Get all offer letter templates
 const getTemplates = async (req, res) => {
@@ -37,7 +39,6 @@ const createTemplate = async (req, res) => {
   try {
     const { name, description, template } = req.body;
     
-    // Validate required fields
     if (!name || !description || !template) {
       return res.status(400).json({ message: 'All fields are required' });
     }
@@ -46,7 +47,7 @@ const createTemplate = async (req, res) => {
       name,
       description,
       template,
-      createdBy: req.user.id
+      createdBy: req.user.id // Requires successful auth
     });
     
     await newTemplate.save();
@@ -61,7 +62,7 @@ const createTemplate = async (req, res) => {
   }
 };
 
-// Generate offer letter
+// Generate offer letter (This is where the DB save happens for backend templates)
 const generateOfferLetter = async (req, res) => {
   try {
     const template = await OfferLetter.findById(req.params.id);
@@ -92,11 +93,11 @@ const generateOfferLetter = async (req, res) => {
       designation: data.designation,
       htmlContent: generatedLetter,
       formData: data,
-      generatedBy: req.user.id,
+      generatedBy: req.user.id, // Requires successful auth
       status: 'draft'
     });
     
-    await savedLetter.save();
+    await savedLetter.save(); // Data is successfully saved to DB here
     
     res.json({
       html: generatedLetter,
@@ -201,10 +202,10 @@ const getGeneratedLetter = async (req, res) => {
   }
 };
 
-// Update generated letter - FIXED VERSION
+
 const updateGeneratedLetter = async (req, res) => {
   try {
-    const { formData, status } = req.body;
+    const { formData, status, htmlContent } = req.body;
     
     const letter = await GeneratedLetter.findById(req.params.id);
     
@@ -212,7 +213,7 @@ const updateGeneratedLetter = async (req, res) => {
       return res.status(404).json({ message: 'Generated letter not found' });
     }
     
-    // If formData is provided, regenerate the HTML using the original template
+    // Always regenerate HTML content when formData is provided
     if (formData) {
       // Update basic fields from formData
       letter.candidateName = formData.candidate_name || letter.candidateName;
@@ -239,7 +240,15 @@ const updateGeneratedLetter = async (req, res) => {
         
         // Update the HTML content with regenerated content
         letter.htmlContent = generatedLetter;
+      } else {
+        // If no template found (shouldn't happen), use the provided htmlContent
+        if (htmlContent) {
+          letter.htmlContent = htmlContent;
+        }
       }
+    } else if (htmlContent) {
+      // If htmlContent is provided directly, use it
+      letter.htmlContent = htmlContent;
     }
     
     if (status) {
@@ -254,7 +263,7 @@ const updateGeneratedLetter = async (req, res) => {
     // Update the updatedAt timestamp
     letter.updatedAt = new Date();
     
-    await letter.save();
+    await letter.save(); // Data is successfully updated in DB here
     
     // Populate the updated letter to return complete data
     const updatedLetter = await GeneratedLetter.findById(letter._id)
@@ -287,6 +296,70 @@ const deleteGeneratedLetter = async (req, res) => {
   }
 };
 
+// Download PDF
+const downloadPDF = async (req, res) => {
+  try {
+    const letter = await GeneratedLetter.findById(req.params.id);
+    
+    if (!letter) {
+      return res.status(404).json({ message: 'Generated letter not found' });
+    }
+    
+    const pdfBuffer = await generatePDF(letter.htmlContent);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="offer-letter-${letter.candidateName.replace(/\s+/g, '-')}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('PDF download error:', error);
+    res.status(500).json({ message: 'Error generating PDF' });
+  }
+};
+
+// Send offer letter via email
+const sendOfferLetter = async (req, res) => {
+  try {
+    const letter = await GeneratedLetter.findById(req.params.id);
+    
+    if (!letter) {
+      return res.status(404).json({ message: 'Generated letter not found' });
+    }
+    
+    if (!letter.candidateEmail) {
+      return res.status(400).json({ message: 'Candidate email is required' });
+    }
+    
+    // Generate PDF
+    const pdfBuffer = await generatePDF(letter.htmlContent);
+    
+    // Send email
+    const emailResult = await sendOfferLetterEmail(
+      letter.candidateEmail,
+      letter.candidateName,
+      pdfBuffer,
+      letter.formData
+    );
+    
+    if (!emailResult.success) {
+      return res.status(500).json({ message: 'Failed to send email: ' + emailResult.error });
+    }
+    
+    // Update letter status
+    letter.status = 'sent';
+    letter.sentAt = new Date();
+    letter.sentTo = letter.candidateEmail;
+    await letter.save();
+    
+    res.json({
+      message: 'Offer letter sent successfully',
+      emailId: emailResult.messageId
+    });
+  } catch (error) {
+    console.error('Send offer letter error:', error);
+    res.status(500).json({ message: 'Error sending offer letter' });
+  }
+};
+
 module.exports = {
   getTemplates,
   getTemplate,
@@ -297,5 +370,7 @@ module.exports = {
   getGeneratedLetters,
   getGeneratedLetter,
   updateGeneratedLetter,
-  deleteGeneratedLetter
+  deleteGeneratedLetter,
+  downloadPDF,
+  sendOfferLetter
 };

@@ -19,7 +19,8 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  RefreshCw
+  RefreshCw,
+  MapPin // New icon for Locations
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -34,7 +35,7 @@ const AdminDashboard = () => {
     totalTeams: 0,
     payrollProcessed: 0,
     thisMonthPayroll: 0,
-    activeSessions: 0,
+    totalLocations: 0, // Changed from activeSessions to totalLocations
     storageUsed: '0GB'
   });
   
@@ -76,7 +77,7 @@ const AdminDashboard = () => {
           totalTeams: statsData.totalTeams || 0,
           payrollProcessed: statsData.payrollProcessed || 0,
           thisMonthPayroll: statsData.thisMonthPayroll || 0,
-          activeSessions: statsData.activeSessions || 0,
+          totalLocations: statsData.totalLocations || 0, // Fetches new stat
           storageUsed: statsData.storageUsed || '0GB'
         });
       }
@@ -315,11 +316,12 @@ const QuickAction = ({ title, description, icon: Icon, to, color = 'blue' }) => 
           icon={CreditCard}
           color="green"
         />
+        {/* Replaced Active Sessions with Locations */}
         <StatCard
-          title="Active Sessions"
-          value={stats.activeSessions}
-          subtitle="Users currently online"
-          icon={Clock}
+          title="Locations"
+          value={stats.totalLocations}
+          subtitle="Operational offices"
+          icon={MapPin} // Changed icon to MapPin
           color="blue"
         />
       </div>
@@ -335,7 +337,7 @@ const QuickAction = ({ title, description, icon: Icon, to, color = 'blue' }) => 
               <p className="text-gray-600 text-sm mt-1">Frequently used administrative tasks</p>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Link >
+              <Link to="/employees">
                <QuickAction
                 title="Employee Management"
                 description="Add, edit, or remove employees"
@@ -448,6 +450,7 @@ const QuickAction = ({ title, description, icon: Icon, to, color = 'blue' }) => 
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-500"
                   style={{ 
+                    // Note: This calculation assumes 50GB max, adjust the value you divide by if needed.
                     width: `${(parseFloat(stats.storageUsed) / 50) * 100}%` 
                   }}
                 ></div>

@@ -11,7 +11,9 @@ const {
   getGeneratedLetters,
   getGeneratedLetter,
   updateGeneratedLetter,
-  deleteGeneratedLetter
+  deleteGeneratedLetter,
+  downloadPDF,
+  sendOfferLetter
 } = require('../controllers/offerLetterController');
 const { authMiddleware, hrMiddleware } = require('../middleware/authMiddleware');
 
@@ -47,12 +49,11 @@ router.put('/:id', hrMiddleware, updateTemplate);
 
 // DELETE /api/offer-letters/:id - Delete template (HR/Admin only)
 router.delete('/:id', hrMiddleware, deleteTemplate);
-// Generate offer letter
-router.post('/templates/:id/generate', generateOfferLetter);
-router.get('/templates', getTemplates);
-router.get('/templates/:id', getTemplate);
-router.post('/templates', createTemplate);
-router.put('/templates/:id', updateTemplate);
-router.delete('/templates/:id', deleteTemplate);
+
+// GET /api/offer-letters/download/:id - Download PDF
+router.get('/download/:id', hrMiddleware, downloadPDF);
+
+// POST /api/offer-letters/send/:id - Send offer letter via email
+router.post('/send/:id', hrMiddleware, sendOfferLetter);
 
 module.exports = router;

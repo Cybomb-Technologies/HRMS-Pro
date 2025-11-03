@@ -1,9 +1,10 @@
 // src/components/HR-Letter/OfferLetterForm.jsx
-import React from 'react';
+import React, { memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileText, X } from 'lucide-react';
 
-const OfferLetterForm = ({
+// Memoize the form component to prevent unnecessary re-renders
+const OfferLetterForm = memo(({
   templates,
   selectedTemplate,
   formData,
@@ -13,11 +14,19 @@ const OfferLetterForm = ({
   onGenerate,
   onReset,
   onClose,
-  isPopup = false
+  isPopup = false,
+  editingLetter = null
 }) => {
+  
+  // Use useCallback-style function for input changes to ensure the prop is stable
+  const handleInputChangeOptimized = React.useCallback((e) => {
+    onInputChange(e);
+  }, [onInputChange]);
+
+  console.log('OfferLetterForm rendering'); // Debug log
+
   return (
     <div className={`${isPopup ? 'h-full flex flex-col' : 'max-w-7xl mx-auto p-6'}`}>
-      {/* Header for Popup */}
       {isPopup && (
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
           <div className="flex items-center space-x-3">
@@ -25,8 +34,12 @@ const OfferLetterForm = ({
               <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Create Offer Letter</h2>
-              <p className="text-sm text-gray-600">Fill in the details to generate an offer letter</p>
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingLetter ? 'Edit Offer Letter' : 'Create Offer Letter'}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {editingLetter ? 'Update the details and regenerate' : 'Fill in the details to generate an offer letter'}
+              </p>
             </div>
           </div>
           <Button
@@ -40,45 +53,7 @@ const OfferLetterForm = ({
         </div>
       )}
 
-      {/* Content */}
       <div className={`${isPopup ? 'flex-1 overflow-y-auto p-6' : ''}`}>
-        {!isPopup && (
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Offer Letter Generator</h2>
-                <p className="text-sm text-gray-600">Create professional offer letters for new hires</p>
-              </div>
-            </div>
-            <div className="flex space-x-3">
-              <Button onClick={onReset} size="sm" variant="outline" className="border-gray-300">
-                Reset Form
-              </Button>
-              <Button 
-                onClick={onGenerate} 
-                size="sm" 
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4 mr-2" />
-                    Generate Offer Letter
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Template Selection */}
         <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -88,6 +63,7 @@ const OfferLetterForm = ({
             value={selectedTemplate}
             onChange={(e) => onTemplateChange(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            disabled={!!editingLetter}
           >
             {templates.map(template => (
               <option key={template._id} value={template._id}>
@@ -98,6 +74,11 @@ const OfferLetterForm = ({
           <p className="text-xs text-gray-500 mt-2">
             {templates.find(t => t._id === selectedTemplate)?.description || 'Professional offer letter template'}
           </p>
+          {editingLetter && (
+            <p className="text-xs text-yellow-600 mt-1">
+              Template cannot be changed when editing an existing letter
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -114,7 +95,7 @@ const OfferLetterForm = ({
                     name="candidate_name"
                     placeholder="Enter candidate's full name"
                     value={formData.candidate_name}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -125,7 +106,7 @@ const OfferLetterForm = ({
                     name="candidate_address"
                     placeholder="Enter complete address"
                     value={formData.candidate_address}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     rows="3"
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -138,7 +119,7 @@ const OfferLetterForm = ({
                       name="email"
                       placeholder="email@example.com"
                       value={formData.email}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -149,13 +130,15 @@ const OfferLetterForm = ({
                       name="phone"
                       placeholder="+91 98765 43210"
                       value={formData.phone}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>
               </div>
             </div>
+
+           
 
             {/* Job Details */}
             <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
@@ -169,7 +152,7 @@ const OfferLetterForm = ({
                       name="designation"
                       placeholder="e.g., Frontend Developer"
                       value={formData.designation}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
@@ -181,7 +164,7 @@ const OfferLetterForm = ({
                       name="department"
                       placeholder="e.g., Engineering"
                       value={formData.department}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -192,7 +175,7 @@ const OfferLetterForm = ({
                     <select
                       name="employment_type"
                       value={formData.employment_type}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="Permanent">Permanent</option>
@@ -206,7 +189,7 @@ const OfferLetterForm = ({
                       type="text"
                       name="work_location"
                       value={formData.work_location}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -218,7 +201,7 @@ const OfferLetterForm = ({
                     name="reporting_manager"
                     placeholder="Manager's name"
                     value={formData.reporting_manager}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -236,7 +219,7 @@ const OfferLetterForm = ({
                       type="date"
                       name="offer_date"
                       value={formData.offer_date}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -246,7 +229,7 @@ const OfferLetterForm = ({
                       type="date"
                       name="date_of_joining"
                       value={formData.date_of_joining}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
@@ -259,7 +242,7 @@ const OfferLetterForm = ({
                       type="date"
                       name="offer_expiry_date"
                       value={formData.offer_expiry_date}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -270,7 +253,7 @@ const OfferLetterForm = ({
                       name="probation_period"
                       placeholder="e.g., 3 months"
                       value={formData.probation_period}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -292,7 +275,7 @@ const OfferLetterForm = ({
                     name="ctc"
                     placeholder="e.g., ₹6,00,000 per annum"
                     value={formData.ctc}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -304,7 +287,7 @@ const OfferLetterForm = ({
                       name="basic_salary"
                       placeholder="e.g., ₹25,000"
                       value={formData.basic_salary}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -315,7 +298,7 @@ const OfferLetterForm = ({
                       name="allowances"
                       placeholder="e.g., ₹5,000"
                       value={formData.allowances}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -327,7 +310,7 @@ const OfferLetterForm = ({
                     name="bonus"
                     placeholder="e.g., Performance-based bonus"
                     value={formData.bonus}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -338,7 +321,7 @@ const OfferLetterForm = ({
                     name="deductions"
                     placeholder="e.g., PF, ESI, Professional Tax"
                     value={formData.deductions}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -367,7 +350,7 @@ const OfferLetterForm = ({
                       type="text"
                       name="company_name"
                       value={formData.company_name}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -377,7 +360,7 @@ const OfferLetterForm = ({
                       type="text"
                       name="hr_name"
                       value={formData.hr_name}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -388,7 +371,7 @@ const OfferLetterForm = ({
                     type="text"
                     name="company_address"
                     value={formData.company_address}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -399,7 +382,7 @@ const OfferLetterForm = ({
                       type="email"
                       name="company_email"
                       value={formData.company_email}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -409,7 +392,7 @@ const OfferLetterForm = ({
                       type="text"
                       name="company_contact"
                       value={formData.company_contact}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -420,7 +403,7 @@ const OfferLetterForm = ({
                     type="text"
                     name="hr_designation"
                     value={formData.hr_designation}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -438,7 +421,7 @@ const OfferLetterForm = ({
                       type="text"
                       name="working_hours"
                       value={formData.working_hours}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -448,7 +431,7 @@ const OfferLetterForm = ({
                       type="text"
                       name="notice_period"
                       value={formData.notice_period}
-                      onChange={onInputChange}
+                      onChange={handleInputChangeOptimized}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -458,7 +441,7 @@ const OfferLetterForm = ({
                   <textarea
                     name="benefits"
                     value={formData.benefits}
-                    onChange={onInputChange}
+                    onChange={handleInputChangeOptimized}
                     rows="3"
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -493,12 +476,12 @@ const OfferLetterForm = ({
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Generating...
+                  {editingLetter ? 'Updating...' : 'Generating...'}
                 </>
               ) : (
                 <>
                   <FileText className="w-4 h-4 mr-2" />
-                  Generate Offer Letter
+                  {editingLetter ? 'Update Letter' : 'Generate Offer Letter'}
                 </>
               )}
             </Button>
@@ -507,6 +490,6 @@ const OfferLetterForm = ({
       </div>
     </div>
   );
-};
+});
 
 export default OfferLetterForm;
