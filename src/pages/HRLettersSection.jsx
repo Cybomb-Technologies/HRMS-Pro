@@ -244,9 +244,9 @@ const HRLettersSection = () => {
             onClose={handleClosePopup} 
           />
         )}
-        {selectedTemplate.id === 'LT002' && <AppointmentLetter />}
+        {/* {selectedTemplate.id === 'LT002' && <AppointmentLetter />}
         {selectedTemplate.id === 'LT003' && <SalaryRevisionLetter />}
-        {selectedTemplate.id === 'LT004' && <ExperienceLetter />}
+        {selectedTemplate.id === 'LT004' && <ExperienceLetter />} */}
       </div>
     </div>
   </div>
