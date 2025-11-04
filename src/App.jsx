@@ -34,7 +34,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { AdminAttendanceProvider } from "@/contexts/AdminAttendanceContext";
 import FeedsSection from "@/pages/FeedsSection";
 import EmployeeLeavePage from "./pages/EmployeeLeavePage";
-import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab"
+import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab";
+import EmployeePayslipsPage from "./pages/EmployeePayslipsPage";
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
@@ -146,6 +147,20 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               {isEmployee ? <Navigate to="/" replace /> : <PayrollSection />}
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/my-payslips"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              {isEmployee ? (
+                <EmployeePayslipsPage />
+              ) : (
+                <Navigate to="/payroll" replace />
+              )}
             </Layout>
           </ProtectedRoute>
         }
