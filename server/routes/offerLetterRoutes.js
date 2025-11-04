@@ -1,10 +1,10 @@
-// routes/offerLetterRoutes.js
 const express = require('express');
 const router = express.Router();
 const {
   getTemplates,
   getTemplate,
   createTemplate,
+  uploadWordTemplate,
   generateOfferLetter,
   updateTemplate,
   deleteTemplate,
@@ -13,47 +13,45 @@ const {
   updateGeneratedLetter,
   deleteGeneratedLetter,
   downloadPDF,
-  sendOfferLetter
+  sendOfferLetter,
+  getOfferLetterStats,
+  upload,
+  handleUploadError
 } = require('../controllers/offerLetterController');
 const { authMiddleware, hrMiddleware } = require('../middleware/authMiddleware');
 
-// All routes require authentication
+// Apply auth middleware to all routes
 router.use(authMiddleware);
 
-// GET /api/offer-letters - Get all templates
-router.get('/', getTemplates);
+// Template routes
+router.get('/templates', getTemplates);
+router.get('/templates/:id', getTemplate);
+router.post('/templates', hrMiddleware, createTemplate);
+router.put('/templates/:id', hrMiddleware, updateTemplate);
+router.delete('/templates/:id', hrMiddleware, deleteTemplate);
 
-// GET /api/offer-letters/generated/all - Get all generated letters
-router.get('/generated/all', hrMiddleware, getGeneratedLetters);
+// Word upload route with error handling
+router.post('/upload-word', 
+  hrMiddleware, 
+  upload.single('wordFile'),
+  handleUploadError,
+  uploadWordTemplate
+);
 
-// GET /api/offer-letters/generated/:id - Get single generated letter
+// Generation routes
+router.post('/generate/:templateId', hrMiddleware, generateOfferLetter);
+
+// Generated letters routes
+router.get('/generated', hrMiddleware, getGeneratedLetters);
 router.get('/generated/:id', hrMiddleware, getGeneratedLetter);
-
-// PUT /api/offer-letters/generated/:id - Update generated letter
 router.put('/generated/:id', hrMiddleware, updateGeneratedLetter);
-
-// DELETE /api/offer-letters/generated/:id - Delete generated letter
 router.delete('/generated/:id', hrMiddleware, deleteGeneratedLetter);
 
-// GET /api/offer-letters/:id - Get single template
-router.get('/:id', getTemplate);
-
-// POST /api/offer-letters - Create new template (HR/Admin only)
-router.post('/', hrMiddleware, createTemplate);
-
-// POST /api/offer-letters/:id/generate - Generate offer letter (HR/Admin only)
-router.post('/:id/generate', hrMiddleware, generateOfferLetter);
-
-// PUT /api/offer-letters/:id - Update template (HR/Admin only)
-router.put('/:id', hrMiddleware, updateTemplate);
-
-// DELETE /api/offer-letters/:id - Delete template (HR/Admin only)
-router.delete('/:id', hrMiddleware, deleteTemplate);
-
-// GET /api/offer-letters/download/:id - Download PDF
+// PDF and email routes
 router.get('/download/:id', hrMiddleware, downloadPDF);
-
-// POST /api/offer-letters/send/:id - Send offer letter via email
 router.post('/send/:id', hrMiddleware, sendOfferLetter);
+
+// Stats route
+router.get('/stats', hrMiddleware, getOfferLetterStats);
 
 module.exports = router;

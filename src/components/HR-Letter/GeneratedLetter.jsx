@@ -38,7 +38,8 @@ const GeneratedLetters = () => {
   const fetchGeneratedLetters = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // FIXED: Use hrms_token for consistency
+      const token = localStorage.getItem('hrms_token');
       const response = await fetch(`http://localhost:5000/api/offer-letters/generated/all?status=${statusFilter}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -141,7 +142,8 @@ const GeneratedLetters = () => {
     if (!editingLetter) return;
 
     try {
-      const token = localStorage.getItem('token');
+      // FIXED: Use hrms_token for consistency
+      const token = localStorage.getItem('hrms_token');
       
       // Prepare updated form data
       const updatedFormData = {
@@ -153,11 +155,12 @@ const GeneratedLetters = () => {
 
       // Calculate net salary if basic salary or allowances are updated
       if (updatedFormData.basic_salary || updatedFormData.allowances) {
-        const basic = parseFloat(updatedFormData.basic_salary) || 0;
-        const allowance = parseFloat(updatedFormData.allowances) || 0;
+        // Use the same logic as calculateNetSalary from OfferLetter.jsx
+        const basic = parseFloat(String(updatedFormData.basic_salary).replace(/[^0-9.]/g, '')) || 0;
+        const allowance = parseFloat(String(updatedFormData.allowances).replace(/[^0-9.]/g, '')) || 0;
         const net = basic + allowance;
-        if (!isNaN(net) && net > 0) {
-          updatedFormData.net_salary = `₹${net.toLocaleString('en-IN')}`;
+        if (net >= 0) {
+          updatedFormData.net_salary = `₹${net.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         }
       }
 
@@ -208,6 +211,11 @@ const GeneratedLetters = () => {
         }
 
         // Regenerate HTML content with updated form data
+        // NOTE: This assumes the originalLetter.htmlContent for local letters contains only the final HTML, 
+        // making regeneration complex without the original template structure. 
+        // For simplicity in this demo, local update might be limited or use the simplified regeneration, 
+        // but the `OfferLetter.jsx` component uses its own `generateDefaultTemplate` for local updates, which is more robust.
+        // For this component, we'll keep the simplified logic as a fallback for the local-only letter.
         const regeneratedHtml = regenerateHtmlContent(originalLetter.htmlContent, updatedFormData);
 
         const updatedLetter = {
@@ -319,22 +327,24 @@ const GeneratedLetters = () => {
 
   const handleSend = async (letter) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/offer-letters/generated/${letter._id || letter.id}`, {
-        method: 'PUT',
+      // FIXED: Use hrms_token for consistency
+      const token = localStorage.getItem('hrms_token');
+      const response = await fetch(`http://localhost:5000/api/offer-letters/send/${letter._id}`, { // Only allow sending for backend-stored letters (with _id)
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'sent' })
+        // body: JSON.stringify({ status: 'sent' }) // Send endpoint handles status update
       });
 
       if (response.ok) {
         const result = await response.json();
-        // Update the letter in state
+        
+        // Find the letter in the current state and update its status
         setLetters(prevLetters => 
           prevLetters.map(l => 
-            l._id === letter._id || l.id === letter.id ? result.letter : l
+            l._id === letter._id ? { ...l, status: 'sent', sentAt: new Date().toISOString() } : l
           )
         );
         
@@ -344,13 +354,14 @@ const GeneratedLetters = () => {
           variant: 'default'
         });
       } else {
-        throw new Error('Failed to update status');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update status');
       }
     } catch (error) {
       console.error('Error sending letter:', error);
       toast({
         title: 'Error',
-        description: 'Failed to send letter',
+        description: error.message || 'Failed to send letter (Backend only)',
         variant: 'destructive'
       });
     }
@@ -364,7 +375,8 @@ const GeneratedLetters = () => {
     try {
       if (letter._id) {
         // Backend deletion
-        const token = localStorage.getItem('token');
+        // FIXED: Use hrms_token for consistency
+        const token = localStorage.getItem('hrms_token');
         await fetch(`http://localhost:5000/api/offer-letters/generated/${letter._id}`, {
           method: 'DELETE',
           headers: {
@@ -860,7 +872,7 @@ const GeneratedLetters = () => {
                     Download
                   </Button>
                   
-                  {letter.status === 'draft' && (
+                  {letter.status === 'draft' && letter._id && ( // Only allow sending if it's a backend letter
                     <Button
                       size="sm"
                       onClick={() => handleSend(letter)}
