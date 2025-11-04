@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -25,21 +26,91 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Edit, Trash2, BookOpen, Loader2, Search } from 'lucide-react';
+import { 
+  Plus, 
+  Edit, 
+  Trash2, 
+  BookOpen, 
+  Loader2, 
+  Search, 
+  Download,
+  FileText,
+  Eye,
+  FileUp,
+  X,
+  Upload
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
   const [formData, setFormData] = useState(policy || { 
     title: '', 
+    policyType: '',
     category: '', 
     content: '', 
-    tags: [] 
+    tags: []
   });
   const [tagInput, setTagInput] = useState('');
-
+  const [file, setFile] = useState(null);
+  
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      // Check file type
+      const allowedTypes = [
+        'application/pdf', 
+        'application/msword', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      
+      const fileExtension = selectedFile.name.split('.').pop().toLowerCase();
+      const isAllowedType = allowedTypes.includes(selectedFile.type) || 
+                           ['pdf', 'doc', 'docx'].includes(fileExtension);
+      
+      if (!isAllowedType) {
+        toast({
+          title: 'Invalid File Type',
+          description: 'Please upload PDF or Word documents only.',
+          variant: 'destructive'
+        });
+        e.target.value = '';
+        return;
+      }
+      
+      // Check file size (5MB max)
+      if (selectedFile.size > MAX_FILE_SIZE) {
+        toast({
+          title: 'File Too Large',
+          description: 'Please upload files smaller than 5MB.',
+          variant: 'destructive'
+        });
+        e.target.value = '';
+        return;
+      }
+      
+      // Store the file in state
+      setFile(selectedFile);
+      
+      toast({
+        title: 'File Selected',
+        description: selectedFile.name + ' ready for upload.',
+        variant: 'default'
+      });
+    } else {
+      setFile(null);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setFile(null);
+    document.getElementById('document').value = '';
   };
 
   const handleAddTag = () => {
@@ -61,13 +132,50 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // Validation for new policy creation: file is required
+    const hasExistingDocument = policy?.document;
+    if (!file && !hasExistingDocument) {
+      toast({
+        title: 'Document Required',
+        description: 'Please upload a policy document.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    // Create FormData object
+    const data = new FormData();
+    data.append('title', formData.title);
+    data.append('policyType', formData.policyType);
+    data.append('category', formData.category);
+    data.append('content', formData.content || '');
+    data.append('tags', JSON.stringify(formData.tags));
+
+    // Append the file if a new one is selected
+    if (file) {
+      data.append('document', file);
+    } 
+
+    onSave(data);
   };
+
+  const getFileIcon = (fileName) => {
+    if (!fileName) return <FileText className="w-4 h-4" />;
+    
+    const extension = fileName.split('.').pop().toLowerCase();
+    if (extension === 'pdf') return <FileText className="w-4 h-4 text-red-500" />;
+    if (['doc', 'docx'].includes(extension)) return <FileText className="w-4 h-4 text-blue-500" />;
+    return <FileText className="w-4 h-4" />;
+  };
+  
+  const hasDocument = policy?.document || file;
+  const displayFileName = file ? file.name : (policy?.document?.originalName || '');
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label htmlFor="title">Policy Title *</Label>
+        <Label htmlFor="title">Policy Name *</Label>
         <Input 
           id="title" 
           name="title" 
@@ -75,9 +183,31 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
           onChange={handleChange} 
           required 
           disabled={loading}
-          placeholder="Enter policy title"
+          placeholder="Enter policy name"
         />
       </div>
+      
+      <div>
+        <Label htmlFor="policyType">Policy Type *</Label>
+        <select
+          id="policyType"
+          name="policyType"
+          value={formData.policyType}
+          onChange={handleChange}
+          required
+          disabled={loading}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <option value="">Select Policy Type</option>
+          <option value="HR">HR Policy</option>
+          <option value="Security">Security Policy</option>
+          <option value="Operations">Operations Policy</option>
+          <option value="Compliance">Compliance Policy</option>
+          <option value="IT">IT Policy</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
       <div>
         <Label htmlFor="category">Category *</Label>
         <Input 
@@ -87,22 +217,74 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
           onChange={handleChange} 
           required 
           disabled={loading}
-          placeholder="e.g., HR, Security, Operations"
+          placeholder="e.g., Employee Handbook, Code of Conduct"
         />
       </div>
+
       <div>
-        <Label htmlFor="content">Policy Content *</Label>
+        <Label htmlFor="document">Policy Document *</Label>
+        <div className="border-2 border-dashed rounded-lg p-6 text-center">
+          <Input 
+            id="document"
+            type="file"
+            name="document"
+            accept=".pdf,.doc,.docx"
+            onChange={handleFileChange}
+            disabled={loading}
+            className="hidden"
+          />
+          <Label htmlFor="document" className="cursor-pointer">
+            <div className="flex flex-col items-center justify-center gap-2">
+              <Upload className="w-8 h-8 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">
+                  {file ? file.name : (policy?._id && !file ? 'Select new document to replace' : 'Click to upload document')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  PDF or Word documents (Max 5MB)
+                </p>
+              </div>
+            </div>
+          </Label>
+        </div>
+
+        {hasDocument && (
+          <div className="mt-2 flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+            <div className="flex items-center gap-2">
+              {getFileIcon(displayFileName)}
+              <div>
+                <p className="text-sm font-medium">{displayFileName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {file ? (file.size / 1024 / 1024).toFixed(2) : (policy.document?.fileSize ? (policy.document.fileSize / 1024 / 1024).toFixed(2) : '0.00')} MB
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRemoveFile}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Label htmlFor="content">Policy Description</Label>
         <Textarea 
           id="content" 
           name="content" 
           value={formData.content} 
           onChange={handleChange} 
-          required 
-          rows={8} 
+          rows={4} 
           disabled={loading}
-          placeholder="Enter the full policy content..."
+          placeholder="Brief description of the policy..."
         />
       </div>
+
       <div>
         <Label htmlFor="tags">Tags</Label>
         <div className="flex gap-2 mb-2">
@@ -139,11 +321,12 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
           ))}
         </div>
       </div>
+
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
           Cancel
         </Button>
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" disabled={loading || (!policy?._id && !file)}>
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
           {policy?._id ? 'Update' : 'Create'} Policy
         </Button>
@@ -152,299 +335,382 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
   );
 };
 
-const CompanyPolicyPage = () => {
-  const { user, logout } = useAuth();
-  const [isModalOpen, setModalOpen] = useState(false);
-  const [editingPolicy, setEditingPolicy] = useState(null);
-  const [deletingPolicy, setDeletingPolicy] = useState(null);
-  const [policies, setPolicies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [formLoading, setFormLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
+const PolicyViewModal = ({ policy, isOpen, onClose }) => {
+  const [documentError, setDocumentError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  // NEW STATE: Store the local object URL for the PDF/Document blob
+  const [localDocumentUrl, setLocalDocumentUrl] = useState(null); 
 
-  // API base URL
-  const API_BASE = 'http://localhost:5000/api';
+  const getToken = () => {
+    return localStorage.getItem('hrms_token') || 
+           localStorage.getItem('token') || 
+           sessionStorage.getItem('hrms_token') ||
+           sessionStorage.getItem('token');
+  };
 
-  // Enhanced getAuthHeaders with better error handling
-  const getAuthHeaders = () => {
+  const getFileExtension = (fileName) => {
+    if (!fileName) return '';
+    return fileName.split('.').pop().toLowerCase();
+  };
+
+  const isPdfFile = (fileName) => {
+    return getFileExtension(fileName) === 'pdf';
+  };
+
+  const fetchDocumentForView = async () => {
+    if (!policy?._id || !policy.document) return;
+    
+    // Clear previous URL
+    if (localDocumentUrl) {
+      window.URL.revokeObjectURL(localDocumentUrl);
+      setLocalDocumentUrl(null);
+    }
+    
+    setDocumentError(false);
+    setIsLoading(true);
+
+    const token = getToken();
+    if (!token) {
+      setDocumentError(true);
+      setIsLoading(false);
+      return;
+    }
+
+    const API_BASE = 'http://localhost:5000';
+    const documentApiUrl = `${API_BASE}/api/policies/${policy._id}/document?token=${encodeURIComponent(token)}`;
+
     try {
-      // Try multiple token storage locations
-      const token = localStorage.getItem('hrms_token') || 
-                   localStorage.getItem('token') || 
-                   sessionStorage.getItem('hrms_token') ||
-                   sessionStorage.getItem('token');
+      const response = await fetch(documentApiUrl);
       
-      if (!token) {
-        console.error('No authentication token found');
-        toast({
-          title: 'Authentication Required',
-          description: 'Please login to access policies',
-          variant: 'destructive'
-        });
-        logout();
-        return {};
+      if (!response.ok) {
+        throw new Error('Failed to fetch document');
       }
 
-      // Validate token format
-      if (typeof token !== 'string' || token.length < 10) {
-        console.error('Invalid token format');
-        toast({
-          title: 'Invalid Token',
-          description: 'Please login again',
-          variant: 'destructive'
-        });
-        logout();
-        return {};
-      }
+      const blob = await response.blob();
+      // Create a local blob URL for the iframe to use (avoids COEP/CORP issues)
+      const url = window.URL.createObjectURL(blob);
+      setLocalDocumentUrl(url);
+      setDocumentError(false);
 
-      return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
     } catch (error) {
-      console.error('Error getting auth headers:', error);
+      console.error('Error fetching document for view:', error);
+      setDocumentError(true);
       toast({
-        title: 'Authentication Error',
-        description: 'Please login again',
+        title: 'Preview Failed',
+        description: 'Could not load document for preview. Please try downloading.',
         variant: 'destructive'
       });
-      logout();
-      return {};
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Enhanced API fetch function
-  const apiFetch = async (url, options = {}) => {
-    try {
-      const headers = getAuthHeaders();
-      if (Object.keys(headers).length === 0) {
-        throw new Error('Authentication required');
+  useEffect(() => {
+    if (isOpen && policy?.document) {
+      fetchDocumentForView();
+    }
+    
+    // Cleanup function to revoke the object URL when modal closes or policy changes
+    return () => {
+      if (localDocumentUrl) {
+        window.URL.revokeObjectURL(localDocumentUrl);
       }
+    };
+  }, [isOpen, policy]);
 
-      const response = await fetch(`${API_BASE}${url}`, {
-        ...options,
-        headers: {
-          ...headers,
-          ...options.headers,
-        },
-      });
 
-      // Handle authentication errors
-      if (response.status === 401) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Authentication failed:', errorData);
+  const handleDownload = async () => {
+    if (policy?._id && policy.document) {
+      try {
+        const token = getToken();
+        if (!token) {
+          toast({
+            title: 'Authentication Required',
+            description: 'Please login to download documents',
+            variant: 'destructive'
+          });
+          return;
+        }
         
+        // Use the same URL structure but without the CORS constraint from fetch API
+        const downloadUrl = `http://localhost:5000/api/policies/${policy._id}/document?token=${encodeURIComponent(token)}`;
+
+        // Trigger download using the URL directly
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        // The backend should set Content-Disposition: attachment for downloads
+        a.download = policy.document.originalName || `policy-${policy._id}.${getFileExtension(policy.document.originalName) || 'pdf'}`; 
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
         toast({
-          title: 'Session Expired',
-          description: errorData.message || 'Please login again',
+          title: 'Download Started',
+          description: 'Policy document is being downloaded',
+          variant: 'default'
+        });
+        
+      } catch (error) {
+        console.error('Download error:', error);
+        toast({
+          title: 'Download Failed',
+          description: 'Could not download the document. Please try again.',
           variant: 'destructive'
         });
-        logout();
-        throw new Error('Authentication failed');
       }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('API fetch error:', error);
-      if (error.message !== 'Authentication failed') {
-        throw error;
-      }
-      throw error; // Re-throw authentication errors
     }
   };
 
-  // Fetch all policies
+
+  const documentUrl = localDocumentUrl; // Use the local blob URL for viewing
+  const isPdf = isPdfFile(policy?.document?.originalName);
+
+  return (
+    // FIX: Adjusted max-h-[] to better handle content scrolling
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[95vh] flex flex-col"> 
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5" />
+            {policy?.title}
+          </DialogTitle>
+          <DialogDescription>
+            {policy?.policyType} • {policy?.category}
+          </DialogDescription>
+        </DialogHeader>
+        
+        {/* Added overflow-y-auto to the container to allow content scrolling */}
+        <div className="space-y-4 flex-1 overflow-y-auto pr-2"> 
+          {policy?.content && (
+            <div>
+              <h4 className="font-semibold mb-2">Description</h4>
+              <p className="text-sm text-muted-foreground">{policy.content}</p>
+            </div>
+          )}
+
+          {policy?.tags && policy.tags.length > 0 && (
+            <div>
+              <h4 className="font-semibold mb-2">Tags</h4>
+              <div className="flex flex-wrap gap-1">
+                {policy.tags.map((tag, index) => (
+                  <Badge key={index} variant="outline">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {policy?.document && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold">Document</h4>
+                <Button onClick={handleDownload} size="sm" className="flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Download
+                </Button>
+              </div>
+              
+              <div className="border rounded-lg overflow-hidden">
+                {isLoading ? (
+                  <div className="h-[500px] flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : isPdf && documentUrl && !documentError ? (
+                  <div className="h-[500px]">
+                    <iframe
+                      // Using local blob URL
+                      src={documentUrl}
+                      className="w-full h-full border-0"
+                      title={`Policy Document: ${policy.title}`}
+                    />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <FileText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium mb-2">{policy.document.originalName}</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {policy.document.fileSize ? (policy.document.fileSize / 1024 / 1024).toFixed(2) : 'Unknown'} MB • 
+                      {policy.document.fileType ? ` ${policy.document.fileType.toUpperCase()} Document` : ' Document'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {documentError 
+                        ? 'Unable to preview document. An error occurred during loading. Please download to view.' 
+                        : 'Preview not available for this file type. Please download to view.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <DialogFooter className="pt-4">
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const CompanyPolicyPage = () => {
+  const { user } = useAuth();
+  const [policies, setPolicies] = useState([]);
+  const [filteredPolicies, setFilteredPolicies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categories, setCategories] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingPolicy, setEditingPolicy] = useState(null);
+  const [viewingPolicy, setViewingPolicy] = useState(null);
+  const [deletePolicy, setDeletePolicy] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
+
+  const isAdminOrEmployer = user && ['admin', 'employer'].includes(user.role);
+
+  useEffect(() => {
+    fetchPolicies();
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    filterPolicies();
+  }, [policies, searchQuery, selectedCategory]);
+
   const fetchPolicies = async () => {
     try {
       setLoading(true);
-      console.log('Fetching policies...');
+      const token = localStorage.getItem('hrms_token') || localStorage.getItem('token');
       
-      const data = await apiFetch('/policies');
+      const response = await fetch('http://localhost:5000/api/policies', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
       
-      if (data.success) {
-        console.log(`Successfully fetched ${data.data?.length || 0} policies`);
-        setPolicies(data.data || []);
+      if (result.success) {
+        setPolicies(result.data || []);
       } else {
-        throw new Error(data.message || 'Failed to fetch policies');
+        throw new Error(result.message || 'Failed to fetch policies');
       }
     } catch (error) {
       console.error('Error fetching policies:', error);
-      if (error.message !== 'Authentication failed') {
-        toast({
-          title: 'Error',
-          description: error.message || 'Failed to load policies',
-          variant: 'destructive'
-        });
-      }
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to load policies',
+        variant: 'destructive'
+      });
       setPolicies([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch categories
   const fetchCategories = async () => {
     try {
-      const data = await apiFetch('/policies/categories/list');
-      if (data.success) {
-        setCategories(data.data || []);
+      const token = localStorage.getItem('hrms_token') || localStorage.getItem('token');
+      
+      const response = await fetch('http://localhost:5000/api/policies/categories/list', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setCategories(result.data || []);
+        }
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
-      // Don't show toast for category errors as it's non-critical
     }
   };
 
-  // Search policies
-  const searchPolicies = async (query) => {
-    try {
-      setLoading(true);
-      const data = await apiFetch(`/policies/search/${encodeURIComponent(query)}`);
-      
-      if (data.success) {
-        setPolicies(data.data || []);
-      } else {
-        throw new Error(data.message || 'Search failed');
-      }
-    } catch (error) {
-      console.error('Error searching policies:', error);
-      if (error.message !== 'Authentication failed') {
-        toast({
-          title: 'Search Error',
-          description: error.message || 'Failed to search policies',
-          variant: 'destructive'
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const filterPolicies = () => {
+    let filtered = policies;
 
-  // Create new policy
-  const createPolicy = async (policyData) => {
-    return await apiFetch('/policies', {
-      method: 'POST',
-      body: JSON.stringify(policyData)
-    });
-  };
-
-  // Update policy
-  const updatePolicy = async (id, policyData) => {
-    return await apiFetch(`/policies/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(policyData)
-    });
-  };
-
-  // Delete policy
-  const deletePolicy = async (id) => {
-    return await apiFetch(`/policies/${id}`, {
-      method: 'DELETE'
-    });
-  };
-
-  // Load policies and categories on component mount
-  useEffect(() => {
-    fetchPolicies();
-    fetchCategories();
-  }, []);
-
-  // Handle search with debounce
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const debounceTimer = setTimeout(() => {
-        searchPolicies(searchQuery);
-      }, 500);
-
-      return () => clearTimeout(debounceTimer);
-    } else if (searchQuery === '') {
-      // Only refetch if we're clearing search and not on initial load
-      fetchPolicies();
-    }
-  }, [searchQuery]);
-
-  // Handle category filter
-  useEffect(() => {
-    if (selectedCategory && policies.length > 0) {
-      const filtered = policies.filter(policy => 
-        policy.category.toLowerCase().includes(selectedCategory.toLowerCase())
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(policy => 
+        policy.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        policy.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        policy.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        policy.policyType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        policy.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       );
-      setPolicies(filtered);
-    } else if (selectedCategory === '' && policies.length === 0) {
-      // If category is cleared and no policies, refetch
-      fetchPolicies();
     }
-  }, [selectedCategory]);
 
-  const handleAddNew = () => {
-    setEditingPolicy({ title: '', category: '', content: '', tags: [] });
-    setModalOpen(true);
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(policy => 
+        policy.category?.toLowerCase() === selectedCategory.toLowerCase()
+      );
+    }
+
+    setFilteredPolicies(filtered);
   };
 
-  const handleEdit = (policy) => {
+  const handleCreatePolicy = () => {
+    setEditingPolicy(null);
+    setShowForm(true);
+  };
+
+  const handleEditPolicy = (policy) => {
     setEditingPolicy(policy);
-    setModalOpen(true);
+    setShowForm(true);
   };
 
-  const handleDelete = (policy) => {
-    setDeletingPolicy(policy);
-  };
-
-  const confirmDelete = async () => {
-    if (deletingPolicy) {
-      try {
-        await deletePolicy(deletingPolicy._id);
-        toast({ 
-          title: 'Policy Deleted', 
-          description: `The policy "${deletingPolicy.title}" has been deleted.`,
-          variant: 'default'
-        });
-        setDeletingPolicy(null);
-        fetchPolicies(); // Refresh the list
-      } catch (error) {
-        console.error('Error deleting policy:', error);
-        toast({
-          title: 'Error',
-          description: error.message || 'Failed to delete policy',
-          variant: 'destructive'
-        });
-      }
-    }
-  };
-
-  const handleSave = async (policyData) => {
+  const handleSavePolicy = async (formData) => {
     try {
       setFormLoading(true);
+      const token = localStorage.getItem('hrms_token') || localStorage.getItem('token');
       
-      let result;
-      if (policyData._id) {
-        // Update existing policy
-        result = await updatePolicy(policyData._id, policyData);
-        toast({ 
-          title: 'Policy Updated', 
-          description: 'The policy has been successfully updated.',
-          variant: 'default'
-        });
-      } else {
-        // Create new policy
-        result = await createPolicy(policyData);
-        toast({ 
-          title: 'Policy Created', 
-          description: 'The new policy has been successfully created.',
-          variant: 'default'
-        });
+      const url = editingPolicy 
+        ? `http://localhost:5000/api/policies/${editingPolicy._id}`
+        : 'http://localhost:5000/api/policies';
+
+      const method = editingPolicy ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to save policy');
       }
-      
-      setModalOpen(false);
-      setEditingPolicy(null);
-      fetchPolicies(); // Refresh the list
+
+      if (result.success) {
+        toast({
+          title: 'Success',
+          description: editingPolicy ? 'Policy updated successfully' : 'Policy created successfully',
+          variant: 'default'
+        });
+        
+        setShowForm(false);
+        setEditingPolicy(null);
+        fetchPolicies();
+      } else {
+        throw new Error(result.message || 'Failed to save policy');
+      }
     } catch (error) {
       console.error('Error saving policy:', error);
       toast({
@@ -457,242 +723,308 @@ const CompanyPolicyPage = () => {
     }
   };
 
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setSelectedCategory('');
-    fetchPolicies();
+  const handleDeletePolicy = async () => {
+    if (!deletePolicy) return;
+
+    try {
+      const token = localStorage.getItem('hrms_token') || localStorage.getItem('token');
+      
+      const response = await fetch(`http://localhost:5000/api/policies/${deletePolicy._id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to delete policy');
+      }
+
+      if (result.success) {
+        toast({
+          title: 'Success',
+          description: 'Policy deleted successfully',
+          variant: 'default'
+        });
+        
+        setDeletePolicy(null);
+        fetchPolicies();
+      } else {
+        throw new Error(result.message || 'Failed to delete policy');
+      }
+    } catch (error) {
+      console.error('Error deleting policy:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete policy',
+        variant: 'destructive'
+      });
+    }
   };
 
-  // Check if user has permission to manage policies
-  const canManagePolicies = user && ['admin', 'hr', 'employer'].includes(user.role);
+  const handleViewPolicy = (policy) => {
+    setViewingPolicy(policy);
+  };
 
-  // Filter policies based on search and category (client-side as fallback)
-  const filteredPolicies = policies.filter(policy => {
-    if (!policy) return false;
+  const getFileIcon = (fileName) => {
+    if (!fileName) return <FileText className="w-4 h-4" />;
     
-    const matchesSearch = !searchQuery || 
-      (policy.title && policy.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (policy.content && policy.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (policy.category && policy.category.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesCategory = !selectedCategory || 
-      (policy.category && policy.category.toLowerCase().includes(selectedCategory.toLowerCase()));
-    
-    return matchesSearch && matchesCategory;
-  });
+    const extension = fileName.split('.').pop().toLowerCase();
+    if (extension === 'pdf') return <FileText className="w-4 h-4 text-red-500" />;
+    if (['doc', 'docx'].includes(extension)) return <FileText className="w-4 h-4 text-blue-500" />;
+    return <FileText className="w-4 h-4" />;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="container mx-auto py-6 space-y-6">
       <Helmet>
-        <title>Company Policies - HRMS Pro</title>
-        <meta name="description" content="View and manage all company policies." />
+        <title>Company Policies | HRMS</title>
       </Helmet>
 
-      <Dialog open={isModalOpen} onOpenChange={(open) => { 
-        if (!open) { 
-          setEditingPolicy(null); 
-          setModalOpen(false); 
-        } else { 
-          setModalOpen(true); 
-        } 
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Company Policies</h1>
+          <p className="text-muted-foreground">
+            Manage and view company policies and documents
+          </p>
+        </div>
+        
+        {isAdminOrEmployer && (
+          <Button onClick={handleCreatePolicy} className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Add Policy
+          </Button>
+        )}
+      </div>
+
+      {/* Search and Filter Section */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search policies..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            
+            <div className="w-full sm:w-48">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="all">All Categories</option>
+                {categories.map((category, index) => (
+                  <option key={index} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Policies Grid */}
+      {filteredPolicies.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <BookOpen className="w-12 h-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No policies found</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              {searchQuery || selectedCategory !== 'all' 
+                ? 'Try adjusting your search or filter criteria'
+                : 'No policies have been added yet'
+              }
+            </p>
+            {isAdminOrEmployer && !searchQuery && selectedCategory === 'all' && (
+              <Button onClick={handleCreatePolicy}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Your First Policy
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredPolicies.map((policy) => (
+            <motion.div
+              key={policy._id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="h-full hover:shadow-lg transition-shadow duration-300">
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1 flex-1">
+                      <CardTitle className="text-lg line-clamp-2">
+                        {policy.title}
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-2">
+                        <Badge variant="outline">{policy.policyType}</Badge>
+                        <span>{policy.category}</span>
+                      </CardDescription>
+                    </div>
+                    
+                    {isAdminOrEmployer && (
+                      <div className="flex gap-1 ml-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditPolicy(policy)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeletePolicy(policy)}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  {policy.content && (
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {policy.content}
+                    </p>
+                  )}
+                  
+                  {policy.tags && policy.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {policy.tags.slice(0, 3).map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {policy.tags.length > 3 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{policy.tags.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  
+                  {policy.document && (
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        {getFileIcon(policy.document.originalName)}
+                        <span className="truncate max-w-[120px]">
+                          {policy.document.originalName}
+                        </span>
+                      </div>
+                      
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewPolicy(policy)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!policy.document && (
+                    <div className="pt-2 border-t">
+                      <Badge variant="outline" className="text-xs">
+                        No Document
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Policy Form Dialog */}
+      <Dialog open={showForm} onOpenChange={(open) => {
+        if (!open) {
+          setShowForm(false);
+          setEditingPolicy(null);
+        }
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingPolicy?._id ? 'Edit' : 'Create'} Company Policy</DialogTitle>
+            <DialogTitle>
+              {editingPolicy ? 'Edit Policy' : 'Create New Policy'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPolicy 
+                ? 'Update the policy information below' 
+                : 'Fill in the details to create a new company policy'
+              }
+            </DialogDescription>
           </DialogHeader>
-          <PolicyForm 
-            policy={editingPolicy} 
-            onSave={handleSave} 
-            onCancel={() => { setModalOpen(false); setEditingPolicy(null); }} 
+          
+          <PolicyForm
+            policy={editingPolicy}
+            onSave={handleSavePolicy}
+            onCancel={() => {
+              setShowForm(false);
+              setEditingPolicy(null);
+            }}
             loading={formLoading}
           />
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deletingPolicy} onOpenChange={() => setDeletingPolicy(null)}>
+      {/* Policy View Modal */}
+      <PolicyViewModal
+        policy={viewingPolicy}
+        isOpen={!!viewingPolicy}
+        onClose={() => setViewingPolicy(null)}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletePolicy} onOpenChange={(open) => !open && setDeletePolicy(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the policy "{deletingPolicy?.title}".
+              This will permanently delete the policy "{deletePolicy?.title}". This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDelete} 
-              className="bg-red-600 hover:bg-red-700 text-white"
+            <AlertDialogAction
+              onClick={handleDeletePolicy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <div className="space-y-8">
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          transition={{ duration: 0.5 }} 
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <h1 className="text-3xl font-bold">Company Policies</h1>
-            <p className="text-muted-foreground mt-2">Central repository for all official company policies.</p>
-          </div>
-          {canManagePolicies && (
-            <Button 
-              onClick={handleAddNew} 
-              className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" /> 
-              Add New Policy
-            </Button>
-          )}
-        </motion.div>
-
-        {/* Search and Filter Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search policies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          >
-            <option value="">All Categories</option>
-            {categories.map((category, index) => (
-              <option key={index} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-          <Button
-            variant="outline"
-            onClick={handleResetFilters}
-            disabled={!searchQuery && !selectedCategory}
-          >
-            Reset Filters
-          </Button>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="ml-2">Loading policies...</span>
-          </div>
-        ) : filteredPolicies.length === 0 ? (
-          <div className="text-center py-12">
-            <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium">No policies found</h3>
-            <p className="text-muted-foreground mt-2">
-              {searchQuery || selectedCategory
-                ? 'No policies match your search criteria. Try adjusting your filters.'
-                : canManagePolicies 
-                  ? 'Create your first company policy to get started.' 
-                  : 'No policies have been published yet.'
-              }
-            </p>
-            {(searchQuery || selectedCategory) && (
-              <Button onClick={handleResetFilters} className="mt-4">
-                Clear Filters
-              </Button>
-            )}
-            {canManagePolicies && !searchQuery && !selectedCategory && (
-              <Button onClick={handleAddNew} className="mt-4">
-                <Plus className="w-4 h-4 mr-2" /> 
-                Create First Policy
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPolicies.map((policy, index) => (
-              <motion.div 
-                key={policy._id || policy.id || index} 
-                initial={{ opacity: 0, y: 20 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-              >
-                <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg line-clamp-2">
-                          {policy.title || 'Untitled Policy'}
-                        </CardTitle>
-                        <CardDescription className="mt-2">
-                          {policy.category || 'Uncategorized'}
-                        </CardDescription>
-                      </div>
-                      <BookOpen className="w-6 h-6 text-muted-foreground flex-shrink-0 ml-2" />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow">
-                    <p className="text-sm text-muted-foreground line-clamp-4 mb-4">
-                      {policy.content || 'No content available.'}
-                    </p>
-                    {policy.tags && policy.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {policy.tags.slice(0, 3).map((tag, tagIndex) => (
-                          <Badge key={tagIndex} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {policy.tags.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{policy.tags.length - 3} more
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      {policy.createdBy && (
-                        <p>Created by: {policy.createdBy.name || policy.createdBy.email}</p>
-                      )}
-                      {policy.updatedAt && (
-                        <p>Updated: {new Date(policy.updatedAt).toLocaleDateString()}</p>
-                      )}
-                    </div>
-                  </CardContent>
-                  {canManagePolicies && (
-                    <div className="p-4 border-t">
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleEdit(policy)}
-                          className="flex-1"
-                        >
-                          <Edit className="mr-2 h-4 w-4" /> 
-                          Edit
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-red-500 hover:text-red-600 hover:bg-red-50 flex-1"
-                          onClick={() => handleDelete(policy)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> 
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 };
 

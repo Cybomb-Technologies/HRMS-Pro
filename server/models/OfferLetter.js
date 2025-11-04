@@ -4,16 +4,54 @@ const mongoose = require('mongoose');
 const offerLetterSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'Template name is required'],
+    trim: true,
+    maxlength: [100, 'Name cannot exceed 100 characters']
   },
   description: {
     type: String,
-    required: true
+    trim: true,
+    maxlength: [500, 'Description cannot exceed 500 characters']
   },
   template: {
     type: String,
-    required: true
+    required: [true, 'Template content is required']
+  },
+  templateType: {
+    type: String,
+    enum: ['professional', 'contract', 'internship', 'word_upload', 'custom'],
+    default: 'professional'
+  },
+  category: {
+    type: String,
+    enum: ['Full-Time', 'Contract', 'Internship', 'Part-Time', 'Custom'],
+    default: 'Full-Time'
+  },
+  variables: [{
+    type: String,
+    trim: true
+  }],
+  originalFileName: {
+    type: String
+  },
+  filePath: {
+    type: String
+  },
+  preview: {
+    type: String,
+    maxlength: [200, 'Preview cannot exceed 200 characters']
+  },
+  icon: {
+    type: String,
+    default: '📄'
+  },
+  color: {
+    type: String,
+    default: 'blue'
+  },
+  isTemplate: {
+    type: Boolean,
+    default: true
   },
   isActive: {
     type: Boolean,
@@ -23,37 +61,14 @@ const offerLetterSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
-  },
-  variables: [{
-    type: String
-  }]
+  }
 }, {
   timestamps: true
 });
 
-// Static method to extract variables from template
-offerLetterSchema.statics.extractVariables = function(template) {
-  const variableRegex = /{{(\w+)}}/g;
-  const matches = [];
-  let match;
-  
-  while ((match = variableRegex.exec(template)) !== null) {
-    matches.push(match[1]);
-  }
-  
-  return [...new Set(matches)]; // Return unique variables
-};
-
-// Pre-save middleware to update variables
-offerLetterSchema.pre('save', function(next) {
-  if (this.isModified('template')) {
-    this.variables = this.constructor.extractVariables(this.template);
-  }
-  next();
-});
-
 // Index for better query performance
-offerLetterSchema.index({ isActive: 1 });
+offerLetterSchema.index({ isActive: 1, isTemplate: 1 });
 offerLetterSchema.index({ createdBy: 1 });
+offerLetterSchema.index({ category: 1 });
 
 module.exports = mongoose.model('OfferLetter', offerLetterSchema);

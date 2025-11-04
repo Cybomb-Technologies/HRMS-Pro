@@ -6,8 +6,34 @@ const Shift = require('../models/attendance/Shift');
 const EmployeeShift = require('../models/attendance/EmployeeShift');
 const AttendanceReport = require('../models/attendance/AttendanceReport');
 const Employee = require('../models/Employee');
+// Add to adminAttendanceController.js
+const debugEmployeeData = async (req, res) => {
+  try {
+    const employees = await Employee.find({ status: 'active' });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const attendance = await Attendance.find({
+      date: { $gte: today }
+    });
+    
+    res.json({
+      totalEmployees: employees.length,
+      employeeIds: employees.map(e => e.employeeId),
+      attendanceCount: attendance.length,
+      attendanceRecords: attendance.map(a => ({
+        employeeId: a.employeeId,
+        status: a.status
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-// In adminAttendanceController.js - Update getDashboardStats function
+
+
+
 const getDashboardStats = async (req, res) => {
   try {
     const today = new Date();
@@ -16,69 +42,65 @@ const getDashboardStats = async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Get today's attendance stats
-    const todayAttendance = await Attendance.aggregate([
-      {
-        $match: {
-          date: {
-            $gte: today,
-            $lt: tomorrow
-          }
-        }
-      },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    // Get all active employees
+    const activeEmployees = await Employee.find({ status: 'active' })
+      .select('_id name email department employeeId')
+      .lean();
 
-    // Get total employees count from Employee model
-    const totalEmployees = await Employee.countDocuments({ 
-      status: 'active' 
+    const totalEmployees = activeEmployees.length;
+
+    // Get today's attendance records
+    const todayAttendance = await Attendance.find({
+      date: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    }).lean();
+
+    // Count status from actual records
+    let presentCount = 0;
+    let lateCount = 0;
+    let halfDayCount = 0;
+
+    todayAttendance.forEach(record => {
+      switch (record.status) {
+        case 'present':
+          presentCount++;
+          break;
+        case 'late':
+          lateCount++;
+          break;
+        case 'half-day':
+          halfDayCount++;
+          break;
+      }
     });
 
-    // Get pending manual requests
+    // Calculate absent count (employees without any attendance record)
+    const employeesWithAttendance = new Set(
+      todayAttendance.map(record => record.employeeId)
+    );
+
+    const absentCount = activeEmployees.filter(employee => 
+      !employeesWithAttendance.has(employee.employeeId)
+    ).length;
+
+    // Get pending requests
     const pendingRequests = await ManualRequest.countDocuments({
       status: 'pending'
     });
 
-    // Get pending timesheets
-    const pendingTimesheets = await Timesheet.countDocuments({
-      status: 'submitted'
-    });
-
-    // Calculate present, absent, late counts
     const stats = {
       totalEmployees,
-      presentToday: 0,
-      absentToday: 0,
-      lateToday: 0,
+      presentToday: presentCount + lateCount + halfDayCount,
+      absentToday: absentCount,
+      lateToday: lateCount,
       onLeave: 0,
       pendingRequests,
-      pendingTimesheets
+      pendingTimesheets: 0
     };
 
-    todayAttendance.forEach(item => {
-      switch (item._id) {
-        case 'present':
-          stats.presentToday = item.count;
-          break;
-        case 'absent':
-          stats.absentToday = item.count;
-          break;
-        case 'late':
-          stats.lateToday = item.count;
-          break;
-        case 'half-day':
-          stats.presentToday += item.count;
-          break;
-      }
-    });
-
-    // Calculate absent count (total employees - present employees)
-    stats.absentToday = Math.max(0, totalEmployees - stats.presentToday);
+    console.log('Dashboard Stats:', stats);
 
     res.json(stats);
   } catch (error) {
@@ -111,7 +133,10 @@ const getAttendanceData = async (req, res) => {
     nextDay.setDate(nextDay.getDate() + 1);
 
     // Get all active employees
-    const activeEmployees = await Employee.find({ status: 'active' })
+    let activeEmployeesFilter = { status: 'active' };
+    if (department) activeEmployeesFilter.department = department;
+
+    const activeEmployees = await Employee.find(activeEmployeesFilter)
       .select('_id name email department designation employeeId') // Add employeeId field
       .lean();
 
@@ -128,7 +153,8 @@ const getAttendanceData = async (req, res) => {
       attendanceFilter.employeeId = employeeId; // Direct string comparison
     }
     if (teamId) attendanceFilter.teamId = parseInt(teamId);
-    if (status) attendanceFilter.status = status;
+    // Status filter is applied later if includeAbsent is true
+    // if (status) attendanceFilter.status = status;
 
     // Get existing attendance records - NO population needed since employeeId is String
     const existingAttendance = await Attendance.find(attendanceFilter)
@@ -188,6 +214,13 @@ const getAttendanceData = async (req, res) => {
           employee.employeeId === employeeId
         );
       }
+      
+      // Apply department filter to absent records if specified
+      if (department) {
+        employeesWithoutAttendance = employeesWithoutAttendance.filter(employee => 
+          employee.department === department
+        );
+      }
 
       // Create absent records for employees without attendance
       const absentRecords = employeesWithoutAttendance.map(employee => ({
@@ -224,12 +257,20 @@ const getAttendanceData = async (req, res) => {
       if (status) {
         finalAttendanceData = finalAttendanceData.filter(record => record.status === status);
       }
+    } else {
+        // Apply status filter to *only* existing attendance if includeAbsent is false
+        if (status) {
+          finalAttendanceData = finalAttendanceData.filter(record => record.status === status);
+        }
     }
-
+    
+    // Manual pagination after combining and filtering
+    const paginatedData = finalAttendanceData.slice(skip, skip + parseInt(limit));
     const total = finalAttendanceData.length;
 
+
     res.json({
-      attendance: finalAttendanceData,
+      attendance: paginatedData,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -267,12 +308,18 @@ const getAttendanceDetails = async (req, res) => {
     if (id.startsWith('absent-')) {
       // Extract employee ID and date from absent record ID
       const parts = id.split('-');
+      // parts[0] is 'absent'
+      // parts[1] is the employeeId string (e.g., EMP003)
+      // parts[2] onwards is the date string
       const employeeId = parts[1];
       const date = parts.slice(2).join('-');
 
       // Find employee
-      const employee = await Employee.findById(employeeId)
-        .select('_id name email department designation')
+      // NOTE: employeeId from the URL for absent records is the string EMP003, 
+      // not the Mongoose ObjectId. We must find by the employeeId field.
+      const Employee = require('../models/Employee');
+      const employee = await Employee.findOne({ employeeId: employeeId })
+        .select('_id name email department designation employeeId')
         .lean();
 
       if (!employee) {
@@ -282,7 +329,7 @@ const getAttendanceDetails = async (req, res) => {
       // Return absent record structure
       const absentRecord = {
         _id: id,
-        employeeId: employee,
+        employeeId: employee.employeeId, // Use the string ID
         employee: employee.name,
         employeeName: employee.name,
         date: new Date(date),
@@ -309,12 +356,24 @@ const getAttendanceDetails = async (req, res) => {
 
     // Regular attendance record lookup
     const attendanceRecord = await Attendance.findById(id)
-      .populate('employeeId', 'name email department designation')
+      .populate('employeeId', 'name email department designation employeeId') // Add employeeId to population
       .lean();
 
     if (!attendanceRecord) {
       return res.status(404).json({ message: 'Attendance record not found' });
     }
+    
+    // Flatten employee data for the client (as it was populated)
+    if (attendanceRecord.employeeId && typeof attendanceRecord.employeeId === 'object') {
+        attendanceRecord.employeeName = attendanceRecord.employeeId.name;
+        attendanceRecord.employeeEmail = attendanceRecord.employeeId.email;
+        attendanceRecord.employeeDepartment = attendanceRecord.employeeId.department;
+        // The original employeeId field in the attendance record holds the string EMP003
+        // If the population succeeds, the root employeeId is the ObjectId.
+        // We'll trust the string employeeId field for consistency if available, otherwise use the populated one.
+        attendanceRecord.employeeIdString = attendanceRecord.employeeId.employeeId || attendanceRecord.employeeId;
+    }
+
 
     res.json(attendanceRecord);
   } catch (error) {
@@ -347,8 +406,7 @@ const getEmployees = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
-// In adminAttendanceController.js - Fix exportAttendanceData function
+// In adminAttendanceController.js - Update exportAttendanceData function
 const exportAttendanceData = async (req, res) => {
   try {
     const { 
@@ -356,17 +414,22 @@ const exportAttendanceData = async (req, res) => {
       endDate, 
       teamId, 
       department,
-      includeAbsent = 'false',
+      employeeId, // Add employeeId filter
+      includeAbsent = 'true',
+      includeDetails = 'false',
       format = 'csv' 
     } = req.query;
 
     const shouldIncludeAbsent = includeAbsent === 'true';
+    const shouldIncludeDetails = includeDetails === 'true';
+
+    console.log('Export request with filters:', {
+      startDate, endDate, department, employeeId, includeAbsent, includeDetails
+    });
 
     // ✅ SAFELY handle user data with fallbacks
     const userId = req.user?.id || req.user?._id || 'system-export';
     const userName = req.user?.name || req.user?.email || 'System User';
-
-    console.log('Export request by user:', { userId, userName, role: req.user?.role });
 
     // Date range filter
     const start = startDate ? new Date(startDate) : new Date();
@@ -374,10 +437,21 @@ const exportAttendanceData = async (req, res) => {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
-    // Get all active employees for reference
-    const activeEmployees = await Employee.find({ status: 'active' })
+    // Validate date range
+    if (start > end) {
+      return res.status(400).json({ message: 'Start date cannot be after end date' });
+    }
+
+    // Get all active employees for reference, applying filters
+    let employeeFilter = { status: 'active' };
+    if (department && department !== 'all') employeeFilter.department = department;
+    if (employeeId && employeeId !== 'all') employeeFilter.employeeId = employeeId;
+
+    const activeEmployees = await Employee.find(employeeFilter)
       .select('_id name email department designation employeeId')
       .lean();
+
+    console.log(`Found ${activeEmployees.length} active employees matching filters`);
 
     // Build attendance filter
     let attendanceFilter = {
@@ -387,12 +461,19 @@ const exportAttendanceData = async (req, res) => {
       }
     };
 
+    // Apply employee filter to attendance records
+    if (employeeId && employeeId !== 'all') {
+      attendanceFilter.employeeId = employeeId;
+    }
+
     if (teamId) attendanceFilter.teamId = parseInt(teamId);
 
     // Get existing attendance records
     const existingAttendance = await Attendance.find(attendanceFilter)
       .sort({ date: 1, employeeId: 1 })
       .lean();
+
+    console.log(`Found ${existingAttendance.length} attendance records`);
 
     // Create employee map for lookup
     const employeeMap = new Map();
@@ -407,7 +488,8 @@ const exportAttendanceData = async (req, res) => {
         ...record,
         employeeName: employeeData?.name || record.employee,
         employeeEmail: employeeData?.email,
-        employeeDepartment: employeeData?.department
+        employeeDepartment: employeeData?.department,
+        employeeDesignation: employeeData?.designation
       };
     });
 
@@ -415,7 +497,6 @@ const exportAttendanceData = async (req, res) => {
 
     // Include absent employees if requested
     if (shouldIncludeAbsent) {
-      // For date range, we need to generate absent records for each date
       const dateRange = getDatesInRange(start, end);
       const absentRecords = [];
 
@@ -428,6 +509,7 @@ const exportAttendanceData = async (req, res) => {
           attendanceForDate.map(record => record.employeeId)
         );
 
+        // Employees who are active, match filters, and have no attendance on this date
         const employeesWithoutAttendance = activeEmployees.filter(employee => 
           !employeesWithAttendance.has(employee.employeeId)
         );
@@ -440,6 +522,7 @@ const exportAttendanceData = async (req, res) => {
           employeeName: employee.name,
           employeeEmail: employee.email,
           employeeDepartment: employee.department,
+          employeeDesignation: employee.designation,
           date: date,
           checkIn: null,
           checkOut: null,
@@ -447,10 +530,17 @@ const exportAttendanceData = async (req, res) => {
           duration: '0h 0m',
           status: 'absent',
           location: null,
+          checkInLocation: null,
+          checkOutLocation: null,
+          checkInPhoto: null,
+          checkOutPhoto: null,
           shift: 'General Shift',
           shiftName: 'General Shift',
           notes: 'Employee was absent',
-          isAbsentRecord: true
+          isAbsentRecord: true,
+          isLate: false,
+          lateMinutes: 0,
+          workingMinutes: 0
         })));
       }
 
@@ -459,15 +549,17 @@ const exportAttendanceData = async (req, res) => {
       );
     }
 
-    // ✅ Create report record with safe user data
+    // ✅ Create report record
     const report = new AttendanceReport({
       reportType: 'custom',
-      title: `Attendance Export - ${startDate} to ${endDate}${shouldIncludeAbsent ? ' (with absent)' : ''}`,
+      title: `Attendance Export - ${startDate} to ${endDate}`,
       startDate: start,
       endDate: end,
       filters: { 
-        teamIds: teamId ? [parseInt(teamId)] : [],
-        includeAbsent: shouldIncludeAbsent
+        department: department || 'all',
+        employeeId: employeeId || 'all',
+        includeAbsent: shouldIncludeAbsent,
+        includeDetails: shouldIncludeDetails
       },
       generatedBy: userId,
       generatedByName: userName,
@@ -477,9 +569,9 @@ const exportAttendanceData = async (req, res) => {
     await report.save();
 
     if (format === 'csv') {
-      const csvData = convertToCSV(finalData);
+      const csvData = convertToCSV(finalData, shouldIncludeDetails);
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename=attendance-${startDate}-to-${endDate}${shouldIncludeAbsent ? '-with-absent' : ''}.csv`);
+      res.setHeader('Content-Disposition', `attachment; filename=attendance-report-${startDate}-to-${endDate}.csv`);
       return res.send(csvData);
     }
 
@@ -489,8 +581,10 @@ const exportAttendanceData = async (req, res) => {
       data: finalData,
       metadata: {
         recordCount: finalData.length,
-        includeAbsent: shouldIncludeAbsent,
         dateRange: `${startDate} to ${endDate}`,
+        department: department || 'all',
+        employeeId: employeeId || 'all',
+        includeAbsent: shouldIncludeAbsent,
         generatedBy: userName
       }
     });
@@ -499,6 +593,82 @@ const exportAttendanceData = async (req, res) => {
     console.error('Export attendance error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
+};
+
+// Enhanced CSV converter with more details
+const convertToCSV = (data, includeDetails = false) => {
+  if (!data.length) return 'No data available';
+  
+  // Basic columns
+  let headers = [
+    'Employee ID', 
+    'Employee Name', 
+    'Email', 
+    'Department', 
+    'Designation',
+    'Date', 
+    'Check In', 
+    'Check Out', 
+    'Duration', 
+    'Status', 
+    'Shift'
+  ];
+
+  // Add detailed columns if requested
+  if (includeDetails) {
+    headers.push(
+      'Location',
+      'Check In Location',
+      'Check Out Location', 
+      'Late Minutes',
+      'Working Minutes',
+      'Is Late',
+      'Notes'
+    );
+  }
+
+  let csv = headers.join(',') + '\n';
+  
+  data.forEach(item => {
+    const baseRow = [
+      `"${item.employeeId || 'N/A'}"`,
+      `"${item.employeeName || item.employee || 'Unknown'}"`,
+      `"${item.employeeEmail || 'N/A'}"`,
+      `"${item.employeeDepartment || 'N/A'}"`,
+      `"${item.employeeDesignation || 'N/A'}"`,
+      `"${new Date(item.date).toISOString().split('T')[0]}"`,
+      `"${item.checkIn ? (typeof item.checkIn === 'string' ? item.checkIn : new Date(item.checkIn).toLocaleTimeString()) : 'N/A'}"`,
+      `"${item.checkOut ? (typeof item.checkOut === 'string' ? item.checkOut : new Date(item.checkOut).toLocaleTimeString()) : 'N/A'}"`,
+      `"${item.duration || '0h 0m'}"`,
+      `"${item.status}"`,
+      `"${item.shiftName || item.shift || 'General Shift'}"`
+    ];
+
+    let detailedRow = baseRow;
+
+    if (includeDetails) {
+      const location = item.location || 'N/A';
+      const checkInLocation = item.checkInLocation ? 
+        `${item.checkInLocation.latitude},${item.checkInLocation.longitude}` : 'N/A';
+      const checkOutLocation = item.checkOutLocation ? 
+        `${item.checkOutLocation.latitude},${item.checkOutLocation.longitude}` : 'N/A';
+
+      detailedRow = [
+        ...baseRow,
+        `"${location}"`,
+        `"${checkInLocation}"`,
+        `"${checkOutLocation}"`,
+        `"${item.lateMinutes || 0}"`,
+        `"${item.workingMinutes || 0}"`,
+        `"${item.isLate ? 'Yes' : 'No'}"`,
+        `"${item.notes || ''}"`
+      ];
+    }
+
+    csv += detailedRow.join(',') + '\n';
+  });
+  
+  return csv;
 };
 // Helper function to get all dates in a range
 const getDatesInRange = (startDate, endDate) => {
@@ -513,38 +683,12 @@ const getDatesInRange = (startDate, endDate) => {
   return dates;
 };
 
-// Helper function to convert to CSV
-const convertToCSV = (data) => {
-  if (!data.length) return 'No data available';
-  
-  const headers = ['Employee Name', 'Email', 'Department', 'Date', 'Check In', 'Check Out', 'Duration', 'Status', 'Location', 'Shift', 'Notes'];
-  
-  let csv = headers.join(',') + '\n';
-  
-  data.forEach(item => {
-    const row = [
-      `"${item.employeeName || item.employee || 'Unknown'}"`,
-      `"${item.employeeId?.email || 'N/A'}"`,
-      `"${item.employeeId?.department || 'N/A'}"`,
-      `"${new Date(item.date).toISOString().split('T')[0]}"`,
-      `"${item.checkIn ? new Date(item.checkIn).toLocaleTimeString() : 'N/A'}"`,
-      `"${item.checkOut ? new Date(item.checkOut).toLocaleTimeString() : 'N/A'}"`,
-      `"${item.duration || '0h 0m'}"`,
-      `"${item.status}"`,
-      `"${item.location || 'N/A'}"`,
-      `"${item.shiftName || item.shift || 'General Shift'}"`,
-      `"${item.notes || ''}"`
-    ];
-    csv += row.join(',') + '\n';
-  });
-  
-  return csv;
-};
 
 module.exports = {
   getDashboardStats,
   getAttendanceData,
   getAttendanceDetails, // Add this new function
   exportAttendanceData,
-  getEmployees
+  getEmployees,
+  debugEmployeeData
 };

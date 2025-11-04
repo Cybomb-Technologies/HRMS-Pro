@@ -6,6 +6,7 @@ const {
   getAttendanceDetails,
   exportAttendanceData,
   getEmployees,
+  debugEmployeeData,
 } = require('../controllers/adminAttendanceController');
 
 const {
@@ -27,7 +28,6 @@ const router = express.Router();
 // ✅ Apply auth middleware to all routes
 router.use(authMiddleware);
 router.use(adminMiddleware);
-
 // Debug route to test if routes are working
 router.get('/test', (req, res) => {
   res.json({ 
@@ -43,6 +43,7 @@ router.get('/test', (req, res) => {
 // Dashboard routes
 router.get('/dashboard/stats', getDashboardStats);
 router.get('/attendance/data', getAttendanceData);
+router.get('/debug/employees', debugEmployeeData);
 
 // ✅ Export route MUST come before parameterized routes
 router.get('/attendance/export', exportAttendanceData);

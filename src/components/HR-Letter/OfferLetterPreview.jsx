@@ -1,10 +1,24 @@
 // src/components/HR-Letter/OfferLetterPreview.jsx
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, Printer, ArrowLeft, X } from 'lucide-react';
+import { FileText, Download, Printer, ArrowLeft, X, Send } from 'lucide-react';
 
-const OfferLetterPreview = ({ generatedLetter, formData, onBack, onClose, isPopup = false }) => {
+const OfferLetterPreview = ({ 
+  generatedLetter, 
+  formData, 
+  onBack, 
+  onClose, 
+  isPopup = false,
+  onDownload,
+  onSend,
+  editingLetter 
+}) => {
   const downloadOfferLetter = () => {
+    if (onDownload && editingLetter?._id) {
+      onDownload();
+      return;
+    }
+
     const blob = new Blob([generatedLetter], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -64,9 +78,20 @@ const OfferLetterPreview = ({ generatedLetter, formData, onBack, onClose, isPopu
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              <Button onClick={downloadOfferLetter} size="sm" className="bg-green-600 hover:bg-green-700">
+              {editingLetter?._id && (
+                <Button 
+                  onClick={onSend} 
+                  size="sm" 
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={editingLetter?.status === 'sent'}
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  {editingLetter?.status === 'sent' ? 'Sent' : 'Send Email'}
+                </Button>
+              )}
+              <Button onClick={downloadOfferLetter} size="sm" className="bg-blue-600 hover:bg-blue-700">
                 <Download className="w-4 h-4 mr-2" />
-                Download HTML
+                {editingLetter?._id ? 'Download PDF' : 'Download HTML'}
               </Button>
               <Button onClick={printOfferLetter} size="sm" variant="outline">
                 <Printer className="w-4 h-4 mr-2" />
@@ -121,9 +146,20 @@ const OfferLetterPreview = ({ generatedLetter, formData, onBack, onClose, isPopu
           </div>
         </div>
         <div className="flex space-x-2">
-          <Button onClick={downloadOfferLetter} size="sm" className="bg-green-600 hover:bg-green-700">
+          {editingLetter?._id && (
+            <Button 
+              onClick={onSend} 
+              size="sm" 
+              className="bg-green-600 hover:bg-green-700"
+              disabled={editingLetter?.status === 'sent'}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {editingLetter?.status === 'sent' ? 'Sent' : 'Send Email'}
+            </Button>
+          )}
+          <Button onClick={downloadOfferLetter} size="sm" className="bg-blue-600 hover:bg-blue-700">
             <Download className="w-4 h-4 mr-2" />
-            Download HTML
+            {editingLetter?._id ? 'Download PDF' : 'Download HTML'}
           </Button>
           <Button onClick={printOfferLetter} size="sm" variant="outline">
             <Printer className="w-4 h-4 mr-2" />
