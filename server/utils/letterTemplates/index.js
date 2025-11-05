@@ -1,3 +1,4 @@
+// utils/letterTemplates/index.js
 const offerLetterTemplate = require('./offerLetterTemplate');
 const appointmentLetterTemplate = require('./appointmentLetterTemplate');
 const hikeLetterTemplate = require('./hikeLetterTemplate');

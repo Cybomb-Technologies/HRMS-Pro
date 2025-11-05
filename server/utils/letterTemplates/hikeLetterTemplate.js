@@ -1,9 +1,27 @@
+// utils/letterTemplates/hikeLetterTemplate.js
 const hikeLetterTemplate = (data) => {
   const currentDate = new Date().toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
   });
+
+  // Format company address
+  const formatCompanyAddress = () => {
+    const addr = data.companyDetails?.address;
+    if (!addr) return 'Company Address Not Specified';
+    
+    const parts = [
+      addr.line1,
+      addr.line2,
+      addr.city,
+      addr.state,
+      addr.pincode,
+      addr.country
+    ].filter(part => part && part.trim() !== '');
+    
+    return parts.join(', ');
+  };
 
   return `
     <!DOCTYPE html>
@@ -17,11 +35,21 @@ const hikeLetterTemplate = (data) => {
         .salary-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         .salary-table th, .salary-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
         .salary-table th { background-color: #f5f5f5; }
+        .company-info { margin-bottom: 20px; }
+        .contact-info { margin-top: 10px; font-size: 14px; color: #666; }
       </style>
     </head>
     <body>
       <div class="header">
         <h1>SALARY REVISION LETTER</h1>
+        <div class="company-info">
+          <h3>${data.companyDetails?.name || 'Company Name'}</h3>
+          <p>${formatCompanyAddress()}</p>
+          <div class="contact-info">
+            ${data.companyDetails?.phone ? `<p>Phone: ${data.companyDetails.phone}</p>` : ''}
+            ${data.companyDetails?.email ? `<p>Email: ${data.companyDetails.email}</p>` : ''}
+          </div>
+        </div>
       </div>
       
       <div class="content">
@@ -29,7 +57,7 @@ const hikeLetterTemplate = (data) => {
         
         <p>Dear <strong>${data.candidateName}</strong>,</p>
         
-        <p>We are pleased to inform you that based on your performance and contributions to the company, your salary has been revised effective from <strong>${new Date(data.effectiveDate).toLocaleDateString('en-IN')}</strong>.</p>
+        <p>We are pleased to inform you that based on your performance and contributions to ${data.companyDetails?.name || 'the company'}, your salary has been revised effective from <strong>${new Date(data.effectiveDate).toLocaleDateString('en-IN')}</strong>.</p>
         
         <h3>Revised Salary Structure:</h3>
         <table class="salary-table">
@@ -59,7 +87,7 @@ const hikeLetterTemplate = (data) => {
           </tbody>
         </table>
         
-        <p>This revision reflects our appreciation for your hard work and dedication. We look forward to your continued contributions to the company's success.</p>
+        <p>This revision reflects our appreciation for your hard work and dedication. We look forward to your continued contributions to ${data.companyDetails?.name || 'the company'}'s success.</p>
         
         <p>Please sign below to acknowledge receipt and acceptance of this salary revision.</p>
       </div>
@@ -68,8 +96,8 @@ const hikeLetterTemplate = (data) => {
         <div class="signature">
           <p>Sincerely,</p>
           <br><br>
-          <p><strong>HR Manager</strong></p>
-          <p>Company Name</p>
+          <p><strong>${data.companyDetails?.hrManagerName || 'HR Manager'}</strong></p>
+          <p>${data.companyDetails?.name || 'Company Name'}</p>
         </div>
         
         <div style="margin-top: 50px;">

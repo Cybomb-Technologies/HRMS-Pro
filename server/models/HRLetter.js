@@ -1,3 +1,4 @@
+// models/HRLetter.js
 const mongoose = require('mongoose');
 
 const hrLetterSchema = new mongoose.Schema({
@@ -28,8 +29,36 @@ const hrLetterSchema = new mongoose.Schema({
   },
   joiningDate: Date,
   effectiveDate: Date,
-  reason: String, // For termination letters
-  duration: String, // For experience letters
+  reason: String,
+  duration: String,
+  
+  // Company Details - NEW
+  companyDetails: {
+    name: {
+      type: String,
+      required: true,
+      default: 'Cybomb Technologies LLP'
+    },
+    address: {
+      line1: String,
+      line2: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: {
+        type: String,
+        default: 'India'
+      }
+    },
+    phone: String,
+    email: String,
+    website: String,
+    hrManagerName: {
+      type: String,
+      default: 'HR Manager'
+    }
+  },
+  
   generatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -39,7 +68,7 @@ const hrLetterSchema = new mongoose.Schema({
     html: String,
     pdfBuffer: {
       type: Buffer,
-      select: false // Don't include in queries by default to improve performance
+      select: false
     }
   },
   fileName: String,

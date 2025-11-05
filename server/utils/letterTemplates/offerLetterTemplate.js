@@ -1,3 +1,4 @@
+// utils/letterTemplates/offerLetterTemplate.js
 const offerLetterTemplate = (data) => {
   const currentDate = new Date().toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -9,6 +10,23 @@ const offerLetterTemplate = (data) => {
   const formatSalary = (amount) => {
     if (!amount && amount !== 0) return '0';
     return amount.toLocaleString('en-IN');
+  };
+
+  // Format company address
+  const formatCompanyAddress = () => {
+    const addr = data.companyDetails?.address;
+    if (!addr) return 'Company Address Not Specified';
+    
+    const parts = [
+      addr.line1,
+      addr.line2,
+      addr.city,
+      addr.state,
+      addr.pincode,
+      addr.country
+    ].filter(part => part && part.trim() !== '');
+    
+    return parts.join(', ');
   };
 
   return `
@@ -23,15 +41,20 @@ const offerLetterTemplate = (data) => {
         .footer { margin-top: 50px; border-top: 1px solid #333; padding-top: 20px; }
         .signature { margin-top: 50px; }
         .company-info { margin-bottom: 20px; }
+        .contact-info { margin-top: 10px; font-size: 14px; color: #666; }
       </style>
     </head>
     <body>
       <div class="header">
         <h1>OFFER OF EMPLOYMENT</h1>
         <div class="company-info">
-          <h3>Company Name</h3>
-          <p>Company Address Line 1</p>
-          <p>City, State - PIN Code</p>
+          <h3>${data.companyDetails?.name || 'Company Name'}</h3>
+          <p>${formatCompanyAddress()}</p>
+          <div class="contact-info">
+            ${data.companyDetails?.phone ? `<p>Phone: ${data.companyDetails.phone}</p>` : ''}
+            ${data.companyDetails?.email ? `<p>Email: ${data.companyDetails.email}</p>` : ''}
+            ${data.companyDetails?.website ? `<p>Website: ${data.companyDetails.website}</p>` : ''}
+          </div>
         </div>
       </div>
       
@@ -40,7 +63,7 @@ const offerLetterTemplate = (data) => {
         
         <p>Dear <strong>${data.candidateName}</strong>,</p>
         
-        <p>We are pleased to offer you the position of <strong>${data.designation}</strong> at our company. This letter outlines the terms and conditions of your employment.</p>
+        <p>We are pleased to offer you the position of <strong>${data.designation}</strong> at ${data.companyDetails?.name || 'our company'}. This letter outlines the terms and conditions of your employment.</p>
         
         <h3>Position Details:</h3>
         <ul>
@@ -66,8 +89,8 @@ const offerLetterTemplate = (data) => {
         <div class="signature">
           <p>Sincerely,</p>
           <br><br>
-          <p><strong>HR Manager</strong></p>
-          <p>Company Name</p>
+          <p><strong>${data.companyDetails?.hrManagerName || 'HR Manager'}</strong></p>
+          <p>${data.companyDetails?.name || 'Company Name'}</p>
         </div>
         
         <div style="margin-top: 30px;">

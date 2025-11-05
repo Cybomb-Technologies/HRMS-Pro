@@ -1,3 +1,4 @@
+// components/hr-letters/LetterForm.jsx
 import React from 'react';
 
 const LetterForm = ({ formData, onFormChange, letterType }) => {
@@ -18,6 +19,29 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
     });
   };
 
+  const handleCompanyDetailChange = (field, value) => {
+    onFormChange({
+      ...formData,
+      companyDetails: {
+        ...formData.companyDetails,
+        [field]: value
+      }
+    });
+  };
+
+  const handleCompanyAddressChange = (field, value) => {
+    onFormChange({
+      ...formData,
+      companyDetails: {
+        ...formData.companyDetails,
+        address: {
+          ...formData.companyDetails?.address,
+          [field]: value
+        }
+      }
+    });
+  };
+
   const calculateTotalSalary = () => {
     const basic = parseFloat(formData.salary?.basic) || 0;
     const hra = parseFloat(formData.salary?.hra) || 0;
@@ -34,6 +58,30 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
       }
     }
   }, [formData.salary?.basic, formData.salary?.hra, formData.salary?.specialAllowance]);
+
+  // Initialize company details if not present
+  React.useEffect(() => {
+    if (!formData.companyDetails) {
+      onFormChange({
+        ...formData,
+        companyDetails: {
+          name: 'Cybomb Technologies LLP',
+          address: {
+            line1: '',
+            line2: '',
+            city: 'Chennai',
+            state: 'Tamil Nadu',
+            pincode: '',
+            country: 'India'
+          },
+          phone: '',
+          email: '',
+          website: '',
+          hrManagerName: 'HR Manager'
+        }
+      });
+    }
+  }, []);
 
   const renderCommonFields = () => (
     <>
@@ -104,6 +152,142 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
         </div>
       </div>
     </>
+  );
+
+  const renderCompanyDetails = () => (
+    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+      <h4 className="text-lg font-medium text-gray-900 mb-3">Company Details</h4>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Company Name *
+          </label>
+          <input
+            type="text"
+            value={formData.companyDetails?.name || ''}
+            onChange={(e) => handleCompanyDetailChange('name', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Address Line 1
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.address?.line1 || ''}
+              onChange={(e) => handleCompanyAddressChange('line1', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Address Line 2
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.address?.line2 || ''}
+              onChange={(e) => handleCompanyAddressChange('line2', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              City
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.address?.city || ''}
+              onChange={(e) => handleCompanyAddressChange('city', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              State
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.address?.state || ''}
+              onChange={(e) => handleCompanyAddressChange('state', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              PIN Code
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.address?.pincode || ''}
+              onChange={(e) => handleCompanyAddressChange('pincode', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.phone || ''}
+              onChange={(e) => handleCompanyDetailChange('phone', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={formData.companyDetails?.email || ''}
+              onChange={(e) => handleCompanyDetailChange('email', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              HR Manager Name
+            </label>
+            <input
+              type="text"
+              value={formData.companyDetails?.hrManagerName || ''}
+              onChange={(e) => handleCompanyDetailChange('hrManagerName', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Website
+          </label>
+          <input
+            type="text"
+            value={formData.companyDetails?.website || ''}
+            onChange={(e) => handleCompanyDetailChange('website', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="https://example.com"
+          />
+        </div>
+      </div>
+    </div>
   );
 
   const renderSalaryFields = () => (
@@ -287,6 +471,9 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
   return (
     <div className="space-y-6">
       {renderCommonFields()}
+      
+      {/* Company Details - Always shown */}
+      {renderCompanyDetails()}
       
       {(letterType === 'offer' || letterType === 'appointment' || 
         letterType === 'hike' || letterType === 'promotion') && 

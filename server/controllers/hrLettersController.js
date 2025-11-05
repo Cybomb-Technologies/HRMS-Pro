@@ -22,7 +22,8 @@ const hrLettersController = {
         joiningDate,
         effectiveDate,
         reason,
-        duration
+        duration,
+        companyDetails
       } = req.body;
 
       // Validate required fields
@@ -52,7 +53,22 @@ const hrLettersController = {
         joiningDate: joiningDate || new Date(),
         effectiveDate: effectiveDate || new Date(),
         reason: reason?.trim() || 'Not specified',
-        duration: duration?.trim() || 'Not specified'
+        duration: duration?.trim() || 'Not specified',
+        companyDetails: companyDetails || { // Include company details
+          name: 'Cybomb Technologies LLP',
+          address: {
+            line1: '',
+            line2: '',
+            city: 'Chennai',
+            state: 'Tamil Nadu',
+            pincode: '',
+            country: 'India'
+          },
+          phone: '',
+          email: '',
+          website: '',
+          hrManagerName: 'HR Manager'
+        }
       };
 
       console.log('Generating template for:', letterType);
@@ -104,6 +120,7 @@ const hrLettersController = {
         effectiveDate: templateData.effectiveDate,
         reason: templateData.reason,
         duration: templateData.duration,
+        companyDetails: templateData.companyDetails,
         generatedBy: req.user.id,
         letterContent: {
           html: htmlContent,

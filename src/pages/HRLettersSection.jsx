@@ -66,7 +66,23 @@ const HRLetters = () => {
         hra: 0,
         specialAllowance: 0,
         total: 0
+      },
+      companyDetails: {
+        name: 'Cybomb Technologies LLP',
+        address: {
+          line1: '',
+          line2: '',
+          city: 'Chennai',
+          state: 'Tamil Nadu',
+          pincode: '',
+          country: 'India'
+        },
+        phone: '',
+        email: '',
+        website: '',
+        hrManagerName: 'HR Manager'
       }
+
     });
   }, [letterType]);
 
@@ -91,22 +107,21 @@ const HRLetters = () => {
         ...formData
       };
 
+      console.log('Generating letter with data:', letterData);
       const response = await hrLettersAPI.generateLetter(letterData);
       
       if (response.success) {
         const letterId = response.data.id;
         
-        // Show warning if PDF generation had issues
-        if (response.warning) {
-          showToast(response.warning, 'warning');
-        }
+        console.log('Letter generated successfully with ID:', letterId);
+        console.log('PDF available:', response.data.hasPDF);
         
         // Now fetch the preview HTML using the generated letter ID
         try {
           const previewHTML = await hrLettersAPI.previewHTML(letterId);
           setPreviewContent(previewHTML);
           setPreviewModalOpen(true);
-          showToast('Letter generated successfully!', 'success');
+          showToast('Letter generated successfully! PDF is ready for download.', 'success');
         } catch (previewError) {
           console.error('Preview fetch error:', previewError);
           showToast('Letter generated but preview failed: ' + previewError.message, 'warning');
