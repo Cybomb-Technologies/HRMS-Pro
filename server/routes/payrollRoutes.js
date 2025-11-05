@@ -13,6 +13,7 @@ const {
   updateEmployeeSalary,
   getEmployeeSalaryHistory,
   generatePayslip,
+  getEmployeePayslips, // Import the new function
 } = require("../controllers/payrollController");
 
 // Get all employees with their salary info
@@ -50,5 +51,8 @@ router.get("/salary-history/:employeeId", getEmployeeSalaryHistory);
 
 // Generate payslip
 router.get("/payslip/:payrollId", generatePayslip);
+
+// NEW: Get employee's own payslips (using same pattern as leave system)
+router.get("/employee-payslips/:employeeId", getEmployeePayslips);
 
 module.exports = router;

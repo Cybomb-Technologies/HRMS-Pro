@@ -7,6 +7,7 @@ const Onboarding = require('../models/onboardingModel');
 const Offboarding = require('../models/offboardingModel');
 const Attendance = require('../models/Attendance');
 const Announcement = require('../models/Announcements');
+const Location = require('../models/Location'); // Added Location Model import
 
 // Get dashboard statistics
 const getDashboardStats = async (req, res) => {
@@ -15,9 +16,12 @@ const getDashboardStats = async (req, res) => {
     const totalEmployees = await Employee.countDocuments();
     const activeEmployees = await Employee.countDocuments({ status: 'active' });
     
-    // Get departments and teams count
-    const totalDepartments = await Department.countDocuments();
-    const totalTeams = await Team.countDocuments();
+    // Get departments, teams, and locations count
+    const [totalDepartments, totalTeams, totalLocations] = await Promise.all([ // Updated Promise.all to include Location
+      Department.countDocuments(),
+      Team.countDocuments(),
+      Location.countDocuments() // Fetches dynamic count of locations
+    ]);
     
     // Get onboarding/offboarding stats
     const onboardingStats = await Onboarding.aggregate([
@@ -95,7 +99,7 @@ const getDashboardStats = async (req, res) => {
       totalTeams,
       payrollProcessed: payrollData[0]?.totalNetPay || 0,
       thisMonthPayroll: payrollData[0]?.totalNetPay || 0,
-      activeSessions: Math.floor(activeEmployees * 0.3), // Estimate 30% as active
+      totalLocations: totalLocations, // Dynamic location count is returned
       storageUsed: calculateStorageUsed(totalEmployees)
     });
   } catch (error) {

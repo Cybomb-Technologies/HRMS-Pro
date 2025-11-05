@@ -39,6 +39,7 @@ import {
   Download,
   Eye,
   BarChart3,
+  Filter, // Added Filter icon
 } from 'lucide-react';
 
 // Import components from the correct paths
@@ -79,11 +80,15 @@ const AdminAttendanceSection = () => {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [employeeFilter, setEmployeeFilter] = useState('');
-  const [reportFilters, setReportFilters] = useState({
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-    department: 'all'
-  });
+  // In AttendanceSection.jsx - Update the reportFilters initial state
+const [reportFilters, setReportFilters] = useState({
+  startDate: new Date().toISOString().split('T')[0],
+  endDate: new Date().toISOString().split('T')[0],
+  department: 'all',
+  employee: 'all',
+  includeAbsent: true,
+  includeDetails: false
+});
 
   // Authentication check - run once on mount
   useEffect(() => {
@@ -94,6 +99,11 @@ const AdminAttendanceSection = () => {
         variant: 'destructive' 
       });
     }
+
+    // ⭐ CRITICAL FIX: Manually initialize filters with a date string on mount
+    const initialDateString = selectedDate.toISOString().split('T')[0];
+    updateFilters({ date: initialDateString, employeeId: employeeFilter }); 
+
   }, []); // Empty dependency array - runs only once
 
   // Data fetching - run when tab or date changes
@@ -110,6 +120,7 @@ const AdminAttendanceSection = () => {
     try {
       switch (activeTab) {
         case 'overview':
+          // Fetch dashboard stats and attendance data for the selected date
           await refreshData();
           break;
         case 'shifts':
@@ -129,11 +140,12 @@ const AdminAttendanceSection = () => {
     setIsDetailsOpen(true);
   };
 
-// In AttendanceSection.jsx - Fix the handleExportData function
+// In AttendanceSection.jsx - Update the handleExportData function
 const handleExportData = async (type) => {
   try {
     let params = {
-      format: 'csv'
+      format: 'csv',
+      includeAbsent: 'true' // Default to including absent employees for comprehensive reports
     };
 
     switch (type) {
@@ -155,12 +167,26 @@ const handleExportData = async (type) => {
         params.startDate = monthStart.toISOString().split('T')[0];
         params.endDate = monthEnd.toISOString().split('T')[0];
         break;
+      case 'comprehensive':
+        // Last 30 days comprehensive report
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        params.startDate = startDate.toISOString().split('T')[0];
+        params.endDate = endDate.toISOString().split('T')[0];
+        params.includeAbsent = 'true';
+        break;
       case 'custom':
         params.startDate = reportFilters.startDate;
         params.endDate = reportFilters.endDate;
         if (reportFilters.department !== 'all') {
           params.department = reportFilters.department;
         }
+        if (reportFilters.employee && reportFilters.employee !== 'all') {
+          params.employeeId = reportFilters.employee;
+        }
+        params.includeAbsent = reportFilters.includeAbsent ? 'true' : 'false';
+        params.includeDetails = reportFilters.includeDetails ? 'true' : 'false';
         break;
       default:
         params.startDate = selectedDate.toISOString().split('T')[0];
@@ -169,6 +195,12 @@ const handleExportData = async (type) => {
 
     console.log('Exporting with params:', params);
     await exportAttendanceData(params);
+    
+    toast({
+      title: 'Export started',
+      description: 'Your report is being generated and will download shortly.',
+      variant: 'default'
+    });
     
   } catch (error) {
     console.error('Export error:', error);
@@ -182,7 +214,9 @@ const handleExportData = async (type) => {
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
-    updateFilters({ date });
+    // CRITICAL FIX: Convert the Date object to an ISO string before passing to updateFilters
+    const dateString = date.toISOString().split('T')[0];
+    updateFilters({ date: dateString, employeeId: employeeFilter }); 
     // Refresh attendance data when date changes
     if (activeTab === 'overview') {
       fetchAttendanceData();
@@ -195,7 +229,8 @@ const handleExportData = async (type) => {
 
   const handleRefreshData = async () => {
     try {
-      await refreshData();
+      // Re-fetch everything
+      await refreshData(); 
       toast({
         title: 'Data refreshed',
         description: 'Latest data has been loaded'
@@ -205,41 +240,16 @@ const handleExportData = async (type) => {
     }
   };
 
-// In AttendanceSection.jsx - Update the employee filter section
+// ✅ FIXED: Update employee filter function
 const updateEmployeeFilter = (employeeId) => {
-  if (employeeId === 'all') {
-    setEmployeeFilter('');
-    updateFilters({ employeeId: '' });
-  } else {
-    setEmployeeFilter(employeeId);
-    updateFilters({ employeeId });
-  }
+  let newEmployeeId = employeeId === 'all' ? '' : employeeId;
+  setEmployeeFilter(newEmployeeId);
+  // Update filters with employeeId
+  updateFilters({ 
+    employeeId: newEmployeeId, 
+    date: selectedDate.toISOString().split('T')[0] 
+  }); 
 };
-
-// In the employee dropdown, use employee.employeeId instead of employee._id
-<Select 
-  value={employeeFilter} 
-  onValueChange={updateEmployeeFilter}
->
-  <SelectTrigger className="w-60">
-    <SelectValue placeholder="All employees" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="all">All Employees</SelectItem>
-    {employees && employees
-      .filter(employee => employee.employeeId && employee.employeeId.trim() !== '')
-      .map(employee => (
-        <SelectItem 
-          key={employee._id} 
-          value={employee.employeeId} // Use employee.employeeId instead of employee._id
-        >
-          {employee.name} - {employee.department || 'No Department'} ({employee.employeeId})
-        </SelectItem>
-      ))
-    }
-  </SelectContent>
-</Select>
-  // In AttendanceSection.jsx - Update the helper functions
 // Helper function to extract employee ID from record
 const getEmployeeId = (record) => {
   // Now employeeId is directly the EMP003 string
@@ -249,7 +259,8 @@ const getEmployeeId = (record) => {
 // Helper function to get employee name
 const getEmployeeName = (record) => {
   if (record.employeeName) return record.employeeName;
-  if (record.employee) return record.employee;
+  if (record.employee && typeof record.employee === 'string') return record.employee;
+  if (record.employee && typeof record.employee === 'object' && record.employee.name) return record.employee.name;
   return 'Unknown Employee';
 };
 
@@ -259,22 +270,22 @@ const getEmployeeDetails = (record) => {
   const employee = employees.find(emp => emp.employeeId === employeeId);
   
   return {
-    name: employee?.name || record.employeeName || record.employee || 'Unknown Employee',
-    department: employee?.department || 'No Department',
-    email: employee?.email || 'N/A'
+    name: employee?.name || getEmployeeName(record),
+    department: employee?.department || record.employeeDepartment || 'No Department',
+    email: employee?.email || record.employeeEmail || 'N/A'
   };
 };
 
   const renderOverview = () => (
   <div className="space-y-6">
-    {/* Employee Filter Section - UPDATED */}
-    {/* <div className="flex items-center space-x-4">
+    {/* Employee Filter Section - ADDED */}
+    <div className="flex items-center space-x-4">
       <div className="flex items-center space-x-2">
-        <User className="w-4 h-4 text-muted-foreground" />
+        <Filter className="w-4 h-4 text-muted-foreground" />
         <span className="text-sm font-medium">Filter by Employee:</span>
       </div>
       <Select 
-        value={employeeFilter} 
+        value={employeeFilter || 'all'} 
         onValueChange={updateEmployeeFilter}
       >
         <SelectTrigger className="w-60">
@@ -287,7 +298,7 @@ const getEmployeeDetails = (record) => {
             .map(employee => (
               <SelectItem 
                 key={employee._id} 
-                value={employee.employeeId} // Use employee.employeeId (EMP003) instead of employee._id
+                value={employee.employeeId} // Use employee.employeeId (EMP003) as the value
               >
                 {employee.name} - {employee.department || 'No Department'} ({employee.employeeId})
               </SelectItem>
@@ -304,7 +315,7 @@ const getEmployeeDetails = (record) => {
           Clear Filter
         </Button>
       )}
-    </div> */}
+    </div>
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -364,19 +375,19 @@ const getEmployeeDetails = (record) => {
           </CardContent>
         </Card>
 
-        {/* <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/50 dark:to-purple-900/50">
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/50 dark:to-purple-900/50">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">On Leave</p>
+                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Pending Requests</p>
                 <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                  {loading.dashboard ? <Loader2 className="w-6 h-6 animate-spin" /> : dashboardStats.onLeave || 0}
+                  {loading.dashboard ? <Loader2 className="w-6 h-6 animate-spin" /> : dashboardStats.pendingRequests || 0}
                 </p>
               </div>
               <CalendarDays className="w-8 h-8 text-purple-500" />
             </div>
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
 
       {/* Recent Attendance Table */}
@@ -402,9 +413,9 @@ const getEmployeeDetails = (record) => {
                 variant="outline" 
                 size="sm"
                 onClick={handleRefreshData}
-                disabled={loading.attendance}
+                disabled={loading.dashboard || loading.attendance}
               >
-                <Loader2 className="w-4 h-4 mr-2" />
+                <Loader2 className={`w-4 h-4 mr-2 ${loading.attendance ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
             </div>
@@ -414,6 +425,7 @@ const getEmployeeDetails = (record) => {
           {loading.attendance ? (
             <div className="flex justify-center items-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-2">Loading attendance data...</span>
             </div>
           ) : (
             <Table>
@@ -515,7 +527,7 @@ const getEmployeeDetails = (record) => {
     <TableRow>
       <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
         No attendance records found for {selectedDate.toLocaleDateString()}
-        {employeeFilter && ` for selected employee`}
+        {employeeFilter && ` for employee ID ${employeeFilter}`}
       </TableCell>
     </TableRow>
   )}
@@ -527,6 +539,7 @@ const getEmployeeDetails = (record) => {
     </div>
   );
 
+// In AttendanceSection.jsx - Update the renderReports function
 const renderReports = () => (
   <div className="space-y-6">
     <Card>
@@ -534,59 +547,63 @@ const renderReports = () => (
         <CardTitle>Attendance Reports</CardTitle>
       </CardHeader>
       <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <Button 
-              variant="outline" 
-              onClick={() => handleExportData('daily')}
-              disabled={loading.attendance}
-            >
-              {loading.attendance ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              Daily Report
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => handleExportData('weekly')}
-              disabled={loading.attendance}
-            >
-              {loading.attendance ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              Weekly Report
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => handleExportData('monthly')}
-              disabled={loading.attendance}
-            >
-              {loading.attendance ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              Monthly Report
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => handleExportData('custom')}
-              disabled={loading.attendance}
-            >
-              {loading.attendance ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              Custom Report
-            </Button>
-          </div>
+        {/* Quick Export Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <Button 
+            variant="outline" 
+            onClick={() => handleExportData('daily')}
+            disabled={loading.attendance}
+          >
+            {loading.attendance ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Daily Report
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => handleExportData('weekly')}
+            disabled={loading.attendance}
+          >
+            {loading.attendance ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Weekly Report
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => handleExportData('monthly')}
+            disabled={loading.attendance}
+          >
+            {loading.attendance ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Monthly Report
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => handleExportData('comprehensive')}
+            disabled={loading.attendance}
+          >
+            {loading.attendance ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Full Report
+          </Button>
+        </div>
 
-          {/* Report Filters */}
-           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border rounded-lg">
+        {/* Enhanced Report Filters */}
+        <div className="space-y-4 p-4 border rounded-lg">
+          <h3 className="font-medium">Advanced Report Generator</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label>Start Date</Label>
               <Input 
@@ -604,29 +621,84 @@ const renderReports = () => (
               />
             </div>
             <div>
-            <Label>Department</Label>
-            <Select 
-              value={reportFilters.department}
-              onValueChange={(value) => handleReportFilterChange('department', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All departments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                {employees && employees
-                  .filter(emp => emp.department)
-                  .map(emp => emp.department)
-                  .filter((dept, index, arr) => arr.indexOf(dept) === index)
-                  .map(dept => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept}
-                    </SelectItem>
-                  ))
-                }
-              </SelectContent>
-            </Select>
+              <Label>Department</Label>
+              <Select 
+                value={reportFilters.department}
+                onValueChange={(value) => handleReportFilterChange('department', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {employees && employees
+                    .filter(emp => emp.department && emp.department.trim() !== '')
+                    .map(emp => emp.department)
+                    .filter((dept, index, arr) => arr.indexOf(dept) === index)
+                    .sort()
+                    .map(dept => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Employee</Label>
+              <Select 
+                value={reportFilters.employee || 'all'}
+                onValueChange={(value) => handleReportFilterChange('employee', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All employees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employees</SelectItem>
+                  {employees && employees
+                    .filter(employee => employee.employeeId && employee.employeeId.trim() !== '')
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(employee => (
+                      <SelectItem 
+                        key={employee._id} 
+                        value={employee.employeeId}
+                      >
+                        {employee.name} ({employee.employeeId})
+                      </SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {/* Additional Options */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="includeAbsent"
+                checked={reportFilters.includeAbsent}
+                onChange={(e) => handleReportFilterChange('includeAbsent', e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="includeAbsent" className="text-sm">
+                Include Absent Employees
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="includeDetails"
+                checked={reportFilters.includeDetails}
+                onChange={(e) => handleReportFilterChange('includeDetails', e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="includeDetails" className="text-sm">
+                Include Detailed Information
+              </Label>
+            </div>
             <div className="flex items-end">
               <Button 
                 className="w-full"
@@ -638,14 +710,48 @@ const renderReports = () => (
                 ) : (
                   <BarChart3 className="w-4 h-4 mr-2" />
                 )}
-                Generate Report
+                Generate Custom Report
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+        </div>
+
+        {/* Quick Department Reports */}
+        <div className="mt-6">
+          <h4 className="font-medium mb-3">Quick Department Reports</h4>
+          <div className="flex flex-wrap gap-2">
+            {employees && employees
+              .filter(emp => emp.department && emp.department.trim() !== '')
+              .map(emp => emp.department)
+              .filter((dept, index, arr) => arr.indexOf(dept) === index)
+              .sort()
+              .map(dept => (
+                <Button
+                  key={dept}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setReportFilters(prev => ({
+                      ...prev,
+                      department: dept,
+                      startDate: new Date().toISOString().split('T')[0],
+                      endDate: new Date().toISOString().split('T')[0],
+                      includeAbsent: true
+                    }));
+                    setTimeout(() => handleExportData('custom'), 100);
+                  }}
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  {dept} Report
+                </Button>
+              ))
+            }
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
 
   const tabs = [
     { id: 'overview', label: 'Dashboard Overview', icon: BarChart3 },
@@ -692,7 +798,7 @@ const renderReports = () => (
           </div>
           <div className="flex space-x-2 mt-4 sm:mt-0">
             <Button variant="outline" onClick={handleRefreshData}>
-              <Loader2 className="w-4 h-4 mr-2" />
+              <Loader2 className={`w-4 h-4 mr-2 ${loading.dashboard || loading.attendance ? 'animate-spin' : ''}`} />
               Refresh Data
             </Button>
           </div>

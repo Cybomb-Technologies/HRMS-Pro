@@ -63,6 +63,25 @@ const syncCurrentMonthPayroll = async (employeeId) => {
   }
 };
 
+// Helper function to convert month name to numerical value for sorting
+const getMonthNumber = (monthName) => {
+  const months = {
+    January: 1,
+    February: 2,
+    March: 3,
+    April: 4,
+    May: 5,
+    June: 6,
+    July: 7,
+    August: 8,
+    September: 9,
+    October: 10,
+    November: 11,
+    December: 12,
+  };
+  return months[monthName] || 0;
+};
+
 // Get all employees with their salary info
 const getEmployeesWithSalary = async (req, res) => {
   try {
@@ -192,25 +211,6 @@ const runPayroll = async (req, res) => {
     console.error("Error in runPayroll:", error);
     res.status(500).json({ message: error.message });
   }
-};
-
-// Helper function to convert month name to numerical value for sorting
-const getMonthNumber = (monthName) => {
-  const months = {
-    January: 1,
-    February: 2,
-    March: 3,
-    April: 4,
-    May: 5,
-    June: 6,
-    July: 7,
-    August: 8,
-    September: 9,
-    October: 10,
-    November: 11,
-    December: 12,
-  };
-  return months[monthName] || 0;
 };
 
 // Get payroll history (all months with payroll)
@@ -897,6 +897,55 @@ const generatePayslip = async (req, res) => {
   }
 };
 
+// NEW: Get employee's own payslips (using same pattern as leave system)
+const getEmployeePayslips = async (req, res) => {
+  try {
+    const { employeeId } = req.params; // Get employeeId from URL parameters like leave system
+
+    if (!employeeId) {
+      return res.status(400).json({ message: "Employee ID is required" });
+    }
+
+    console.log("Fetching payslips for employee:", employeeId);
+
+    const payrolls = await Payroll.find({ employeeId }).sort({
+      year: -1,
+      month: -1,
+    });
+
+    // Add month number for proper sorting
+    const payrollsWithSort = payrolls.map((payroll) => {
+      const monthNumber = getMonthNumber(payroll.month);
+      return {
+        ...payroll.toObject(),
+        monthNumber,
+        yearNumber: payroll.year,
+      };
+    });
+
+    // Sort by year and month
+    const sortedPayrolls = payrollsWithSort.sort((a, b) => {
+      if (a.yearNumber !== b.yearNumber) {
+        return b.yearNumber - a.yearNumber;
+      }
+      return b.monthNumber - a.monthNumber;
+    });
+
+    // Remove temporary sorting fields
+    const finalPayrolls = sortedPayrolls.map(
+      ({ monthNumber, yearNumber, ...payroll }) => payroll
+    );
+
+    console.log(
+      `Found ${finalPayrolls.length} payslips for employee ${employeeId}`
+    );
+    res.json(finalPayrolls);
+  } catch (error) {
+    console.error("Error in getEmployeePayslips:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getEmployeesWithSalary,
   runPayroll,
@@ -910,5 +959,6 @@ module.exports = {
   updateEmployeeSalary,
   getEmployeeSalaryHistory,
   generatePayslip,
-  syncCurrentMonthPayroll, // Export the new function
+  syncCurrentMonthPayroll,
+  getEmployeePayslips, // Export the new function
 };
