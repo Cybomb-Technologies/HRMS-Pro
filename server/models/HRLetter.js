@@ -32,7 +32,7 @@ const hrLetterSchema = new mongoose.Schema({
   reason: String,
   duration: String,
   
-  // Company Details - NEW
+  // Company Details
   companyDetails: {
     name: {
       type: String,
@@ -76,6 +76,21 @@ const hrLetterSchema = new mongoose.Schema({
     type: String,
     enum: ['draft', 'generated', 'sent'],
     default: 'generated'
+  },
+  
+  // Track modifications
+  modifiedData: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
+  isModified: {
+    type: Boolean,
+    default: false
+  },
+  originalLetterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'HRLetter',
+    default: null
   }
 }, {
   timestamps: true
@@ -93,8 +108,17 @@ hrLetterSchema.methods.hasPDF = function() {
          this.letterContent.pdfBuffer.length > 0;
 };
 
+// Method to get effective data (original or modified)
+hrLetterSchema.methods.getEffectiveData = function() {
+  if (this.isModified && this.modifiedData) {
+    return { ...this.toObject(), ...this.modifiedData };
+  }
+  return this.toObject();
+};
+
 // Index for better performance
 hrLetterSchema.index({ letterType: 1, createdAt: -1 });
 hrLetterSchema.index({ candidateEmail: 1 });
+hrLetterSchema.index({ originalLetterId: 1 });
 
 module.exports = mongoose.model('HRLetter', hrLetterSchema);

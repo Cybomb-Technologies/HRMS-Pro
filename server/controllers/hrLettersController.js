@@ -3,12 +3,13 @@ const { getTemplate } = require('../utils/letterTemplates');
 const pdfGenerator = require('../utils/pdfGenerator');
 
 const hrLettersController = {
-  // Generate new HR letter - SIMPLIFIED AND FIXED
+  // Generate new HR letter
   generateLetter: async (req, res) => {
     try {
       console.log('Generate letter request received:', {
         user: req.user,
-        letterType: req.body.letterType
+        letterType: req.body.letterType,
+        isRegeneration: req.body.isRegeneration
       });
 
       const {
@@ -23,7 +24,9 @@ const hrLettersController = {
         effectiveDate,
         reason,
         duration,
-        companyDetails
+        companyDetails,
+        originalLetterId,
+        isRegeneration = false
       } = req.body;
 
       // Validate required fields
@@ -54,7 +57,7 @@ const hrLettersController = {
         effectiveDate: effectiveDate || new Date(),
         reason: reason?.trim() || 'Not specified',
         duration: duration?.trim() || 'Not specified',
-        companyDetails: companyDetails || { // Include company details
+        companyDetails: companyDetails || {
           name: 'Cybomb Technologies LLP',
           address: {
             line1: '',
@@ -91,7 +94,7 @@ const hrLettersController = {
         });
       }
 
-      // Generate PDF with html-pdf (more reliable)
+      // Generate PDF
       let pdfBuffer;
       try {
         pdfBuffer = await pdfGenerator.generatePDF(htmlContent);
@@ -107,7 +110,7 @@ const hrLettersController = {
       // Create file name
       const fileName = `${letterType}_${candidateName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
 
-      // Create HR Letter document
+      // Prepare HR Letter data
       const hrLetterData = {
         letterType,
         candidateName: templateData.candidateName,
@@ -130,6 +133,30 @@ const hrLettersController = {
         status: 'generated'
       };
 
+      // Handle regeneration case
+      if (isRegeneration && originalLetterId) {
+        hrLetterData.originalLetterId = originalLetterId;
+        hrLetterData.isModified = true;
+        
+        // Find original letter to mark it as modified
+        await HRLetter.findByIdAndUpdate(originalLetterId, {
+          isModified: true,
+          modifiedData: {
+            candidateName: templateData.candidateName,
+            candidateEmail: templateData.candidateEmail,
+            candidateAddress: templateData.candidateAddress,
+            designation: templateData.designation,
+            department: templateData.department,
+            salary: templateData.salary,
+            joiningDate: templateData.joiningDate,
+            effectiveDate: templateData.effectiveDate,
+            reason: templateData.reason,
+            duration: templateData.duration,
+            companyDetails: templateData.companyDetails
+          }
+        });
+      }
+
       console.log('Saving letter to database...');
       const hrLetter = new HRLetter(hrLetterData);
       await hrLetter.save();
@@ -138,13 +165,15 @@ const hrLettersController = {
 
       res.status(201).json({
         success: true,
-        message: 'Letter generated successfully!',
+        message: isRegeneration ? 'Letter regenerated successfully!' : 'Letter generated successfully!',
         data: {
           id: hrLetter._id,
           letterType: hrLetter.letterType,
           candidateName: hrLetter.candidateName,
           fileName: hrLetter.fileName,
           status: hrLetter.status,
+          isModified: hrLetter.isModified,
+          originalLetterId: hrLetter.originalLetterId,
           downloadUrl: `/api/hrletters/download/${hrLetter._id}`,
           previewUrl: `/api/hrletters/preview/${hrLetter._id}`
         }
@@ -160,7 +189,52 @@ const hrLettersController = {
     }
   },
 
-  // Download PDF - SIMPLIFIED
+  // Update letter data and regenerate
+  updateAndRegenerate: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      console.log('Update and regenerate request for ID:', id, 'with data:', updateData);
+
+      // Find existing letter
+      const existingLetter = await HRLetter.findById(id);
+      if (!existingLetter) {
+        return res.status(404).json({
+          success: false,
+          message: 'Letter not found'
+        });
+      }
+
+      // Prepare data for regeneration
+      const regenerationData = {
+        ...existingLetter.toObject(),
+        ...updateData,
+        isRegeneration: true,
+        originalLetterId: existingLetter.originalLetterId || existingLetter._id
+      };
+
+      // Remove MongoDB specific fields
+      delete regenerationData._id;
+      delete regenerationData.__v;
+      delete regenerationData.createdAt;
+      delete regenerationData.updatedAt;
+
+      // Call generateLetter with the updated data
+      req.body = regenerationData;
+      return hrLettersController.generateLetter(req, res);
+
+    } catch (error) {
+      console.error('Error updating and regenerating letter:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update and regenerate letter',
+        error: error.message
+      });
+    }
+  },
+
+  // Download PDF - uses modified data if available
   downloadPDF: async (req, res) => {
     try {
       const { id } = req.params;
@@ -168,7 +242,7 @@ const hrLettersController = {
       console.log('Download PDF request for ID:', id);
       
       // Find letter with PDF buffer
-      const letter = await HRLetter.findById(id).select('letterContent.pdfBuffer fileName');
+      const letter = await HRLetter.findById(id).select('letterContent.pdfBuffer fileName isModified modifiedData');
       
       if (!letter) {
         console.log('Letter not found for ID:', id);

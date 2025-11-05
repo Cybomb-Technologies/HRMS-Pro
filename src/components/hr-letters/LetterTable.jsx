@@ -1,7 +1,14 @@
-import React, {useState } from 'react';
+import React, { useState } from 'react';
 import { hrLettersAPI } from '../../utils/api';
 
-const LetterTable = ({ letters, onLetterUpdate, isLoading }) => {
+const LetterTable = ({ 
+  letters, 
+  onLetterUpdate, 
+  isLoading,
+  onEditLetter,
+  onDownloadLetter,
+  onDeleteLetter
+}) => {
   const [downloadingId, setDownloadingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [previewingId, setPreviewingId] = useState(null);
@@ -53,6 +60,12 @@ const LetterTable = ({ letters, onLetterUpdate, isLoading }) => {
       alert('Failed to delete letter: ' + error.message);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleEdit = (letter) => {
+    if (onEditLetter) {
+      onEditLetter(letter);
     }
   };
 
@@ -139,6 +152,11 @@ const LetterTable = ({ letters, onLetterUpdate, isLoading }) => {
                     <div>
                       <div className="text-sm font-medium text-gray-900">
                         {letter.candidateName}
+                        {letter.isModified && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                            Modified
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500">
                         {letter.candidateEmail}
@@ -164,6 +182,18 @@ const LetterTable = ({ letters, onLetterUpdate, isLoading }) => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex justify-end space-x-2">
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => handleEdit(letter)}
+                      className="text-green-600 hover:text-green-900"
+                      title="Edit and Regenerate"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+
+                    {/* Preview Button */}
                     <button
                       onClick={() => handlePreview(letter._id)}
                       disabled={previewingId === letter._id}
@@ -181,6 +211,8 @@ const LetterTable = ({ letters, onLetterUpdate, isLoading }) => {
                         'Preview'
                       )}
                     </button>
+
+                    {/* Download Button */}
                     <button
                       onClick={() => handleDownload(letter._id, letter.fileName)}
                       disabled={downloadingId === letter._id}
@@ -198,6 +230,8 @@ const LetterTable = ({ letters, onLetterUpdate, isLoading }) => {
                         'Download PDF'
                       )}
                     </button>
+
+                    {/* Delete Button */}
                     <button
                       onClick={() => handleDelete(letter._id)}
                       disabled={deletingId === letter._id}

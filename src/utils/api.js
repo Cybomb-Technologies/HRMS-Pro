@@ -45,6 +45,16 @@ export const hrLettersAPI = {
     return handleResponse(response);
   },
 
+  // Update and regenerate letter
+  updateAndRegenerate: async (id, updateData) => {
+    const response = await fetch(`${API_BASE_URL}/hrletters/${id}/regenerate`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updateData),
+    });
+    return handleResponse(response);
+  },
+
   // Get all letters
   getAllLetters: async (params = {}) => {
     const queryParams = new URLSearchParams();
@@ -71,7 +81,7 @@ export const hrLettersAPI = {
     return handleResponse(response);
   },
 
-  // Download PDF - IMPROVED: Better error handling and retry logic
+  // Download PDF
   downloadPDF: async (id) => {
     try {
       const response = await fetch(`${API_BASE_URL}/hrletters/download/${id}`, {
@@ -79,7 +89,6 @@ export const hrLettersAPI = {
       });
       
       if (!response.ok) {
-        // Try to get error message from response
         let errorMessage = `Failed to download PDF: ${response.status}`;
         try {
           const errorData = await response.json();
@@ -90,12 +99,10 @@ export const hrLettersAPI = {
         throw new ApiError(errorMessage, response.status);
       }
       
-      // Check if response is PDF
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/pdf')) {
         const blob = await response.blob();
         
-        // Check if blob is valid
         if (blob.size === 0) {
           throw new ApiError('PDF file is empty', 500);
         }
@@ -105,7 +112,6 @@ export const hrLettersAPI = {
         a.style.display = 'none';
         a.href = url;
         
-        // Get filename from Content-Disposition header or generate one
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = `letter_${id}.pdf`;
         if (contentDisposition) {
@@ -123,7 +129,6 @@ export const hrLettersAPI = {
         
         return { success: true, filename };
       } else {
-        // Handle non-PDF response (error)
         const errorData = await response.json().catch(() => ({}));
         throw new ApiError(
           errorData.message || 'Server returned non-PDF response',
