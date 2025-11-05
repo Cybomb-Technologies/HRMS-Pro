@@ -22,7 +22,7 @@ import OffboardingSection from "@/pages/OffboardingSection";
 import LeaveSection from "@/pages/LeaveSection";
 import AttendanceSection from "@/pages/AttendanceSection";
 import PayrollSection from "@/pages/PayrollSection";
-import HRLettersSection from "@/pages/HRLettersSection";
+import HRLetters from "@/pages/HRLettersSection";
 import SettingsSection from "@/pages/SettingsSection";
 import AuditSection from "@/pages/AuditSection";
 import ReportsSection from "@/pages/ReportsSection";
@@ -170,7 +170,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-              {isEmployee ? <Navigate to="/" replace /> : <HRLettersSection />}
+              {isEmployee ? <Navigate to="/" replace /> : <HRLetters />}
             </Layout>
           </ProtectedRoute>
         }
