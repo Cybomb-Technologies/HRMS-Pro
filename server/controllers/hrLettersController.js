@@ -3,7 +3,7 @@ const { getTemplate } = require('../utils/letterTemplates');
 const pdfGenerator = require('../utils/pdfGenerator');
 
 const hrLettersController = {
-  // Generate new HR letter - FIXED: Removed transactions for standalone MongoDB
+  // Generate new HR letter - SIMPLIFIED AND FIXED
   generateLetter: async (req, res) => {
     try {
       console.log('Generate letter request received:', {
@@ -75,24 +75,23 @@ const hrLettersController = {
         });
       }
 
-      // Generate PDF immediately
-      let pdfBuffer = null;
+      // Generate PDF with html-pdf (more reliable)
+      let pdfBuffer;
       try {
-        console.log('Starting PDF generation...');
         pdfBuffer = await pdfGenerator.generatePDF(htmlContent);
-        
-        if (pdfBuffer && Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 0) {
-          console.log('PDF generated successfully, size:', pdfBuffer.length);
-        } else {
-          throw new Error('PDF generation returned invalid buffer');
-        }
+        console.log('PDF buffer generated successfully, size:', pdfBuffer.length);
       } catch (pdfError) {
         console.error('PDF generation failed:', pdfError);
-        console.log('PDF generation failed, saving letter without PDF buffer');
-        pdfBuffer = null;
+        return res.status(500).json({
+          success: false,
+          message: `PDF generation failed: ${pdfError.message}`
+        });
       }
 
-      // Create HR Letter document with PDF
+      // Create file name
+      const fileName = `${letterType}_${candidateName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+
+      // Create HR Letter document
       const hrLetterData = {
         letterType,
         candidateName: templateData.candidateName,
@@ -110,18 +109,19 @@ const hrLettersController = {
           html: htmlContent,
           pdfBuffer: pdfBuffer
         },
-        fileName: `${letterType}_${candidateName.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
-        status: pdfBuffer ? 'generated' : 'draft'
+        fileName: fileName,
+        status: 'generated'
       };
 
+      console.log('Saving letter to database...');
       const hrLetter = new HRLetter(hrLetterData);
       await hrLetter.save();
 
-      console.log('Letter saved to database with ID:', hrLetter._id);
+      console.log('Letter saved successfully with ID:', hrLetter._id);
 
       res.status(201).json({
         success: true,
-        message: pdfBuffer ? 'Letter generated successfully' : 'Letter saved but PDF generation failed',
+        message: 'Letter generated successfully!',
         data: {
           id: hrLetter._id,
           letterType: hrLetter.letterType,
@@ -130,8 +130,7 @@ const hrLettersController = {
           status: hrLetter.status,
           downloadUrl: `/api/hrletters/download/${hrLetter._id}`,
           previewUrl: `/api/hrletters/preview/${hrLetter._id}`
-        },
-        warning: pdfBuffer ? null : 'PDF generation failed. The letter was saved but you may need to regenerate the PDF later.'
+        }
       });
 
     } catch (error) {
@@ -144,7 +143,7 @@ const hrLettersController = {
     }
   },
 
-  // Download PDF - FIXED VERSION
+  // Download PDF - SIMPLIFIED
   downloadPDF: async (req, res) => {
     try {
       const { id } = req.params;
@@ -152,7 +151,7 @@ const hrLettersController = {
       console.log('Download PDF request for ID:', id);
       
       // Find letter with PDF buffer
-      let letter = await HRLetter.findById(id).select('+letterContent.pdfBuffer +letterContent.html');
+      const letter = await HRLetter.findById(id).select('letterContent.pdfBuffer fileName');
       
       if (!letter) {
         console.log('Letter not found for ID:', id);
@@ -162,51 +161,16 @@ const hrLettersController = {
         });
       }
 
-      console.log('Letter found, checking PDF buffer...');
+      console.log('Letter found:', letter.fileName);
       
-      let pdfBuffer = letter.letterContent?.pdfBuffer;
+      const pdfBuffer = letter.letterContent?.pdfBuffer;
 
-      // If no PDF buffer exists or it's invalid, generate it now
+      // Check if PDF buffer exists
       if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
-        console.log('PDF buffer missing or invalid, generating now...');
-        
-        if (!letter.letterContent.html) {
-          return res.status(400).json({
-            success: false,
-            message: 'Cannot generate PDF: HTML content is missing'
-          });
-        }
-        
-        try {
-          // Generate PDF from HTML content
-          pdfBuffer = await pdfGenerator.generatePDF(letter.letterContent.html);
-          
-          if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
-            throw new Error('PDF generation returned empty buffer');
-          }
-          
-          console.log('PDF generated successfully, size:', pdfBuffer.length);
-          
-          // Update the letter with the new PDF buffer
-          letter.letterContent.pdfBuffer = pdfBuffer;
-          letter.status = 'generated';
-          await letter.save();
-          
-          console.log('Letter updated with new PDF buffer');
-        } catch (pdfError) {
-          console.error('PDF generation failed:', pdfError);
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to generate PDF. Please try regenerating the letter.'
-          });
-        }
-      }
-
-      // Final validation
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        return res.status(500).json({
+        console.log('PDF buffer missing or invalid');
+        return res.status(400).json({
           success: false,
-          message: 'PDF generation failed. Please regenerate the letter.'
+          message: 'PDF not available for this letter'
         });
       }
 
@@ -228,7 +192,7 @@ const hrLettersController = {
     }
   },
 
-  // Preview HTML content - FIXED: Proper error handling
+  // Preview HTML content
   previewHTML: async (req, res) => {
     try {
       const { id } = req.params;
