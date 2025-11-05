@@ -21,16 +21,39 @@ const hrLetterSchema = new mongoose.Schema({
     required: true
   },
   department: String,
+  
+  // Salary details
   salary: {
     basic: Number,
     hra: Number,
     specialAllowance: Number,
     total: Number
   },
+  
+  // Previous salary for hike letters
+  previousSalary: {
+    basic: Number,
+    hra: Number,
+    specialAllowance: Number,
+    total: Number
+  },
+  
+  // Dates
   joiningDate: Date,
   effectiveDate: Date,
+  lastWorkingDay: Date,
+  
+  // Additional fields for different letter types
   reason: String,
   duration: String,
+  workLocation: String,
+  reportingManager: String,
+  hikePercentage: Number,
+  previousDesignation: String,
+  promotionReason: String,
+  noticePeriod: String,
+  responsibilities: String,
+  achievements: String,
   
   // Company Details
   companyDetails: {

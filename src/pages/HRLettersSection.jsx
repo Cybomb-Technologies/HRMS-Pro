@@ -144,48 +144,58 @@ const HRLetters = () => {
     }
   };
 
-  // Handle edit and regenerate
-  const handleEditAndRegenerate = async (letter) => {
-    setIsEditing(true);
-    setEditingLetter(letter);
-    setLetterType(letter.letterType);
-    
-    // Populate form with letter data
-    setFormData({
-      candidateName: letter.candidateName,
-      candidateEmail: letter.candidateEmail,
-      candidateAddress: letter.candidateAddress,
-      designation: letter.designation,
-      department: letter.department,
-      salary: letter.salary || {
-        basic: 0,
-        hra: 0,
-        specialAllowance: 0,
-        total: 0
+  // In HRLettersSection.jsx - update the handleEditAndRegenerate function
+const handleEditAndRegenerate = async (letter) => {
+  setIsEditing(true);
+  setEditingLetter(letter);
+  setLetterType(letter.letterType);
+  
+  // Populate form with letter data including all dynamic fields
+  setFormData({
+    candidateName: letter.candidateName,
+    candidateEmail: letter.candidateEmail,
+    candidateAddress: letter.candidateAddress,
+    designation: letter.designation,
+    department: letter.department,
+    salary: letter.salary || {
+      basic: 0,
+      hra: 0,
+      specialAllowance: 0,
+      total: 0
+    },
+    previousSalary: letter.previousSalary || null,
+    joiningDate: letter.joiningDate ? new Date(letter.joiningDate).toISOString().split('T')[0] : '',
+    effectiveDate: letter.effectiveDate ? new Date(letter.effectiveDate).toISOString().split('T')[0] : '',
+    lastWorkingDay: letter.lastWorkingDay ? new Date(letter.lastWorkingDay).toISOString().split('T')[0] : '',
+    reason: letter.reason || '',
+    duration: letter.duration || '',
+    workLocation: letter.workLocation || '',
+    reportingManager: letter.reportingManager || '',
+    hikePercentage: letter.hikePercentage || 0,
+    previousDesignation: letter.previousDesignation || '',
+    promotionReason: letter.promotionReason || '',
+    noticePeriod: letter.noticePeriod || '',
+    responsibilities: letter.responsibilities || '',
+    achievements: letter.achievements || '',
+    companyDetails: letter.companyDetails || {
+      name: 'Cybomb Technologies LLP',
+      address: {
+        line1: '',
+        line2: '',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+        pincode: '',
+        country: 'India'
       },
-      joiningDate: letter.joiningDate ? new Date(letter.joiningDate).toISOString().split('T')[0] : '',
-      effectiveDate: letter.effectiveDate ? new Date(letter.effectiveDate).toISOString().split('T')[0] : '',
-      reason: letter.reason || '',
-      duration: letter.duration || '',
-      companyDetails: letter.companyDetails || {
-        name: 'Cybomb Technologies LLP',
-        address: {
-          line1: '',
-          line2: '',
-          city: 'Chennai',
-          state: 'Tamil Nadu',
-          pincode: '',
-          country: 'India'
-        },
-        phone: '',
-        email: '',
-        website: '',
-        hrManagerName: 'HR Manager'
-      }
-    });
+      phone: '',
+      email: '',
+      website: '',
+      hrManagerName: 'HR Manager'
+    }
+  });
 
-    showToast('Letter data loaded for editing. Make changes and click "Update & Regenerate".', 'info');
-  };
+  showToast('Letter data loaded for editing. Make changes and click "Update & Regenerate".', 'info');
+};
 
   // Generate and save letter (for final generation after preview)
   const generateAndSaveLetter = async () => {

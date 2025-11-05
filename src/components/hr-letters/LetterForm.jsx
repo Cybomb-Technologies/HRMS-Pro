@@ -83,75 +83,180 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
     }
   }, []);
 
-  const renderCommonFields = () => (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  // Dynamic field configuration for each letter type
+  const getLetterTypeFields = () => {
+    const commonFields = {
+      candidateName: { type: 'text', label: 'Candidate Name *', required: true },
+      candidateEmail: { type: 'email', label: 'Candidate Email *', required: true },
+      candidateAddress: { type: 'textarea', label: 'Candidate Address', required: false },
+      designation: { type: 'text', label: 'Designation *', required: true },
+      department: { type: 'text', label: 'Department', required: false }
+    };
+
+    const letterTypeSpecificFields = {
+      offer: {
+        joiningDate: { type: 'date', label: 'Joining Date *', required: true },
+        salary: { type: 'salary', label: 'Salary Details', required: true }
+      },
+      appointment: {
+        joiningDate: { type: 'date', label: 'Joining Date *', required: true },
+        salary: { type: 'salary', label: 'Salary Details', required: true },
+        workLocation: { type: 'text', label: 'Work Location', required: false },
+        reportingManager: { type: 'text', label: 'Reporting Manager', required: false }
+      },
+      hike: {
+        effectiveDate: { type: 'date', label: 'Effective Date *', required: true },
+        salary: { type: 'salary', label: 'Revised Salary Details', required: true },
+        previousSalary: { type: 'salary', label: 'Previous Salary Details', required: false },
+        hikePercentage: { type: 'number', label: 'Hike Percentage %', required: false }
+      },
+      promotion: {
+        effectiveDate: { type: 'date', label: 'Effective Date *', required: true },
+        salary: { type: 'salary', label: 'New Salary Details', required: true },
+        previousDesignation: { type: 'text', label: 'Previous Designation', required: false },
+        promotionReason: { type: 'textarea', label: 'Promotion Reason', required: false }
+      },
+      termination: {
+        effectiveDate: { type: 'date', label: 'Termination Date *', required: true },
+        reason: { type: 'textarea', label: 'Reason for Termination *', required: true },
+        noticePeriod: { type: 'text', label: 'Notice Period', required: false },
+        lastWorkingDay: { type: 'date', label: 'Last Working Day', required: false }
+      },
+      experience: {
+        joiningDate: { type: 'date', label: 'Joining Date *', required: true },
+        effectiveDate: { type: 'date', label: 'Leaving Date *', required: true },
+        duration: { type: 'text', label: 'Employment Duration', required: false },
+        responsibilities: { type: 'textarea', label: 'Key Responsibilities', required: false },
+        achievements: { type: 'textarea', label: 'Key Achievements', required: false }
+      }
+    };
+
+    return {
+      ...commonFields,
+      ...(letterTypeSpecificFields[letterType] || {})
+    };
+  };
+
+  const renderSalaryFields = (label = 'Salary Details') => (
+    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+      <h4 className="text-lg font-medium text-gray-900 mb-3">{label}</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Candidate Name *
+            Basic Salary (₹)
           </label>
           <input
-            type="text"
-            value={formData.candidateName || ''}
-            onChange={(e) => handleInputChange('candidateName', e.target.value)}
+            type="number"
+            value={formData.salary?.basic || ''}
+            onChange={(e) => handleSalaryChange('basic', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
           />
         </div>
         
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Candidate Email *
+            HRA (₹)
           </label>
           <input
-            type="email"
-            value={formData.candidateEmail || ''}
-            onChange={(e) => handleInputChange('candidateEmail', e.target.value)}
+            type="number"
+            value={formData.salary?.hra || ''}
+            onChange={(e) => handleSalaryChange('hra', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Candidate Address
-        </label>
-        <textarea
-          value={formData.candidateAddress || ''}
-          onChange={(e) => handleInputChange('candidateAddress', e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Designation *
-          </label>
-          <input
-            type="text"
-            value={formData.designation || ''}
-            onChange={(e) => handleInputChange('designation', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
           />
         </div>
         
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Department
+            Special Allowance (₹)
           </label>
           <input
-            type="text"
-            value={formData.department || ''}
-            onChange={(e) => handleInputChange('department', e.target.value)}
+            type="number"
+            value={formData.salary?.specialAllowance || ''}
+            onChange={(e) => handleSalaryChange('specialAllowance', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Total CTC (₹)
+          </label>
+          <input
+            type="number"
+            value={calculateTotalSalary()}
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 bg-gray-100 rounded-md font-semibold"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPreviousSalaryFields = () => (
+    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+      <h4 className="text-lg font-medium text-gray-900 mb-3">Previous Salary Details</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Previous Basic (₹)
+          </label>
+          <input
+            type="number"
+            value={formData.previousSalary?.basic || ''}
+            onChange={(e) => handleInputChange('previousSalary', {
+              ...formData.previousSalary,
+              basic: parseFloat(e.target.value) || 0
+            })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Previous HRA (₹)
+          </label>
+          <input
+            type="number"
+            value={formData.previousSalary?.hra || ''}
+            onChange={(e) => handleInputChange('previousSalary', {
+              ...formData.previousSalary,
+              hra: parseFloat(e.target.value) || 0
+            })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Previous Allowance (₹)
+          </label>
+          <input
+            type="number"
+            value={formData.previousSalary?.specialAllowance || ''}
+            onChange={(e) => handleInputChange('previousSalary', {
+              ...formData.previousSalary,
+              specialAllowance: parseFloat(e.target.value) || 0
+            })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Previous Total (₹)
+          </label>
+          <input
+            type="number"
+            value={formData.previousSalary?.total || ''}
+            onChange={(e) => handleInputChange('previousSalary', {
+              ...formData.previousSalary,
+              total: parseFloat(e.target.value) || 0
+            })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
-    </>
+    </div>
   );
 
   const renderCompanyDetails = () => (
@@ -290,174 +395,95 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
     </div>
   );
 
-  const renderSalaryFields = () => (
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <h4 className="text-lg font-medium text-gray-900 mb-3">Salary Details</h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Basic Salary (₹)
-          </label>
-          <input
-            type="number"
-            value={formData.salary?.basic || ''}
-            onChange={(e) => handleSalaryChange('basic', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            HRA (₹)
-          </label>
-          <input
-            type="number"
-            value={formData.salary?.hra || ''}
-            onChange={(e) => handleSalaryChange('hra', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Special Allowance (₹)
-          </label>
-          <input
-            type="number"
-            value={formData.salary?.specialAllowance || ''}
-            onChange={(e) => handleSalaryChange('specialAllowance', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Total CTC (₹)
-          </label>
-          <input
-            type="number"
-            value={calculateTotalSalary()}
-            readOnly
-            className="w-full px-3 py-2 border border-gray-300 bg-gray-100 rounded-md font-semibold"
-          />
-        </div>
-      </div>
-    </div>
-  );
+  const renderField = (fieldName, fieldConfig) => {
+    const { type, label, required } = fieldConfig;
+    const value = formData[fieldName] || '';
 
-  const renderDateFields = () => {
-    switch (letterType) {
-      case 'offer':
-      case 'appointment':
+    switch (type) {
+      case 'text':
+      case 'email':
+      case 'number':
         return (
-          <div>
+          <div key={fieldName}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Joining Date *
+              {label}
             </label>
             <input
-              type="date"
-              value={formData.joiningDate || ''}
-              onChange={(e) => handleInputChange('joiningDate', e.target.value)}
+              type={type}
+              value={value}
+              onChange={(e) => handleInputChange(fieldName, e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
+              required={required}
             />
           </div>
         );
-      
-      case 'hike':
-      case 'promotion':
+
+      case 'textarea':
         return (
-          <div>
+          <div key={fieldName}>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Effective Date *
+              {label}
             </label>
-            <input
-              type="date"
-              value={formData.effectiveDate || ''}
-              onChange={(e) => handleInputChange('effectiveDate', e.target.value)}
+            <textarea
+              value={value}
+              onChange={(e) => handleInputChange(fieldName, e.target.value)}
+              rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
+              required={required}
             />
           </div>
         );
-      
-      case 'termination':
+
+      case 'date':
         return (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Termination Date *
-              </label>
-              <input
-                type="date"
-                value={formData.effectiveDate || ''}
-                onChange={(e) => handleInputChange('effectiveDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason for Termination
-              </label>
-              <textarea
-                value={formData.reason || ''}
-                onChange={(e) => handleInputChange('reason', e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter the reason for termination..."
-              />
-            </div>
-          </>
+          <div key={fieldName}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {label}
+            </label>
+            <input
+              type="date"
+              value={value}
+              onChange={(e) => handleInputChange(fieldName, e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required={required}
+            />
+          </div>
         );
-      
-      case 'experience':
-        return (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Joining Date *
-                </label>
-                <input
-                  type="date"
-                  value={formData.joiningDate || ''}
-                  onChange={(e) => handleInputChange('joiningDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Leaving Date *
-                </label>
-                <input
-                  type="date"
-                  value={formData.effectiveDate || ''}
-                  onChange={(e) => handleInputChange('effectiveDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Employment Duration Description
-              </label>
-              <input
-                type="text"
-                value={formData.duration || ''}
-                onChange={(e) => handleInputChange('duration', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g., 2 years and 6 months"
-              />
-            </div>
-          </>
-        );
-      
+
       default:
         return null;
     }
+  };
+
+  const renderDynamicFields = () => {
+    const fieldsConfig = getLetterTypeFields();
+    const commonFields = ['candidateName', 'candidateEmail', 'candidateAddress', 'designation', 'department'];
+    
+    return (
+      <div className="space-y-4">
+        {/* Common fields in grid layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {commonFields.map(fieldName => 
+            fieldsConfig[fieldName] && renderField(fieldName, fieldsConfig[fieldName])
+          )}
+        </div>
+
+        {/* Special fields */}
+        {fieldsConfig.joiningDate && renderField('joiningDate', fieldsConfig.joiningDate)}
+        {fieldsConfig.effectiveDate && renderField('effectiveDate', fieldsConfig.effectiveDate)}
+        {fieldsConfig.reason && renderField('reason', fieldsConfig.reason)}
+        {fieldsConfig.duration && renderField('duration', fieldsConfig.duration)}
+        {fieldsConfig.workLocation && renderField('workLocation', fieldsConfig.workLocation)}
+        {fieldsConfig.reportingManager && renderField('reportingManager', fieldsConfig.reportingManager)}
+        {fieldsConfig.hikePercentage && renderField('hikePercentage', fieldsConfig.hikePercentage)}
+        {fieldsConfig.previousDesignation && renderField('previousDesignation', fieldsConfig.previousDesignation)}
+        {fieldsConfig.promotionReason && renderField('promotionReason', fieldsConfig.promotionReason)}
+        {fieldsConfig.noticePeriod && renderField('noticePeriod', fieldsConfig.noticePeriod)}
+        {fieldsConfig.lastWorkingDay && renderField('lastWorkingDay', fieldsConfig.lastWorkingDay)}
+        {fieldsConfig.responsibilities && renderField('responsibilities', fieldsConfig.responsibilities)}
+        {fieldsConfig.achievements && renderField('achievements', fieldsConfig.achievements)}
+      </div>
+    );
   };
 
   if (!letterType) {
@@ -470,17 +496,16 @@ const LetterForm = ({ formData, onFormChange, letterType }) => {
 
   return (
     <div className="space-y-6">
-      {renderCommonFields()}
+      {renderDynamicFields()}
       
       {/* Company Details - Always shown */}
       {renderCompanyDetails()}
       
-      {(letterType === 'offer' || letterType === 'appointment' || 
-        letterType === 'hike' || letterType === 'promotion') && 
-        renderSalaryFields()
-      }
+      {/* Salary Fields */}
+      {getLetterTypeFields().salary && renderSalaryFields(getLetterTypeFields().salary.label)}
       
-      {renderDateFields()}
+      {/* Previous Salary Fields for Hike Letters */}
+      {letterType === 'hike' && formData.previousSalary && renderPreviousSalaryFields()}
     </div>
   );
 };
