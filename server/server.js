@@ -26,7 +26,7 @@ app.use((req, res, next) => {
   }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With,X-CSRF-Token');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -53,7 +53,7 @@ app.use('/api/employees', employeeShiftRoutes);
 app.use("/api/announcements", require("./routes/announcementRoutes.js"));
 app.use("/api/notifications", require("./routes/notificationRoutes.js"));
 app.use("/api/payroll", require("./routes/payrollRoutes.js"));
-app.use("/api/offer-letters", require("./routes/offerLetterRoutes.js"));
+app.use("/api/hrletters",require("./routes/hrLettersRoutes"));
 app.use('/api/employee-profiles', employeeProfileRoutes);
 app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
 app.use("/api/organization", require("./routes/organizationRoutes.js"));
