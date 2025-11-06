@@ -71,7 +71,7 @@ const HRLetters = () => {
           total: 0
         },
         companyDetails: {
-          name: 'Cybomb Technologies LLP',
+          name: 'Cybomb Technologies Pvt Ltd.',
           address: {
             line1: '',
             line2: '',
@@ -178,7 +178,7 @@ const handleEditAndRegenerate = async (letter) => {
     responsibilities: letter.responsibilities || '',
     achievements: letter.achievements || '',
     companyDetails: letter.companyDetails || {
-      name: 'Cybomb Technologies LLP',
+      name: 'Cybomb Technologies Pvt Ltd.',
       address: {
         line1: '',
         line2: '',
