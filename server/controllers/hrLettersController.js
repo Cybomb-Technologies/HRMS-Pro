@@ -3,12 +3,13 @@ const { getTemplate } = require('../utils/letterTemplates');
 const pdfGenerator = require('../utils/pdfGenerator');
 
 const hrLettersController = {
-  // Generate new HR letter - FIXED: Removed transactions for standalone MongoDB
+  // Generate new HR letter
   generateLetter: async (req, res) => {
     try {
       console.log('Generate letter request received:', {
         user: req.user,
-        letterType: req.body.letterType
+        letterType: req.body.letterType,
+        isRegeneration: req.body.isRegeneration
       });
 
       const {
@@ -19,10 +20,23 @@ const hrLettersController = {
         designation,
         department,
         salary,
+        previousSalary,
         joiningDate,
         effectiveDate,
+        lastWorkingDay,
         reason,
-        duration
+        duration,
+        workLocation,
+        reportingManager,
+        hikePercentage,
+        previousDesignation,
+        promotionReason,
+        noticePeriod,
+        responsibilities,
+        achievements,
+        companyDetails,
+        originalLetterId,
+        isRegeneration = false
       } = req.body;
 
       // Validate required fields
@@ -49,10 +63,35 @@ const hrLettersController = {
         designation: designation.trim(),
         department: department?.trim() || 'Not specified',
         salary: salary || { basic: 0, hra: 0, specialAllowance: 0, total: 0 },
+        previousSalary: previousSalary || null,
         joiningDate: joiningDate || new Date(),
         effectiveDate: effectiveDate || new Date(),
+        lastWorkingDay: lastWorkingDay || null,
         reason: reason?.trim() || 'Not specified',
-        duration: duration?.trim() || 'Not specified'
+        duration: duration?.trim() || 'Not specified',
+        workLocation: workLocation?.trim() || 'Not specified',
+        reportingManager: reportingManager?.trim() || 'Not specified',
+        hikePercentage: hikePercentage || 0,
+        previousDesignation: previousDesignation?.trim() || 'Not specified',
+        promotionReason: promotionReason?.trim() || 'Not specified',
+        noticePeriod: noticePeriod?.trim() || 'Not specified',
+        responsibilities: responsibilities?.trim() || 'Not specified',
+        achievements: achievements?.trim() || 'Not specified',
+        companyDetails: companyDetails || {
+          name: 'Cybomb Technologies LLP',
+          address: {
+            line1: '',
+            line2: '',
+            city: 'Chennai',
+            state: 'Tamil Nadu',
+            pincode: '',
+            country: 'India'
+          },
+          phone: '',
+          email: '',
+          website: '',
+          hrManagerName: 'HR Manager'
+        }
       };
 
       console.log('Generating template for:', letterType);
@@ -75,24 +114,23 @@ const hrLettersController = {
         });
       }
 
-      // Generate PDF immediately
-      let pdfBuffer = null;
+      // Generate PDF
+      let pdfBuffer;
       try {
-        console.log('Starting PDF generation...');
         pdfBuffer = await pdfGenerator.generatePDF(htmlContent);
-        
-        if (pdfBuffer && Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 0) {
-          console.log('PDF generated successfully, size:', pdfBuffer.length);
-        } else {
-          throw new Error('PDF generation returned invalid buffer');
-        }
+        console.log('PDF buffer generated successfully, size:', pdfBuffer.length);
       } catch (pdfError) {
         console.error('PDF generation failed:', pdfError);
-        console.log('PDF generation failed, saving letter without PDF buffer');
-        pdfBuffer = null;
+        return res.status(500).json({
+          success: false,
+          message: `PDF generation failed: ${pdfError.message}`
+        });
       }
 
-      // Create HR Letter document with PDF
+      // Create file name
+      const fileName = `${letterType}_${candidateName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+
+      // Prepare HR Letter data
       const hrLetterData = {
         letterType,
         candidateName: templateData.candidateName,
@@ -101,37 +139,84 @@ const hrLettersController = {
         designation: templateData.designation,
         department: templateData.department,
         salary: templateData.salary,
+        previousSalary: templateData.previousSalary,
         joiningDate: templateData.joiningDate,
         effectiveDate: templateData.effectiveDate,
+        lastWorkingDay: templateData.lastWorkingDay,
         reason: templateData.reason,
         duration: templateData.duration,
+        workLocation: templateData.workLocation,
+        reportingManager: templateData.reportingManager,
+        hikePercentage: templateData.hikePercentage,
+        previousDesignation: templateData.previousDesignation,
+        promotionReason: templateData.promotionReason,
+        noticePeriod: templateData.noticePeriod,
+        responsibilities: templateData.responsibilities,
+        achievements: templateData.achievements,
+        companyDetails: templateData.companyDetails,
         generatedBy: req.user.id,
         letterContent: {
           html: htmlContent,
           pdfBuffer: pdfBuffer
         },
-        fileName: `${letterType}_${candidateName.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
-        status: pdfBuffer ? 'generated' : 'draft'
+        fileName: fileName,
+        status: 'generated'
       };
 
+      // Handle regeneration case
+      if (isRegeneration && originalLetterId) {
+        hrLetterData.originalLetterId = originalLetterId;
+        hrLetterData.isModified = true;
+        
+        // Find original letter to mark it as modified
+        await HRLetter.findByIdAndUpdate(originalLetterId, {
+          isModified: true,
+          modifiedData: {
+            candidateName: templateData.candidateName,
+            candidateEmail: templateData.candidateEmail,
+            candidateAddress: templateData.candidateAddress,
+            designation: templateData.designation,
+            department: templateData.department,
+            salary: templateData.salary,
+            previousSalary: templateData.previousSalary,
+            joiningDate: templateData.joiningDate,
+            effectiveDate: templateData.effectiveDate,
+            lastWorkingDay: templateData.lastWorkingDay,
+            reason: templateData.reason,
+            duration: templateData.duration,
+            workLocation: templateData.workLocation,
+            reportingManager: templateData.reportingManager,
+            hikePercentage: templateData.hikePercentage,
+            previousDesignation: templateData.previousDesignation,
+            promotionReason: templateData.promotionReason,
+            noticePeriod: templateData.noticePeriod,
+            responsibilities: templateData.responsibilities,
+            achievements: templateData.achievements,
+            companyDetails: templateData.companyDetails
+          }
+        });
+      }
+
+      console.log('Saving letter to database...');
       const hrLetter = new HRLetter(hrLetterData);
       await hrLetter.save();
 
-      console.log('Letter saved to database with ID:', hrLetter._id);
+      console.log('Letter saved successfully with ID:', hrLetter._id);
 
       res.status(201).json({
         success: true,
-        message: pdfBuffer ? 'Letter generated successfully' : 'Letter saved but PDF generation failed',
+        message: isRegeneration ? 'Letter regenerated successfully!' : 'Letter generated successfully!',
         data: {
           id: hrLetter._id,
           letterType: hrLetter.letterType,
           candidateName: hrLetter.candidateName,
           fileName: hrLetter.fileName,
           status: hrLetter.status,
+          isModified: hrLetter.isModified,
+          originalLetterId: hrLetter.originalLetterId,
           downloadUrl: `/api/hrletters/download/${hrLetter._id}`,
           previewUrl: `/api/hrletters/preview/${hrLetter._id}`
-        },
-        warning: pdfBuffer ? null : 'PDF generation failed. The letter was saved but you may need to regenerate the PDF later.'
+        }
       });
 
     } catch (error) {
@@ -144,7 +229,52 @@ const hrLettersController = {
     }
   },
 
-  // Download PDF - FIXED VERSION
+  // Update letter data and regenerate
+  updateAndRegenerate: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      console.log('Update and regenerate request for ID:', id, 'with data:', updateData);
+
+      // Find existing letter
+      const existingLetter = await HRLetter.findById(id);
+      if (!existingLetter) {
+        return res.status(404).json({
+          success: false,
+          message: 'Letter not found'
+        });
+      }
+
+      // Prepare data for regeneration
+      const regenerationData = {
+        ...existingLetter.toObject(),
+        ...updateData,
+        isRegeneration: true,
+        originalLetterId: existingLetter.originalLetterId || existingLetter._id
+      };
+
+      // Remove MongoDB specific fields
+      delete regenerationData._id;
+      delete regenerationData.__v;
+      delete regenerationData.createdAt;
+      delete regenerationData.updatedAt;
+
+      // Call generateLetter with the updated data
+      req.body = regenerationData;
+      return hrLettersController.generateLetter(req, res);
+
+    } catch (error) {
+      console.error('Error updating and regenerating letter:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update and regenerate letter',
+        error: error.message
+      });
+    }
+  },
+
+  // Download PDF - uses modified data if available
   downloadPDF: async (req, res) => {
     try {
       const { id } = req.params;
@@ -152,7 +282,7 @@ const hrLettersController = {
       console.log('Download PDF request for ID:', id);
       
       // Find letter with PDF buffer
-      let letter = await HRLetter.findById(id).select('+letterContent.pdfBuffer +letterContent.html');
+      const letter = await HRLetter.findById(id).select('letterContent.pdfBuffer fileName isModified modifiedData');
       
       if (!letter) {
         console.log('Letter not found for ID:', id);
@@ -162,51 +292,16 @@ const hrLettersController = {
         });
       }
 
-      console.log('Letter found, checking PDF buffer...');
+      console.log('Letter found:', letter.fileName);
       
-      let pdfBuffer = letter.letterContent?.pdfBuffer;
+      const pdfBuffer = letter.letterContent?.pdfBuffer;
 
-      // If no PDF buffer exists or it's invalid, generate it now
+      // Check if PDF buffer exists
       if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
-        console.log('PDF buffer missing or invalid, generating now...');
-        
-        if (!letter.letterContent.html) {
-          return res.status(400).json({
-            success: false,
-            message: 'Cannot generate PDF: HTML content is missing'
-          });
-        }
-        
-        try {
-          // Generate PDF from HTML content
-          pdfBuffer = await pdfGenerator.generatePDF(letter.letterContent.html);
-          
-          if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
-            throw new Error('PDF generation returned empty buffer');
-          }
-          
-          console.log('PDF generated successfully, size:', pdfBuffer.length);
-          
-          // Update the letter with the new PDF buffer
-          letter.letterContent.pdfBuffer = pdfBuffer;
-          letter.status = 'generated';
-          await letter.save();
-          
-          console.log('Letter updated with new PDF buffer');
-        } catch (pdfError) {
-          console.error('PDF generation failed:', pdfError);
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to generate PDF. Please try regenerating the letter.'
-          });
-        }
-      }
-
-      // Final validation
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        return res.status(500).json({
+        console.log('PDF buffer missing or invalid');
+        return res.status(400).json({
           success: false,
-          message: 'PDF generation failed. Please regenerate the letter.'
+          message: 'PDF not available for this letter'
         });
       }
 
@@ -228,7 +323,7 @@ const hrLettersController = {
     }
   },
 
-  // Preview HTML content - FIXED: Proper error handling
+  // Preview HTML content
   previewHTML: async (req, res) => {
     try {
       const { id } = req.params;

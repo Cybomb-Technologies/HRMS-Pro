@@ -9,6 +9,9 @@ router.use(authMiddleware);
 // Generate new HR letter - require HR role
 router.post('/generate', hrMiddleware, hrLettersController.generateLetter);
 
+// Update and regenerate letter - require HR role
+router.put('/:id/regenerate', hrMiddleware, hrLettersController.updateAndRegenerate);
+
 // Get all letters with pagination and filtering
 router.get('/', hrLettersController.getAllLetters);
 
