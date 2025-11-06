@@ -1,229 +1,158 @@
 // src/components/HR-Letter/OfferLetterForm.jsx
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { X, FileText, Shield, Upload, FileCheck, AlertCircle, Loader2, Building, User, Briefcase, DollarSign, Clock, Download } from 'lucide-react';
+import { X, FileText, Shield, Eye, Upload, FileCheck, AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-// --- DUMMY TEMPLATE DATA ---
-const commonVariables = [
-  'company_name', 'company_address', 'company_email', 'company_contact', 'offer_date',
-  'candidate_name', 'candidate_address', 'email', 'phone', 'designation', 'department',
-  'employment_type', 'reporting_manager', 'work_location', 'date_of_joining', 'ctc',
-  'basic_salary', 'allowances', 'bonus', 'deductions', 'net_salary', 'working_hours', 
-  'probation_period', 'notice_period', 'benefits', 'offer_expiry_date',
-  'hr_name', 'hr_designation',
-];
-
-const DUMMY_TEMPLATES = [
-  { 
-    _id: 'default-offer', 
-    name: 'Standard Employment Offer', 
-    description: 'Standard full-time employment terms.', 
-    category: 'Full-Time', 
-    variables: commonVariables, 
-    icon: '👔', 
-    color: 'blue' 
-  },
-  { 
-    _id: 'executive-offer', 
-    name: 'Executive Leadership Offer', 
-    description: 'Offer for C-level and senior management with equity and severance.', 
-    category: 'Executive', 
-    variables: [...commonVariables, 'title', 'annual_base_salary', 'target_bonus_percentage', 'equity_grants', 'severance_details', 'reporting_to', 'hr_contact'], 
-    icon: '💼', 
-    color: 'purple' 
-  },
-  { 
-    _id: 'contract-offer', 
-    name: 'Independent Contractor Agreement', 
-    description: 'Fixed-term, project-based contract with payment and IP details.', 
-    category: 'Contract', 
-    variables: ['company_name', 'company_address', 'offer_date', 'contractor_name', 'contractor_address', 'project_name', 'fixed_fee', 'payment_schedule', 'start_date', 'end_date', 'deliverables_summary', 'ip_rights', 'project_manager', 'company_email', 'company_contact'], 
-    icon: '📝', 
-    color: 'amber' 
-  },
-];
-
 const OfferLetterForm = ({
-  templates = DUMMY_TEMPLATES, 
-  selectedTemplate: initialSelectedTemplate = DUMMY_TEMPLATES[0]._id,
-  formData = {},
-  loading = false,
-  onTemplateChange = () => {},
-  onInputChange = () => {},
-  onGenerate = () => {},
-  onReset = () => {},
-  onClose = () => {},
-  isPopup = false,
-  editingLetter = false,
-  onShowPrivacyPolicy = () => {}
+  templates,
+  selectedTemplate,
+  formData,
+  loading,
+  onTemplateChange,
+  onInputChange,
+  onGenerate,
+  onReset,
+  onClose,
+  isPopup,
+  editingLetter,
+  onShowPrivacyPolicy
 }) => {
-  const [selectedTemplate, setSelectedTemplate] = useState(initialSelectedTemplate);
   const [useWordFile, setUseWordFile] = useState(false);
   const [wordFile, setWordFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
 
   const handleTemplateSelect = (value) => {
-    setSelectedTemplate(value);
     onTemplateChange(value);
-    setUseWordFile(false);
+    setUseWordFile(false); // Reset to template mode when selecting a template
   };
-  
-  useEffect(() => {
-    if (initialSelectedTemplate) {
-      setSelectedTemplate(initialSelectedTemplate);
-    }
-  }, [initialSelectedTemplate]);
 
   const getSelectedTemplate = () => {
     return templates.find(t => t._id === selectedTemplate) || templates[0];
   };
 
-  const currentTemplate = useMemo(getSelectedTemplate, [templates, selectedTemplate]);
+  const handleWordFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const allowedTypes = ['.doc', '.docx'];
+      const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+      
+      if (!allowedTypes.includes(fileExtension)) {
+        toast({
+          title: 'Invalid File Type',
+          description: 'Please select a Word document (.doc or .docx)',
+          variant: 'destructive'
+        });
+        return;
+      }
 
-  // --- Dynamic Field Logic ---
-  const HARDCODED_KEYS = useMemo(() => new Set([
-    'company_name', 'company_address', 'company_email', 'company_contact', 'offer_date', 'offer_expiry_date',
-    'candidate_name', 'candidate_address', 'contractor_name', 'contractor_address', 'email', 'phone',
-    'designation', 'title', 'project_name', 'start_date', 'end_date', 'date_of_joining', 'department', 
-    'employment_type', 'reporting_manager', 'work_location',
-    'ctc', 'basic_salary', 'allowances', 'net_salary', 'bonus', 'deductions', 'probation_period', 
-    'notice_period', 'benefits', 'working_hours', 'hr_name', 'hr_designation', 'hr_contact',
-  ]), []);
-  
-  const getCleanLabel = (key) => {
-    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: 'File Too Large',
+          description: 'Please select a file smaller than 10MB',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setWordFile(file);
+      
+      // Auto-fill template name if empty
+      if (!templateName) {
+        const fileName = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+        setTemplateName(fileName);
+      }
+    }
   };
 
-  const dynamicTemplateFields = useMemo(() => {
-    if (!currentTemplate || !currentTemplate.variables) return [];
+  const uploadAndUseWordTemplate = async () => {
+    if (!wordFile) {
+      toast({
+        title: 'No File Selected',
+        description: 'Please select a Word document to upload',
+        variant: 'destructive'
+      });
+      return;
+    }
 
-    const dynamicFields = currentTemplate.variables
-      .filter(key => !HARDCODED_KEYS.has(key))
-      .map(key => ({
-        key,
-        label: getCleanLabel(key),
-        type: key.includes('date') ? 'date' : 
-              key.includes('salary') || key.includes('ctc') || key.includes('fee') ? 'text' : 
-              'text',
-        required: key.includes('required') || key.includes('mandatory') || key === 'fixed_fee',
-        group: 'Template Specific',
-      }));
+    if (!templateName.trim()) {
+      toast({
+        title: 'Template Name Required',
+        description: 'Please enter a name for your template',
+        variant: 'destructive'
+      });
+      return;
+    }
 
-    return dynamicFields;
-  }, [currentTemplate, HARDCODED_KEYS]);
+    setUploading(true);
 
-  // --- FIXED: Utility to map keys to explicit input types ---
-  const getInputType = (key) => {
-    // Date fields first (be specific to avoid false matches)
-    if (key === 'date_of_joining' || key === 'offer_date' || key === 'offer_expiry_date' || key === 'start_date' || key === 'end_date') return 'date';
-    
-    // Email fields
-    if (key.includes('email')) return 'email';
-    
-    // Phone/contact fields
-    if (key.includes('phone') || key.includes('contact')) return 'tel';
-    
-    // Default to text for ALL other fields, including names, addresses, salaries, and titles.
-    return 'text';
+    try {
+      const token = localStorage.getItem('hrms_token');
+      const uploadData = new FormData();
+      uploadData.append('wordFile', wordFile);
+      uploadData.append('name', templateName);
+      uploadData.append('description', templateDescription);
+      uploadData.append('category', 'Custom');
+
+      const response = await fetch('http://localhost:5000/api/offer-letters/upload-word', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: uploadData
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        toast({
+          title: 'Template Uploaded',
+          description: 'Your Word document has been successfully converted to a template',
+          variant: 'default'
+        });
+
+        // Use the newly created template
+        onTemplateChange(result.template._id);
+        setUseWordFile(false);
+        
+        // Refresh templates list (you might want to add a callback prop for this)
+        window.dispatchEvent(new Event('templatesUpdated'));
+        
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: 'Upload Failed',
+        description: error.message || 'Failed to upload Word document',
+        variant: 'destructive'
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
-  // Helper component to render a single field with enhanced UI
-  const RenderInputField = ({ field, defaultType = 'text', groupName = 'Default' }) => {
-    const isTextarea = field.key.includes('details') || field.key.includes('description') || field.key.includes('summary') || field.key.includes('clause') || field.key.includes('scope') || field.key === 'benefits';
-    
-    // *** THE FIXED TYPE DETERMINATION ***
-    const inputType = getInputType(field.key); 
-    // *** END FIXED TYPE DETERMINATION ***
-
-    const inputProps = {
-      id: field.key,
-      name: field.key,
-      value: formData[field.key] || '',
-      onChange: onInputChange,
-      placeholder: `Enter ${field.label.toLowerCase()}`,
-      className: "mt-1 transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
-      required: field.required || (groupName === 'Company' || groupName === 'Recipient' || groupName === 'Core Employment'),
-      type: inputType,
-    };
-
-    const getFieldIcon = () => {
-      if (field.key.includes('name')) return <User className="w-4 h-4 text-gray-400" />;
-      if (field.key.includes('email')) return <span className="text-gray-400">@</span>;
-      if (field.key.includes('phone') || field.key.includes('contact')) return <span className="text-gray-400">📞</span>;
-      if (field.key.includes('date')) return <Clock className="w-4 h-4 text-gray-400" />;
-      if (field.key.includes('salary') || field.key.includes('ctc') || field.key.includes('fee')) return <DollarSign className="w-4 h-4 text-gray-400" />;
-      if (field.key.includes('address')) return <span className="text-gray-400">📍</span>;
-      return <FileText className="w-4 h-4 text-gray-400" />;
-    };
-
-    return (
-      <div className="space-y-2">
-        <Label htmlFor={field.key} className="text-sm font-medium text-gray-700 flex items-center">
-          {field.label} {(field.required || inputProps.required) && <span className="text-red-500 ml-1">*</span>}
-        </Label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            {getFieldIcon()}
-          </div>
-          {isTextarea ? (
-            <Textarea {...inputProps} rows={3} className="pl-10 pr-4 py-3" />
-          ) : (
-            <Input {...inputProps} className="pl-10 pr-4 py-3" />
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Section header component
-  const SectionHeader = ({ icon: Icon, title, description, color = "blue" }) => {
-    const colorClasses = {
-      blue: 'bg-blue-100 text-blue-600',
-      green: 'bg-green-100 text-green-600',
-      amber: 'bg-amber-100 text-amber-600',
-      purple: 'bg-purple-100 text-purple-600'
-    };
-
-    return (
-      <div className="flex items-start space-x-3 mb-4">
-        <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          {description && <p className="text-sm text-gray-600 mt-1">{description}</p>}
-        </div>
-      </div>
-    );
-  };
-
-  // Template badge component
-  const TemplateBadge = ({ template }) => {
-    const colorMap = {
-      blue: 'bg-blue-100 text-blue-800 border-blue-200',
-      purple: 'bg-purple-100 text-purple-800 border-purple-200',
-      amber: 'bg-amber-100 text-amber-800 border-amber-200'
-    };
-    
-    return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorMap[template.color] || colorMap.blue}`}>
-        {template.icon} {template.category}
-      </span>
-    );
+  const removeWordFile = () => {
+    setWordFile(null);
+    setTemplateName('');
+    setTemplateDescription('');
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-sm">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-md">
-            <FileText className="w-6 h-6 text-white" />
+          <div className="p-2 bg-blue-600 rounded-lg">
+            <FileText className="w-5 h-5 text-white" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">
@@ -235,7 +164,12 @@ const OfferLetterForm = ({
           </div>
         </div>
         {isPopup && (
-          <Button onClick={onClose} variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full hover:bg-gray-200">
+          <Button
+            onClick={onClose}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+          >
             <X className="w-4 h-4" />
           </Button>
         )}
@@ -243,59 +177,56 @@ const OfferLetterForm = ({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
-          
-          {/* 1. Template Selection */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <SectionHeader 
-              icon={FileText} 
-              title="Select Template" 
-              description="Choose from existing templates or upload your own Word document"
-              color="blue"
-            />
+        <div className="max-w-4xl mx-auto space-y-8">
+          {/* Template Selection */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Template</h3>
             
             {/* Template Selection Toggle */}
-            <div className="flex space-x-4 mb-6">
+            <div className="flex space-x-4 mb-4">
               <Button
                 type="button"
                 variant={!useWordFile ? "default" : "outline"}
                 onClick={() => setUseWordFile(false)}
-                className={`flex-1 transition-all duration-200 ${!useWordFile ? 'shadow-md' : ''}`}
+                className="flex-1"
               >
-                <FileText className="w-4 h-4 mr-2" /> Use Existing Template
+                <FileText className="w-4 h-4 mr-2" />
+                Use Existing Template
               </Button>
               <Button
                 type="button"
                 variant={useWordFile ? "default" : "outline"}
                 onClick={() => setUseWordFile(true)}
-                className={`flex-1 transition-all duration-200 ${useWordFile ? 'shadow-md' : ''}`}
+                className="flex-1"
               >
-                <Upload className="w-4 h-4 mr-2" /> Upload Word Document
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Word Document
               </Button>
             </div>
 
             {!useWordFile ? (
+              // Existing Template Selection
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="template" className="text-sm font-medium text-gray-700 mb-2 block">
+                  <Label htmlFor="template" className="text-sm font-medium text-gray-700">
                     Choose a Template
                   </Label>
                   <Select value={selectedTemplate} onValueChange={handleTemplateSelect}>
-                    <SelectTrigger className="w-full mt-1 border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200">
+                    <SelectTrigger className="w-full mt-1">
                       <SelectValue placeholder="Select a template" />
                     </SelectTrigger>
-                    <SelectContent className="border-gray-200 shadow-lg">
+                    <SelectContent>
                       {templates.map((template) => (
-                        <SelectItem key={template._id} value={template._id} className="py-3">
-                          <div className="flex items-center space-x-3">
-                            <span className="text-lg">{template.icon}</span>
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2">
-                                <span className="font-medium text-gray-900">{template.name}</span>
-                                <TemplateBadge template={template} />
-                              </div>
-                              <p className="text-sm text-gray-500 mt-1">{template.description}</p>
-                            </div>
+                        <SelectItem key={template._id} value={template._id}>
+                          <div className="flex items-center space-x-2">
+                            <FileText className={`w-4 h-4 ${
+                              template.templateType === 'word_upload' ? 'text-green-600' : 'text-blue-600'
+                            }`} />
+                            <span>{template.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">
+                              ({template.category})
+                              {template.templateType === 'word_upload' && ' - Word'}
+                            </span>
                           </div>
                         </SelectItem>
                       ))}
@@ -303,207 +234,430 @@ const OfferLetterForm = ({
                   </Select>
                 </div>
                 
-                {selectedTemplate && currentTemplate && (
-                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{currentTemplate.icon}</span>
-                      <div>
-                        <h4 className="font-semibold text-blue-900">{currentTemplate.name}</h4>
-                        <p className="text-sm text-blue-700 mt-1">{currentTemplate.description}</p>
+                {selectedTemplate && (
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-blue-900">
+                          {getSelectedTemplate().name}
+                        </h4>
+                        <p className="text-sm text-blue-700 mt-1">
+                          {getSelectedTemplate().description}
+                        </p>
+                        <div className="flex items-center mt-2 space-x-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            {getSelectedTemplate().category}
+                          </span>
+                          {getSelectedTemplate().templateType === 'word_upload' && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                              Word Upload
+                            </span>
+                          )}
+                        </div>
+                        {getSelectedTemplate().variables && getSelectedTemplate().variables.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs font-medium text-blue-800 mb-1">Available Fields:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {getSelectedTemplate().variables.slice(0, 5).map((variable, index) => (
+                                <span key={index} className="text-xs bg-white text-blue-600 px-2 py-1 rounded border border-blue-200">
+                                  {variable}
+                                </span>
+                              ))}
+                              {getSelectedTemplate().variables.length > 5 && (
+                                <span className="text-xs bg-white text-blue-600 px-2 py-1 rounded border border-blue-200">
+                                  +{getSelectedTemplate().variables.length - 5} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
+              // Word File Upload Section
               <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors duration-200">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-gray-700 mb-2">Upload Word Document</p>
-                  <p className="text-sm text-gray-500 mb-4">Drag and drop your .docx file here, or click to browse</p>
-                  <Button variant="outline" className="bg-white">
-                    Browse Files
-                  </Button>
+                {/* File Upload */}
+                <div>
+                  <Label htmlFor="wordFile" className="text-sm font-medium text-gray-700 mb-2 block">
+                    Upload Word Document *
+                  </Label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      type="file"
+                      id="wordFile"
+                      accept=".doc,.docx"
+                      onChange={handleWordFileSelect}
+                      className="hidden"
+                    />
+                    <label htmlFor="wordFile" className="cursor-pointer">
+                      {wordFile ? (
+                        <div className="flex items-center justify-center space-x-3">
+                          <FileCheck className="w-8 h-8 text-green-500" />
+                          <div className="text-left">
+                            <p className="font-medium text-gray-900">{wordFile.name}</p>
+                            <p className="text-sm text-gray-500">
+                              {(wordFile.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={removeWordFile}
+                            className="ml-4"
+                          >
+                            Change
+                          </Button>
+                        </div>
+                      ) : (
+                        <div>
+                          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600">Click to upload Word document</p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Supports .doc and .docx files (max 10MB)
+                          </p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
                 </div>
+
+                {/* Template Details */}
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <Label htmlFor="templateName" className="text-sm font-medium text-gray-700">
+                      Template Name *
+                    </Label>
+                    <Input
+                      id="templateName"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                      placeholder="e.g., Sales Offer Template"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="templateDescription" className="text-sm font-medium text-gray-700">
+                      Description
+                    </Label>
+                    <Textarea
+                      id="templateDescription"
+                      value={templateDescription}
+                      onChange={(e) => setTemplateDescription(e.target.value)}
+                      placeholder="Brief description of this template"
+                      className="mt-1"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-start space-x-3">
+                    <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-medium text-blue-900 mb-2">Using Placeholders in Your Word Document</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{candidate_name}}"}</code> for candidate name</li>
+                        <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{designation}}"}</code> for job title</li>
+                        <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{ctc}}"}</code> for compensation</li>
+                        <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{date_of_joining}}"}</code> for joining date</li>
+                        <li>• Any field can be made dynamic with <code className="bg-blue-100 px-1 rounded">{"{{field_name}}"}</code></li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upload Button */}
+                <Button
+                  onClick={uploadAndUseWordTemplate}
+                  disabled={uploading || !wordFile || !templateName.trim()}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Uploading & Converting...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload & Use This Template
+                    </>
+                  )}
+                </Button>
               </div>
             )}
           </div>
 
-          {/* 2. COMMON LETTER FIELDS */}
-          {selectedTemplate && !useWordFile && (
-            <>
-              {/* Company & Offer Details */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <SectionHeader 
-                  icon={Building} 
-                  title="Company & Offer Details" 
-                  description="Basic information about your company and the offer"
-                  color="blue"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <RenderInputField field={{ key: 'company_name', label: 'Company Name', required: true }} groupName="Company" />
-                  <RenderInputField field={{ key: 'company_address', label: 'Company Address' }} groupName="Company" />
-                  <RenderInputField field={{ key: 'company_email', label: 'Company Email', type: 'email' }} groupName="Company" />
-                  <RenderInputField field={{ key: 'company_contact', label: 'Company Phone', type: 'tel' }} groupName="Company" />
-                  <RenderInputField field={{ key: 'offer_date', label: 'Offer Date', type: 'date', required: true }} groupName="Company" />
-                  <RenderInputField field={{ key: 'offer_expiry_date', label: 'Offer Expiry Date', type: 'date' }} groupName="Company" />
-                </div>
-              </div>
-
-              {/* Recipient Details */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <SectionHeader 
-                  icon={User} 
-                  title="Recipient Details" 
-                  description="Information about the candidate or contractor receiving the offer"
-                  color="green"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {currentTemplate._id === 'contract-offer' ? (
-                    <>
-                      <RenderInputField field={{ key: 'contractor_name', label: 'Contractor Name', required: true }} groupName="Recipient" />
-                      <RenderInputField field={{ key: 'contractor_address', label: 'Contractor Address' }} groupName="Recipient" />
-                    </>
-                  ) : (
-                    <>
-                      <RenderInputField field={{ key: 'candidate_name', label: 'Candidate Name', required: true }} groupName="Recipient" />
-                      <RenderInputField field={{ key: 'candidate_address', label: 'Candidate Address' }} groupName="Recipient" />
-                    </>
-                  )}
-                  <RenderInputField field={{ key: 'email', label: 'Email Address', type: 'email', required: true }} groupName="Recipient" />
-                  <RenderInputField field={{ key: 'phone', label: 'Phone Number', type: 'tel' }} groupName="Recipient" />
-                </div>
-              </div>
-
-              {/* Core Employment/Project Details */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <SectionHeader 
-                  icon={Briefcase} 
-                  title={currentTemplate._id === 'contract-offer' ? 'Project & Term Details' : 'Core Employment Details'}
-                  description={currentTemplate._id === 'contract-offer' ? 'Project specifications and contract duration' : 'Employment terms and conditions'}
-                  color="amber"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {currentTemplate._id === 'executive-offer' && (
-                    <RenderInputField field={{ key: 'title', label: 'Executive Title', required: true }} groupName="Core Employment" />
-                  )}
-                  {currentTemplate._id !== 'contract-offer' && (
-                    <RenderInputField field={{ key: 'designation', label: 'Designation', required: true }} groupName="Core Employment" />
-                  )}
-                  {currentTemplate._id === 'contract-offer' && (
-                    <>
-                      <RenderInputField field={{ key: 'project_name', label: 'Project Name', required: true }} groupName="Core Employment" />
-                      <RenderInputField field={{ key: 'project_manager', label: 'Project Manager' }} groupName="Core Employment" />
-                    </>
-                  )}
-                  <RenderInputField field={{ key: 'date_of_joining', label: currentTemplate._id === 'contract-offer' ? 'Start Date' : 'Date of Joining', type: 'date', required: true }} groupName="Core Employment" />
-                  
-                  {currentTemplate._id === 'contract-offer' && (
-                    <RenderInputField field={{ key: 'end_date', label: 'End Date', type: 'date', required: true }} groupName="Core Employment" />
-                  )}
-                  {currentTemplate._id !== 'contract-offer' && (
-                    <>
-                      <RenderInputField field={{ key: 'department', label: 'Department' }} groupName="Core Employment" />
-                      <RenderInputField field={{ key: 'employment_type', label: 'Employment Type' }} groupName="Core Employment" />
-                      <RenderInputField field={{ key: 'reporting_manager', label: 'Reporting Manager' }} groupName="Core Employment" />
-                      <RenderInputField field={{ key: 'work_location', label: 'Work Location' }} groupName="Core Employment" />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Compensation & Signature */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <SectionHeader 
-                  icon={DollarSign} 
-                  title={currentTemplate._id === 'contract-offer' ? 'Fee & Payment' : 'Compensation & Terms'}
-                  description={currentTemplate._id === 'contract-offer' ? 'Contract fee structure and payment schedule' : 'Salary breakdown and employment terms'}
-                  color="green"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {currentTemplate._id === 'contract-offer' ? (
-                    <>
-                      <RenderInputField field={{ key: 'fixed_fee', label: 'Fixed Total Fee', required: true }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'payment_schedule', label: 'Payment Schedule Details' }} groupName="Compensation" />
-                    </>
-                  ) : (
-                    <>
-                      <RenderInputField field={{ key: 'ctc', label: 'Annual CTC', required: true }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'basic_salary', label: 'Basic Salary (Monthly)' }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'allowances', label: 'Allowances (Monthly)' }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'net_salary', label: 'Net Salary (Monthly)' }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'bonus', label: 'Bonus/Incentives' }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'deductions', label: 'Deductions (Monthly)' }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'probation_period', label: 'Probation Period' }} groupName="Compensation" />
-                      <RenderInputField field={{ key: 'notice_period', label: 'Notice Period' }} groupName="Compensation" />
-                    </>
-                  )}
-                  
-                  {/* Signature fields */}
-                  {currentTemplate._id === 'executive-offer' ? (
-                    <RenderInputField field={{ key: 'hr_contact', label: 'HR Contact (for Signature)' }} groupName="Signature" />
-                  ) : (
-                    <>
-                      <RenderInputField field={{ key: 'hr_name', label: 'HR Name (for Signature)' }} groupName="Signature" />
-                      <RenderInputField field={{ key: 'hr_designation', label: 'HR Designation (for Signature)' }} groupName="Signature" />
-                    </>
-                  )}
-                  
-                  {currentTemplate._id !== 'contract-offer' && (
-                    <div className="md:col-span-2">
-                      <RenderInputField field={{ key: 'benefits', label: 'Benefits & Perks Details', required: true }} groupName="Compensation" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* 3. DYNAMIC TEMPLATE FIELDS SECTION */}
-          {selectedTemplate && !useWordFile && dynamicTemplateFields.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <SectionHeader 
-                icon={FileText} 
-                title="Template Specific Details" 
-                description="Additional fields specific to your selected template"
-                color="purple"
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {dynamicTemplateFields.map(field => (
-                  <RenderInputField key={field.key} field={field} groupName="Template Specific" />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Privacy Policy Consent */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-start space-x-4">
-              <div className="flex-shrink-0 mt-1">
-                <input
-                  type="checkbox"
-                  id="privacy_consent"
-                  name="privacy_consent"
-                  checked={formData.privacy_consent || false}
+          {/* Candidate Information */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Candidate Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="candidate_name" className="text-sm font-medium text-gray-700">
+                  Full Name *
+                </Label>
+                <Input
+                  id="candidate_name"
+                  name="candidate_name"
+                  value={formData.candidate_name}
                   onChange={onInputChange}
-                  className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-colors duration-200"
+                  placeholder="Enter candidate's full name"
+                  className="mt-1"
                   required
                 />
               </div>
+              <div>
+                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                  Email Address *
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={onInputChange}
+                  placeholder="candidate@example.com"
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                  Phone Number
+                </Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={onInputChange}
+                  placeholder="+91 98765 43210"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="candidate_address" className="text-sm font-medium text-gray-700">
+                  Address
+                </Label>
+                <Input
+                  id="candidate_address"
+                  name="candidate_address"
+                  value={formData.candidate_address}
+                  onChange={onInputChange}
+                  placeholder="Enter candidate's address"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Employment Details */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Employment Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="designation" className="text-sm font-medium text-gray-700">
+                  Designation *
+                </Label>
+                <Input
+                  id="designation"
+                  name="designation"
+                  value={formData.designation}
+                  onChange={onInputChange}
+                  placeholder="e.g., Software Engineer"
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="department" className="text-sm font-medium text-gray-700">
+                  Department
+                </Label>
+                <Input
+                  id="department"
+                  name="department"
+                  value={formData.department}
+                  onChange={onInputChange}
+                  placeholder="e.g., Engineering"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="date_of_joining" className="text-sm font-medium text-gray-700">
+                  Date of Joining *
+                </Label>
+                <Input
+                  id="date_of_joining"
+                  name="date_of_joining"
+                  type="date"
+                  value={formData.date_of_joining}
+                  onChange={onInputChange}
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="work_location" className="text-sm font-medium text-gray-700">
+                  Work Location
+                </Label>
+                <Input
+                  id="work_location"
+                  name="work_location"
+                  value={formData.work_location}
+                  onChange={onInputChange}
+                  placeholder="e.g., Chennai (Hybrid)"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Compensation Details */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Compensation Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="ctc" className="text-sm font-medium text-gray-700">
+                  Annual CTC (Cost to Company)
+                </Label>
+                <Input
+                  id="ctc"
+                  name="ctc"
+                  value={formData.ctc}
+                  onChange={onInputChange}
+                  placeholder="e.g., ₹8,00,000"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="basic_salary" className="text-sm font-medium text-gray-700">
+                  Basic Salary
+                </Label>
+                <Input
+                  id="basic_salary"
+                  name="basic_salary"
+                  value={formData.basic_salary}
+                  onChange={onInputChange}
+                  placeholder="e.g., ₹4,00,000"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="allowances" className="text-sm font-medium text-gray-700">
+                  Allowances
+                </Label>
+                <Input
+                  id="allowances"
+                  name="allowances"
+                  value={formData.allowances}
+                  onChange={onInputChange}
+                  placeholder="e.g., ₹2,00,000"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="net_salary" className="text-sm font-medium text-gray-700">
+                  Net Salary (Calculated)
+                </Label>
+                <Input
+                  id="net_salary"
+                  name="net_salary"
+                  value={formData.net_salary}
+                  readOnly
+                  className="mt-1 bg-gray-50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Company & Additional Details */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Company & Additional Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="company_name" className="text-sm font-medium text-gray-700">
+                  Company Name
+                </Label>
+                <Input
+                  id="company_name"
+                  name="company_name"
+                  value={formData.company_name}
+                  onChange={onInputChange}
+                  placeholder="Company name"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="hr_name" className="text-sm font-medium text-gray-700">
+                  HR Name
+                </Label>
+                <Input
+                  id="hr_name"
+                  name="hr_name"
+                  value={formData.hr_name}
+                  onChange={onInputChange}
+                  placeholder="HR representative name"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="probation_period" className="text-sm font-medium text-gray-700">
+                  Probation Period
+                </Label>
+                <Input
+                  id="probation_period"
+                  name="probation_period"
+                  value={formData.probation_period}
+                  onChange={onInputChange}
+                  placeholder="e.g., 3 months"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="notice_period" className="text-sm font-medium text-gray-700">
+                  Notice Period
+                </Label>
+                <Input
+                  id="notice_period"
+                  name="notice_period"
+                  value={formData.notice_period}
+                  onChange={onInputChange}
+                  placeholder="e.g., 60 days"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Privacy Policy Consent */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-start space-x-3">
+              <input
+                type="checkbox"
+                id="privacy_consent"
+                name="privacy_consent"
+                checked={formData.privacy_consent}
+                onChange={onInputChange}
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                required
+              />
               <div className="flex-1">
-                <Label htmlFor="privacy_consent" className="text-sm font-medium text-gray-700 flex items-center">
-                  <Shield className="w-4 h-4 mr-2 text-blue-600" />
+                <Label htmlFor="privacy_consent" className="text-sm font-medium text-gray-700">
                   Privacy Policy Consent *
                 </Label>
-                <p className="text-sm text-gray-600 mt-2">
+                <p className="text-sm text-gray-600 mt-1">
                   I acknowledge that I have read and understood the{' '}
                   <button
                     type="button"
                     onClick={onShowPrivacyPolicy}
-                    className="text-blue-600 hover:text-blue-800 underline font-medium inline-flex items-center transition-colors duration-200"
+                    className="text-blue-600 hover:text-blue-800 underline font-medium flex items-center"
                   >
+                    <Shield className="w-4 h-4 mr-1" />
                     Privacy Policy
                   </button>
                   {' '}and consent to the collection and processing of candidate data for the purpose 
@@ -516,36 +670,26 @@ const OfferLetterForm = ({
       </div>
 
       {/* Footer */}
-      <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-white shadow-sm">
+      <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50">
         <div className="flex space-x-3">
-          <Button 
-            onClick={onReset} 
-            variant="outline" 
-            disabled={loading || uploading}
-            className="border-gray-300 hover:bg-gray-50 transition-colors duration-200"
-          >
+          <Button onClick={onReset} variant="outline" disabled={loading || uploading}>
             Reset Form
           </Button>
         </div>
         <div className="flex space-x-3">
           {isPopup && (
-            <Button 
-              onClick={onClose} 
-              variant="outline" 
-              disabled={loading || uploading}
-              className="border-gray-300 hover:bg-gray-50 transition-colors duration-200"
-            >
+            <Button onClick={onClose} variant="outline" disabled={loading || uploading}>
               Cancel
             </Button>
           )}
           <Button 
             onClick={onGenerate} 
             disabled={loading || uploading || !formData.privacy_consent || (!useWordFile && !selectedTemplate)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-blue-600 hover:bg-blue-700"
           >
             {loading ? (
               <>
-                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 Generating...
               </>
             ) : (

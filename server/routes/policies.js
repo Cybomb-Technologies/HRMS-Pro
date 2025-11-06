@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Policy = require('../models/Policy');
+const Employee = require('../models/Employee'); // Imported Employee model for ID validation
 const { authMiddleware: auth } = require('../middleware/authMiddleware');
 const { check, validationResult } = require('express-validator');
 const multer = require('multer');
@@ -104,12 +105,118 @@ const getActiveDocument = (policy) => {
   return activeDocuments.length > 0 ? activeDocuments[0] : null;
 };
 
+// @route   GET /api/policies/employees/validate
+// @desc    Fetch employees by list of empids and validate them (for policy creation form)
+// @access  Private (Admin/Employer)
+router.get('/employees/validate', auth, async (req, res) => {
+  try {
+    if (!['admin', 'employer'].includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied. Only admin and employer can access employee validation.' 
+      });
+    }
+    
+    // Employee IDs are passed as a comma-separated string in query param
+    const { empIds } = req.query;
+    if (!empIds) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Employee IDs (empIds) query parameter is required.' 
+      });
+    }
+
+    const employeeIdArray = empIds.split(',')
+      .map(id => id.trim())
+      .filter(id => id.length > 0);
+
+    if (employeeIdArray.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'No valid employee IDs provided.' 
+      });
+    }
+
+    // Fetch employees from DB
+    const employees = await Employee.find({
+      employeeId: { $in: employeeIdArray }
+    }).select('employeeId name email designation department');
+
+    const foundIds = employees.map(emp => emp.employeeId);
+    const notFoundIds = employeeIdArray.filter(id => !foundIds.includes(id));
+
+    res.json({
+      success: true,
+      data: {
+        validEmployees: employees,
+        invalidEmployeeIds: notFoundIds
+      }
+    });
+
+  } catch (error) {
+    console.error('Error validating employee IDs:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+});
+// @route   GET /api/policies/employees/list
+// @desc    Get all employees for dropdown selection
+// @access  Private (Admin/Employer/HR)
+router.get('/employees/list', auth, async (req, res) => {
+  try {
+    if (!['admin', 'employer', 'hr'].includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied. Only admin, employer and HR can access employee list.' 
+      });
+    }
+    
+    const employees = await Employee.find({})
+      .select('employeeId name email designation department')
+      .sort({ name: 1 });
+
+    res.json({
+      success: true,
+      data: employees,
+      count: employees.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+});
+
 // @route   GET /api/policies
-// @desc    Get all policies with active document info
+// @desc    Get all policies with active document info visible to the user
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const policies = await Policy.find({ isActive: true })
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+    
+    let findQuery = { isActive: true };
+
+    // Admin/Employer can see ALL active policies
+    if (!['admin', 'employer'].includes(userRole)) {
+      // Regular employees only see policies visible to ALL or policies specifically allowed for their employeeId
+      findQuery.$or = [
+        { visibility: 'ALL' },
+        { 
+          visibility: 'SELECTED',
+          allowedEmployeeIds: userEmployeeId 
+        }
+      ];
+    }
+    
+    const policies = await Policy.find(findQuery)
       .populate('createdBy', 'name email')
       .populate('lastModifiedBy', 'name email')
       .sort({ createdAt: -1 });
@@ -142,7 +249,24 @@ router.get('/', auth, async (req, res) => {
 // @access  Private
 router.get('/categories/list', auth, async (req, res) => {
   try {
-    const categories = await Policy.distinct('category', { isActive: true });
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+    
+    let matchQuery = { isActive: true };
+    
+    // Admin/Employer sees all categories
+    if (!['admin', 'employer'].includes(userRole)) {
+      matchQuery.$or = [
+        { visibility: 'ALL' },
+        { 
+          visibility: 'SELECTED',
+          allowedEmployeeIds: userEmployeeId 
+        }
+      ];
+    }
+    
+    const categories = await Policy.distinct('category', matchQuery);
+    
     res.json({
       success: true,
       data: categories
@@ -158,13 +282,16 @@ router.get('/categories/list', auth, async (req, res) => {
 });
 
 // @route   GET /api/policies/search/:query
-// @desc    Search policies
+// @desc    Search policies visible to the user
 // @access  Private
 router.get('/search/:query', auth, async (req, res) => {
   try {
     const { query } = req.params;
-    
-    const policies = await Policy.find({
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+
+    // Base search criteria
+    let findQuery = {
       isActive: true,
       $or: [
         { title: { $regex: query, $options: 'i' } },
@@ -173,7 +300,27 @@ router.get('/search/:query', auth, async (req, res) => {
         { policyType: { $regex: query, $options: 'i' } },
         { tags: { $in: [new RegExp(query, 'i')] } }
       ]
-    })
+    };
+    
+    // Apply visibility filter for regular employees
+    if (!['admin', 'employer'].includes(userRole)) {
+      findQuery.$and = [
+        ...findQuery.$or.map(o => o), // Keep original search terms
+        { 
+          $or: [
+            { visibility: 'ALL' },
+            { 
+              visibility: 'SELECTED',
+              allowedEmployeeIds: userEmployeeId 
+            }
+          ]
+        }
+      ];
+      // Remove the original $or condition after wrapping it in $and
+      delete findQuery.$or; 
+    }
+    
+    const policies = await Policy.find(findQuery)
     .populate('createdBy', 'name email')
     .sort({ createdAt: -1 });
 
@@ -201,7 +348,7 @@ router.get('/search/:query', auth, async (req, res) => {
 });
 
 // @route   GET /api/policies/:id
-// @desc    Get single policy with active document
+// @desc    Get single policy with active document, and check visibility
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
@@ -216,6 +363,22 @@ router.get('/:id', auth, async (req, res) => {
       });
     }
 
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+
+    // Check visibility for regular employees
+    if (!['admin', 'employer'].includes(userRole)) {
+      const isVisibleToAll = policy.visibility === 'ALL';
+      const isSelectedEmployee = policy.visibility === 'SELECTED' && policy.allowedEmployeeIds.includes(userEmployeeId);
+
+      if (!isVisibleToAll && !isSelectedEmployee) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. You are not authorized to view this policy.' 
+        });
+      }
+    }
+    
     // Add active document for frontend
     const policyObj = policy.toObject();
     const activeDocument = getActiveDocument(policy);
@@ -242,7 +405,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // @route   GET /api/policies/:id/document
-// @desc    Serve active policy document from file system
+// @desc    Serve active policy document from file system - check visibility
 // @access  Private (with token query parameter support)
 router.get('/:id/document', authQueryToken, async (req, res) => {
   try {
@@ -253,6 +416,22 @@ router.get('/:id/document', authQueryToken, async (req, res) => {
         success: false,
         message: 'Policy not found' 
       });
+    }
+
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+
+    // Check visibility for regular employees (only for viewing documents)
+    if (!['admin', 'employer'].includes(userRole)) {
+      const isVisibleToAll = policy.visibility === 'ALL';
+      const isSelectedEmployee = policy.visibility === 'SELECTED' && policy.allowedEmployeeIds.includes(userEmployeeId);
+
+      if (!isVisibleToAll && !isSelectedEmployee) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. You are not authorized to view this policy document.' 
+        });
+      }
     }
 
     const document = getActiveDocument(policy);
@@ -329,6 +508,22 @@ router.get('/:id/document/:docId', authQueryToken, async (req, res) => {
       });
     }
 
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+
+    // Check visibility for regular employees (only for viewing specific documents)
+    if (!['admin', 'employer'].includes(userRole)) {
+      const isVisibleToAll = policy.visibility === 'ALL';
+      const isSelectedEmployee = policy.visibility === 'SELECTED' && policy.allowedEmployeeIds.includes(userEmployeeId);
+
+      if (!isVisibleToAll && !isSelectedEmployee) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. You are not authorized to view this policy document.' 
+        });
+      }
+    }
+
     const document = policy.documents.id(req.params.docId);
     
     if (!document || document.status !== 'active') {
@@ -400,6 +595,7 @@ router.post('/', [
     check('title', 'Title is required').not().isEmpty().trim(),
     check('policyType', 'Policy type is required').not().isEmpty().trim(),
     check('category', 'Category is required').not().isEmpty().trim(),
+    check('visibility', 'Visibility is required').not().isEmpty().isIn(['ALL', 'SELECTED'])
   ]
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -446,7 +642,41 @@ router.post('/', [
       });
     }
     
-    const { title, policyType, category, content, tags } = req.body;
+    const { title, policyType, category, content, tags, visibility, allowedEmployeeIds: allowedIdsString } = req.body;
+    let allowedEmployeeIds = [];
+
+    // Process allowedEmployeeIds if visibility is SELECTED
+    if (visibility === 'SELECTED' && allowedIdsString) {
+      const rawIds = allowedIdsString.split(',')
+        .map(id => id.trim())
+        .filter(id => id.length > 0);
+
+      if (rawIds.length === 0) {
+        // Clean up file if validation fails
+        if (req.file) {
+          try {
+            await fs.unlink(req.file.path);
+          } catch (unlinkError) {
+            console.error('Error cleaning up file:', unlinkError);
+          }
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Visibility is set to SELECTED, but no valid Employee IDs were provided.'
+        });
+      }
+      
+      // Basic validation: Check if IDs exist in the Employee collection
+      const existingEmployees = await Employee.find({ employeeId: { $in: rawIds } }).select('employeeId');
+      allowedEmployeeIds = existingEmployees.map(emp => emp.employeeId);
+      
+      if (allowedEmployeeIds.length !== rawIds.length) {
+        const notFoundIds = rawIds.filter(id => !allowedEmployeeIds.includes(id));
+        console.warn('The following employee IDs were not found:', notFoundIds);
+        // We will proceed with the valid IDs, but warn the creator
+      }
+    }
+
 
     // Get file extension
     const fileExtension = path.extname(req.file.originalname).toLowerCase();
@@ -469,6 +699,8 @@ router.post('/', [
       policyType,
       category,
       content: content || '',
+      visibility,
+      allowedEmployeeIds: visibility === 'SELECTED' ? allowedEmployeeIds : [],
       documents: [document],
       tags: tags ? JSON.parse(tags) : [],
       createdBy: req.user.id
@@ -535,7 +767,8 @@ router.put('/:id', [
   [
     check('title', 'Title is required').not().isEmpty().trim(),
     check('policyType', 'Policy type is required').not().isEmpty().trim(),
-    check('category', 'Category is required').not().isEmpty().trim()
+    check('category', 'Category is required').not().isEmpty().trim(),
+    check('visibility', 'Visibility is required').not().isEmpty().isIn(['ALL', 'SELECTED'])
   ]
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -574,7 +807,40 @@ router.put('/:id', [
       });
     }
 
-    const { title, policyType, category, content, tags } = req.body;
+    const { title, policyType, category, content, tags, visibility, allowedEmployeeIds: allowedIdsString } = req.body;
+
+    let allowedEmployeeIds = [];
+    
+    // Process allowedEmployeeIds if visibility is SELECTED
+    if (visibility === 'SELECTED' && allowedIdsString) {
+      const rawIds = allowedIdsString.split(',')
+        .map(id => id.trim())
+        .filter(id => id.length > 0);
+
+      if (rawIds.length === 0) {
+        // Clean up file if validation fails
+        if (req.file) {
+          try {
+            await fs.unlink(req.file.path);
+          } catch (unlinkError) {
+            console.error('Error cleaning up file:', unlinkError);
+          }
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Visibility is set to SELECTED, but no valid Employee IDs were provided.'
+        });
+      }
+      
+      // Basic validation: Check if IDs exist in the Employee collection
+      const existingEmployees = await Employee.find({ employeeId: { $in: rawIds } }).select('employeeId');
+      allowedEmployeeIds = existingEmployees.map(emp => emp.employeeId);
+      
+      if (allowedEmployeeIds.length !== rawIds.length) {
+        const notFoundIds = rawIds.filter(id => !allowedEmployeeIds.includes(id));
+        console.warn('The following employee IDs were not found during update:', notFoundIds);
+      }
+    }
 
     let policy = await Policy.findById(req.params.id);
 
@@ -599,6 +865,8 @@ router.put('/:id', [
       policyType,
       category,
       content: content || '',
+      visibility,
+      allowedEmployeeIds: visibility === 'SELECTED' ? allowedEmployeeIds : [],
       tags: tags ? JSON.parse(tags) : policy.tags,
       lastModifiedBy: req.user.id
     };
@@ -630,7 +898,7 @@ router.put('/:id', [
 
       // Add new document to the array
       policy.documents.push(newDocument);
-      await policy.save();
+      await policy.save(); // Save to ensure document array is updated before findByIdAndUpdate
     }
     
     // Update policy fields

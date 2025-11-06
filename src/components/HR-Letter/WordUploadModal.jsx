@@ -98,19 +98,19 @@ const WordUploadModal = ({ onClose, onSuccess }) => {
         body: uploadData
       });
 
-      const result = await response.json();
-
       if (response.ok) {
+        const result = await response.json();
+        
         toast({
-          title: 'Template Uploaded Successfully',
+          title: 'Template Uploaded',
           description: 'Your Word document has been successfully converted to a template',
           variant: 'default'
         });
 
-        onSuccess(result.data);
-        onClose();
+        onSuccess();
       } else {
-        throw new Error(result.message || 'Upload failed');
+        const error = await response.json();
+        throw new Error(error.message || 'Upload failed');
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -124,15 +124,11 @@ const WordUploadModal = ({ onClose, onSuccess }) => {
     }
   };
 
-  const removeFile = () => {
-    setSelectedFile(null);
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-blue-600 rounded-lg">
               <Upload className="w-5 h-5 text-white" />
@@ -167,38 +163,24 @@ const WordUploadModal = ({ onClose, onSuccess }) => {
                 onChange={handleFileSelect}
                 className="hidden"
               />
-              <label htmlFor="wordFile" className="cursor-pointer block">
+              <label htmlFor="wordFile" className="cursor-pointer">
                 {selectedFile ? (
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="w-6 h-6 text-green-500" />
-                      <div className="text-left">
-                        <p className="font-medium text-gray-900">{selectedFile.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </div>
+                  <div className="flex items-center justify-center space-x-3">
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">{selectedFile.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={removeFile}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
                   </div>
                 ) : (
-                  <div className="py-8">
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">Click to upload Word document</p>
-                    <p className="text-sm text-gray-500 mt-2">
+                  <div>
+                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-600">Click to upload Word document</p>
+                    <p className="text-sm text-gray-500 mt-1">
                       Supports .doc and .docx files (max 10MB)
                     </p>
-                    <Button type="button" variant="outline" className="mt-4">
-                      Choose File
-                    </Button>
                   </div>
                 )}
               </label>
@@ -263,10 +245,9 @@ const WordUploadModal = ({ onClose, onSuccess }) => {
               <div>
                 <h4 className="font-medium text-blue-900 mb-2">Using Placeholders in Your Word Document</h4>
                 <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{candidate_name}}"}</code> for candidate name</li>
+                  <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{candidate_name}}"}</code> for dynamic fields</li>
                   <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{designation}}"}</code> for job title</li>
                   <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{ctc}}"}</code> for compensation</li>
-                  <li>• Use <code className="bg-blue-100 px-1 rounded">{"{{company_name}}"}</code> for company name</li>
                   <li>• Any field can be made dynamic with <code className="bg-blue-100 px-1 rounded">{"{{field_name}}"}</code></li>
                 </ul>
               </div>
@@ -275,7 +256,7 @@ const WordUploadModal = ({ onClose, onSuccess }) => {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
+        <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
           <Button onClick={onClose} variant="outline" disabled={uploading}>
             Cancel
           </Button>

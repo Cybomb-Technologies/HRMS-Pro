@@ -23,6 +23,18 @@ const policySchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // NEW FIELDS FOR VISIBILITY
+  visibility: {
+    type: String,
+    required: [true, 'Policy visibility is required'],
+    enum: ['ALL', 'SELECTED'], // ALL employees, or SELECTED employee IDs
+    default: 'ALL'
+  },
+  allowedEmployeeIds: [{
+    type: String, // Storing employeeId (String) not ObjectId
+    trim: true,
+    index: true // Index for efficient lookups
+  }],
   // Document storage exactly like employee documents
   documents: [{
     name: { type: String, required: true },

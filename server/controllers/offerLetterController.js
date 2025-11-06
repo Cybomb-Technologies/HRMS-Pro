@@ -1,3 +1,4 @@
+// controllers/offerLetterController.js
 const OfferLetter = require('../models/OfferLetter');
 const GeneratedLetter = require('../models/GeneratedLetter');
 const { generatePDF } = require('../utils/pdfGenerator');
@@ -7,7 +8,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Configure multer for file uploads with better error handling
+// Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/word-templates/';
@@ -27,7 +28,6 @@ const upload = multer({
   fileFilter: function (req, file, cb) {
     const allowedExtensions = ['.doc', '.docx'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
-    
     if (allowedExtensions.includes(fileExtension)) {
       cb(null, true);
     } else {
@@ -39,389 +39,191 @@ const upload = multer({
   }
 });
 
-// Enhanced error handling for file upload
-const handleUploadError = (error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'File size too large. Maximum 10MB allowed.' });
-    }
-    return res.status(400).json({ message: `Upload error: ${error.message}` });
-  } else if (error) {
-    return res.status(400).json({ message: error.message });
-  }
-  next();
-};
-
-// Enhanced default templates
-const createDefaultTemplates = async (userId) => {
-  const defaultTemplates = [
-    {
-      name: 'Standard Employment Offer',
-      description: 'Professional full-time employment offer with comprehensive details',
-      template: `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Employment Offer - {{company_name}}</title>
-    <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            line-height: 1.6; 
-            margin: 0; 
-            padding: 40px; 
-            color: #333;
-            background: #ffffff;
-        }
-        .letter-container {
-            max-width: 800px;
-            margin: 0 auto;
-            border: 1px solid #e0e0e0;
-            padding: 50px;
-            background: #ffffff;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .header { 
-            text-align: center; 
-            border-bottom: 3px solid #2c5aa0; 
-            padding-bottom: 30px;
-            margin-bottom: 40px;
-        }
-        .company-name {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2c5aa0;
-            margin-bottom: 10px;
-        }
-        .section { 
-            margin: 30px 0; 
-        }
-        .section-title {
-            font-size: 18px;
-            font-weight: bold;
-            color: #2c5aa0;
-            border-bottom: 2px solid #f0f0f0;
-            padding-bottom: 8px;
-            margin-bottom: 15px;
-        }
-        .signature-section { 
-            margin-top: 80px; 
-        }
-        .signature-line {
-            border-top: 1px solid #333;
-            width: 300px;
-            margin: 40px 0 10px 0;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            font-size: 12px;
-            color: #666;
-        }
-        .highlight {
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-left: 4px solid #2c5aa0;
-            margin: 15px 0;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-        }
-        table td {
-            padding: 10px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-    </style>
-</head>
-<body>
-    <div class="letter-container">
-        <div class="header">
-            <div class="company-name">{{company_name}}</div>
-            <div class="company-address">{{company_address}}</div>
-            <div style="margin-top: 10px;">
-                <strong>OFFER OF EMPLOYMENT</strong>
-            </div>
-        </div>
-        
-        <div style="text-align: right; margin-bottom: 30px;">
-            <strong>Date:</strong> {{offer_date}}
-        </div>
-        
-        <div class="section">
-            <p>Dear <strong>{{candidate_name}}</strong>,</p>
-            <p>We are delighted to extend an offer of employment for the position of <strong>{{designation}}</strong> at {{company_name}}. We were impressed with your qualifications and believe you will be a valuable addition to our team.</p>
-        </div>
-        
-        <div class="section">
-            <div class="section-title">POSITION DETAILS</div>
-            <table>
-                <tr><td style="width: 40%;"><strong>Designation:</strong></td><td>{{designation}}</td></tr>
-                <tr><td><strong>Department:</strong></td><td>{{department}}</td></tr>
-                <tr><td><strong>Employment Type:</strong></td><td>{{employment_type}}</td></tr>
-                <tr><td><strong>Reporting Manager:</strong></td><td>{{reporting_manager}}</td></tr>
-                <tr><td><strong>Work Location:</strong></td><td>{{work_location}}</td></tr>
-                <tr><td><strong>Date of Joining:</strong></td><td><strong>{{date_of_joining}}</strong></td></tr>
-            </table>
-        </div>
-
-        <div class="section">
-            <div class="section-title">COMPENSATION & BENEFITS</div>
-            <div class="highlight">
-                <table>
-                    <tr><td style="width: 40%;"><strong>Annual CTC:</strong></td><td>{{ctc}}</td></tr>
-                    <tr><td><strong>Basic Salary:</strong></td><td>{{basic_salary}}</td></tr>
-                    <tr><td><strong>Allowances:</strong></td><td>{{allowances}}</td></tr>
-                    <tr><td><strong>Net Monthly Salary:</strong></td><td><strong>{{net_salary}}</strong></td></tr>
-                </table>
-            </div>
-            <p><strong>Benefits:</strong> {{benefits}}</p>
-        </div>
-
-        <div class="section">
-            <div class="section-title">TERMS & CONDITIONS</div>
-            <table>
-                <tr><td style="width: 40%;"><strong>Probation Period:</strong></td><td>{{probation_period}}</td></tr>
-                <tr><td><strong>Notice Period:</strong></td><td>{{notice_period}}</td></tr>
-                <tr><td><strong>Working Hours:</strong></td><td>{{working_hours}}</td></tr>
-            </table>
-        </div>
-
-        <div class="section">
-            <p>This offer is contingent upon satisfactory reference checks and background verification. Please sign and return this letter by <strong>{{offer_expiry_date}}</strong> to indicate your acceptance.</p>
-        </div>
-        
-        <div class="signature-section">
-            <div style="display: flex; justify-content: space-between;">
-                <div style="width: 45%;">
-                    <p><strong>For {{company_name}}:</strong></p>
-                    <div class="signature-line"></div>
-                    <p><strong>{{hr_name}}</strong><br>
-                    {{hr_designation}}<br>
-                    {{company_name}}</p>
-                    <p>Date: ___________</p>
-                </div>
-                
-                <div style="width: 45%;">
-                    <p><strong>Accepted by Candidate:</strong></p>
-                    <div class="signature-line"></div>
-                    <p><strong>{{candidate_name}}</strong><br>
-                    Candidate<br>
-                    Date: ___________</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>Confidential & Proprietary - {{company_name}} | {{company_address}} | {{company_email}} | {{company_contact}}</p>
-        </div>
-    </div>
-</body>
-</html>`,
-      category: 'Full-Time',
-      preview: 'Professional employment offer with comprehensive details and modern design',
-      templateType: 'professional',
-      icon: '👔',
-      color: 'blue',
-      createdBy: userId
-    }
-  ];
-
-  try {
-    await OfferLetter.insertMany(defaultTemplates);
-    console.log('Default templates created successfully');
-  } catch (error) {
-    console.error('Error creating default templates:', error);
-  }
-};
-
 // Get all offer letter templates
 const getTemplates = async (req, res) => {
   try {
-    let templates = await OfferLetter.find({ isActive: true, isTemplate: true })
-      .select('name description templateType category variables preview icon color createdAt')
+    const templates = await OfferLetter.find({ isActive: true, isTemplate: true })
+      .select('name description templateType category variables preview originalFileName createdAt')
       .sort({ createdAt: -1 });
     
     // Add default templates if no templates exist
     if (templates.length === 0) {
       await createDefaultTemplates(req.user.id);
-      templates = await OfferLetter.find({ isActive: true, isTemplate: true });
+      const defaultTemplates = await OfferLetter.find({ isActive: true, isTemplate: true });
+      return res.json(defaultTemplates);
     }
     
-    res.json({
-      success: true,
-      data: templates,
-      count: templates.length
-    });
+    res.json(templates);
   } catch (error) {
     console.error('Get templates error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to fetch templates',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Get single template
-const getTemplate = async (req, res) => {
-  try {
-    const template = await OfferLetter.findById(req.params.id);
+// Create default templates
+const createDefaultTemplates = async (userId) => {
+  const defaultTemplates = [
+    {
+      name: 'Standard Full-Time Offer',
+      description: 'Comprehensive offer letter for permanent employees',
+      template: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Offer Letter - {{company_name}}</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }
+        .header { text-align: center; border-bottom: 2px solid #2c5aa0; padding-bottom: 20px; }
+        .section { margin: 25px 0; }
+        .signature-section { margin-top: 60px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{company_name}}</h1>
+        <p>{{company_address}}</p>
+    </div>
     
-    if (!template) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Template not found' 
-      });
+    <div class="date">Date: {{offer_date}}</div>
+    
+    <div class="section">
+        <p>Dear <strong>{{candidate_name}}</strong>,</p>
+        <p>We are pleased to offer you the position of <strong>{{designation}}</strong> at {{company_name}}.</p>
+    </div>
+    
+    <div class="section">
+        <h3>Employment Details:</h3>
+        <p><strong>Designation:</strong> {{designation}}</p>
+        <p><strong>Department:</strong> {{department}}</p>
+        <p><strong>Date of Joining:</strong> {{date_of_joining}}</p>
+        <p><strong>Work Location:</strong> {{work_location}}</p>
+    </div>
+    
+    <div class="section">
+        <h3>Compensation:</h3>
+        <p><strong>Annual CTC:</strong> {{ctc}}</p>
+        <p><strong>Basic Salary:</strong> {{basic_salary}}</p>
+        <p><strong>Net Salary:</strong> {{net_salary}}</p>
+    </div>
+    
+    <div class="signature-section">
+        <p>Sincerely,</p>
+        <p><strong>{{hr_name}}</strong></p>
+        <p>{{hr_designation}}</p>
+        <p>{{company_name}}</p>
+    </div>
+</body>
+</html>`,
+      category: 'Full-Time',
+      preview: 'Professional template with all standard employment sections',
+      templateType: 'default',
+      createdBy: userId
+    },
+    {
+      name: 'Executive Level Offer',
+      description: 'Premium offer letter for senior management positions',
+      template: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Executive Offer - {{company_name}}</title>
+    <style>
+        body { font-family: 'Times New Roman', serif; line-height: 1.8; margin: 50px; }
+        .header { border-bottom: 3px double #000; padding-bottom: 30px; }
+        .executive-section { background: #f8f9fa; padding: 20px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>EXECUTIVE OFFER LETTER</h1>
+        <h2>{{company_name}}</h2>
+    </div>
+    
+    <p>Dear <strong>{{candidate_name}}</strong>,</p>
+    
+    <div class="executive-section">
+        <h3>Executive Position: {{designation}}</h3>
+        <p><strong>Package:</strong> {{ctc}} + Executive Benefits</p>
+        <p><strong>Reporting To:</strong> {{reporting_manager}}</p>
+        <p><strong>Start Date:</strong> {{date_of_joining}}</p>
+    </div>
+    
+    <p>We look forward to your leadership at {{company_name}}.</p>
+    
+    <div class="signature-section">
+        <p>For {{company_name}},</p>
+        <br><br>
+        <p><strong>{{hr_name}}</strong></p>
+        <p>{{hr_designation}}</p>
+    </div>
+</body>
+</html>`,
+      category: 'Executive',
+      preview: 'Enhanced template for executive roles with premium formatting',
+      templateType: 'default',
+      createdBy: userId
+    },
+    {
+      name: 'Internship Program',
+      description: 'Offer letter for internship positions',
+      template: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Internship Offer - {{company_name}}</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }
+        .internship-info { background: #e8f4fd; padding: 20px; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>INTERNSHIP OFFER LETTER</h2>
+        <p>{{company_name}}</p>
+    </div>
+    
+    <p>Dear <strong>{{candidate_name}}</strong>,</p>
+    
+    <div class="internship-info">
+        <p>We are pleased to offer you an internship position as <strong>{{designation}}</strong>.</p>
+        <p><strong>Duration:</strong> {{probation_period}}</p>
+        <p><strong>Stipend:</strong> {{ctc}}</p>
+        <p><strong>Start Date:</strong> {{date_of_joining}}</p>
+    </div>
+    
+    <p>This internship will provide valuable learning experience in {{department}}.</p>
+    
+    <div class="signature-section">
+        <p>Welcome to {{company_name}}!</p>
+        <br><br>
+        <p><strong>{{hr_name}}</strong></p>
+        <p>{{hr_designation}}</p>
+    </div>
+</body>
+</html>`,
+      category: 'Internship',
+      preview: 'Structured template for internship programs',
+      templateType: 'default',
+      createdBy: userId
     }
-    
-    res.json({
-      success: true,
-      data: template
-    });
-  } catch (error) {
-    console.error('Get template error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to fetch template',
-      error: error.message 
-    });
-  }
-};
+  ];
 
-// Create template
-const createTemplate = async (req, res) => {
-  try {
-    const { name, description, template, category, variables } = req.body;
-    
-    if (!name || !template) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name and template content are required'
-      });
-    }
-    
-    const newTemplate = new OfferLetter({
-      name,
-      description,
-      template,
-      category,
-      variables,
-      createdBy: req.user.id,
-      isTemplate: true,
-      isActive: true
-    });
-    
-    await newTemplate.save();
-    
-    res.status(201).json({
-      success: true,
-      message: 'Template created successfully',
-      data: newTemplate
-    });
-  } catch (error) {
-    console.error('Create template error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to create template',
-      error: error.message 
-    });
-  }
-};
-
-// Update template
-const updateTemplate = async (req, res) => {
-  try {
-    const { name, description, template, category, variables } = req.body;
-    
-    const updatedTemplate = await OfferLetter.findByIdAndUpdate(
-      req.params.id,
-      {
-        name,
-        description,
-        template,
-        category,
-        variables,
-        updatedAt: new Date()
-      },
-      { new: true, runValidators: true }
-    );
-    
-    if (!updatedTemplate) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Template not found' 
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Template updated successfully',
-      data: updatedTemplate
-    });
-  } catch (error) {
-    console.error('Update template error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to update template',
-      error: error.message 
-    });
-  }
-};
-
-// Delete template (soft delete)
-const deleteTemplate = async (req, res) => {
-  try {
-    const template = await OfferLetter.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
-      { new: true }
-    );
-    
-    if (!template) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Template not found' 
-      });
-    }
-    
-    res.json({ 
-      success: true,
-      message: 'Template deleted successfully' 
-    });
-  } catch (error) {
-    console.error('Delete template error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to delete template',
-      error: error.message 
-    });
-  }
+  await OfferLetter.insertMany(defaultTemplates);
 };
 
 // Upload Word document as template
 const uploadWordTemplate = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'No file uploaded' 
-      });
+      return res.status(400).json({ message: 'No file uploaded' });
     }
 
     const { name, description, category } = req.body;
     
     if (!name) {
       // Clean up uploaded file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      return res.status(400).json({ 
-        success: false,
-        message: 'Template name is required' 
-      });
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Template name is required' });
     }
 
     // Convert Word to HTML
@@ -436,7 +238,7 @@ const uploadWordTemplate = async (req, res) => {
     // Create new template
     const newTemplate = new OfferLetter({
       name,
-      description: description || `Custom template from ${req.file.originalname}`,
+      description: description || '',
       template: htmlContent,
       templateType: 'word_upload',
       originalFileName: req.file.originalname,
@@ -444,67 +246,101 @@ const uploadWordTemplate = async (req, res) => {
       variables,
       category: category || 'Custom',
       preview: `Custom template uploaded from ${req.file.originalname}`,
-      icon: '📄',
-      color: 'green',
-      createdBy: req.user.id,
-      isTemplate: true,
-      isActive: true
+      createdBy: req.user.id
     });
 
     await newTemplate.save();
 
     res.status(201).json({
-      success: true,
       message: 'Word template uploaded successfully',
-      data: {
+      template: {
         _id: newTemplate._id,
         name: newTemplate.name,
         description: newTemplate.description,
         templateType: newTemplate.templateType,
         category: newTemplate.category,
         variables: newTemplate.variables,
-        originalFileName: newTemplate.originalFileName,
-        icon: newTemplate.icon,
-        color: newTemplate.color
+        originalFileName: newTemplate.originalFileName
       }
     });
 
   } catch (error) {
     console.error('Upload Word template error:', error);
     
-    // Clean up uploaded file in case of error
+    // Clean up uploaded file if error occurs
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
     
-    res.status(500).json({ 
-      success: false,
-      message: 'Error processing Word document',
-      error: error.message 
+    res.status(500).json({ message: 'Error processing Word document: ' + error.message });
+  }
+};
+
+// Get single template
+const getTemplate = async (req, res) => {
+  try {
+    const template = await OfferLetter.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ message: 'Template not found' });
+    }
+    
+    res.json(template);
+  } catch (error) {
+    console.error('Get template error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Create new template (manual HTML)
+const createTemplate = async (req, res) => {
+  try {
+    const { name, description, template, category } = req.body;
+    
+    if (!name || !template) {
+      return res.status(400).json({ message: 'Name and template content are required' });
+    }
+    
+    const newTemplate = new OfferLetter({
+      name,
+      description: description || '',
+      template,
+      templateType: 'default',
+      category: category || 'General',
+      createdBy: req.user.id
     });
+
+    // Extract variables
+    newTemplate.variables = newTemplate.extractVariables();
+    
+    await newTemplate.save();
+    
+    res.status(201).json({
+      message: 'Template created successfully',
+      template: newTemplate
+    });
+  } catch (error) {
+    console.error('Create template error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
 // Generate offer letter
 const generateOfferLetter = async (req, res) => {
   try {
-    const template = await OfferLetter.findById(req.params.templateId);
+    const template = await OfferLetter.findById(req.params.id);
     
     if (!template) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Template not found' 
-      });
+      return res.status(404).json({ message: 'Template not found' });
     }
     
     const data = req.body;
     let generatedLetter = template.template;
     
-    // Enhanced placeholder replacement with fallbacks
-    const allVariables = template.variables || [];
-    allVariables.forEach(key => {
+    // Replace all placeholders with actual data
+    Object.keys(data).forEach(key => {
       const placeholder = `{{${key}}}`;
-      const value = data[key] || getDefaultValue(key) || '';
+      const value = data[key] || '';
       generatedLetter = generatedLetter.replace(new RegExp(placeholder, 'g'), value);
     });
     
@@ -516,9 +352,9 @@ const generateOfferLetter = async (req, res) => {
       templateId: template._id,
       templateName: template.name,
       templateType: template.templateType,
-      candidateName: data.candidate_name || data.contractor_name || 'Candidate',
+      candidateName: data.candidate_name,
       candidateEmail: data.email,
-      designation: data.designation || data.title || 'Not specified',
+      designation: data.designation,
       htmlContent: generatedLetter,
       formData: data,
       generatedBy: req.user.id,
@@ -528,69 +364,112 @@ const generateOfferLetter = async (req, res) => {
     await savedLetter.save();
     
     res.json({
-      success: true,
-      message: 'Offer letter generated and saved successfully',
-      data: {
-        html: generatedLetter,
-        templateName: template.name,
-        generatedLetterId: savedLetter._id,
-        trackingId: savedLetter.trackingId
-      }
+      html: generatedLetter,
+      templateName: template.name,
+      generatedLetterId: savedLetter._id,
+      message: 'Offer letter generated and saved successfully'
     });
     
   } catch (error) {
     console.error('Generate offer letter error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to generate offer letter',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// Helper function for default values
-const getDefaultValue = (key) => {
-  const defaults = {
-    'company_name': 'Cybomb Technologies LLP',
-    'company_address': 'Prime Plaza, Chennai, Tamil Nadu - 600001',
-    'company_email': 'hr@cybomb.com',
-    'company_contact': '+91-9876543210',
-    'offer_date': new Date().toLocaleDateString('en-IN'),
-    'hr_name': 'Ms. Priya Sharma',
-    'hr_designation': 'HR Manager',
-    'employment_type': 'Full-time',
-    'probation_period': '3 months',
-    'notice_period': '30 days',
-    'working_hours': '9:00 AM - 6:00 PM (Monday to Friday)'
-  };
-  return defaults[key];
+// Update template
+const updateTemplate = async (req, res) => {
+  try {
+    const { name, description, template, isActive, category } = req.body;
+    
+    const updatedTemplate = await OfferLetter.findByIdAndUpdate(
+      req.params.id,
+      { name, description, template, isActive, category },
+      { new: true, runValidators: true }
+    );
+    
+    if (!updatedTemplate) {
+      return res.status(404).json({ message: 'Template not found' });
+    }
+    
+    res.json({
+      message: 'Template updated successfully',
+      template: updatedTemplate
+    });
+  } catch (error) {
+    console.error('Update template error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Delete template
+const deleteTemplate = async (req, res) => {
+  try {
+    const template = await OfferLetter.findById(req.params.id);
+    
+    if (!template) {
+      return res.status(404).json({ message: 'Template not found' });
+    }
+
+    // Delete uploaded file if it exists
+    if (template.templateType === 'word_upload' && template.filePath && fs.existsSync(template.filePath)) {
+      fs.unlinkSync(template.filePath);
+    }
+    
+    await OfferLetter.findByIdAndDelete(req.params.id);
+    
+    res.json({ message: 'Template deleted successfully' });
+  } catch (error) {
+    console.error('Delete template error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get all generated letters
+const getGeneratedLetters = async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+    
+    let query = {};
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    const letters = await GeneratedLetter.find(query)
+      .populate('templateId', 'name description templateType')
+      .populate('generatedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+    
+    const total = await GeneratedLetter.countDocuments(query);
+    
+    res.json({
+      letters,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      total
+    });
+  } catch (error) {
+    console.error('Get generated letters error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 };
 
 // Get single generated letter
 const getGeneratedLetter = async (req, res) => {
   try {
     const letter = await GeneratedLetter.findById(req.params.id)
-      .populate('templateId', 'name description templateType')
+      .populate('templateId', 'name template variables templateType')
       .populate('generatedBy', 'name email');
     
     if (!letter) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Generated letter not found' 
-      });
+      return res.status(404).json({ message: 'Generated letter not found' });
     }
     
-    res.json({
-      success: true,
-      data: letter
-    });
+    res.json(letter);
   } catch (error) {
     console.error('Get generated letter error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to fetch generated letter',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -602,27 +481,22 @@ const updateGeneratedLetter = async (req, res) => {
     const letter = await GeneratedLetter.findById(req.params.id);
     
     if (!letter) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Generated letter not found' 
-      });
+      return res.status(404).json({ message: 'Generated letter not found' });
     }
     
     if (formData) {
-      letter.candidateName = formData.candidate_name || formData.contractor_name || letter.candidateName;
+      letter.candidateName = formData.candidate_name || letter.candidateName;
       letter.candidateEmail = formData.email || letter.candidateEmail;
-      letter.designation = formData.designation || formData.title || letter.designation;
+      letter.designation = formData.designation || letter.designation;
       letter.formData = { ...letter.formData, ...formData };
       
-      // Regenerate HTML content if template exists
       const template = await OfferLetter.findById(letter.templateId);
       if (template) {
         let generatedLetter = template.template;
         
-        const allVariables = template.variables || [];
-        allVariables.forEach(key => {
+        Object.keys(letter.formData).forEach(key => {
           const placeholder = `{{${key}}}`;
-          const value = letter.formData[key] || getDefaultValue(key) || '';
+          const value = letter.formData[key] || '';
           generatedLetter = generatedLetter.replace(new RegExp(placeholder, 'g'), value);
         });
         
@@ -648,21 +522,16 @@ const updateGeneratedLetter = async (req, res) => {
     await letter.save();
     
     const updatedLetter = await GeneratedLetter.findById(letter._id)
-      .populate('templateId', 'name description templateType')
+      .populate('templateId', 'name description')
       .populate('generatedBy', 'name email');
     
     res.json({
-      success: true,
       message: 'Generated letter updated successfully',
-      data: updatedLetter
+      letter: updatedLetter
     });
   } catch (error) {
     console.error('Update generated letter error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to update generated letter',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -672,71 +541,13 @@ const deleteGeneratedLetter = async (req, res) => {
     const letter = await GeneratedLetter.findByIdAndDelete(req.params.id);
     
     if (!letter) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Generated letter not found' 
-      });
+      return res.status(404).json({ message: 'Generated letter not found' });
     }
     
-    res.json({ 
-      success: true,
-      message: 'Generated letter deleted successfully' 
-    });
+    res.json({ message: 'Generated letter deleted successfully' });
   } catch (error) {
     console.error('Delete generated letter error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to delete generated letter',
-      error: error.message 
-    });
-  }
-};
-
-// Get all generated letters with enhanced filtering
-const getGeneratedLetters = async (req, res) => {
-  try {
-    const { status, page = 1, limit = 50, search } = req.query;
-    
-    let query = {};
-    if (status && status !== 'all') {
-      query.status = status;
-    }
-    
-    // Add search functionality
-    if (search) {
-      query.$or = [
-        { candidateName: { $regex: search, $options: 'i' } },
-        { candidateEmail: { $regex: search, $options: 'i' } },
-        { designation: { $regex: search, $options: 'i' } },
-        { trackingId: { $regex: search, $options: 'i' } }
-      ];
-    }
-    
-    const letters = await GeneratedLetter.find(query)
-      .populate('templateId', 'name description templateType category')
-      .populate('generatedBy', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    
-    const total = await GeneratedLetter.countDocuments(query);
-    
-    res.json({
-      success: true,
-      data: {
-        letters,
-        totalPages: Math.ceil(total / limit),
-        currentPage: parseInt(page),
-        total
-      }
-    });
-  } catch (error) {
-    console.error('Get generated letters error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to fetch generated letters',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -746,10 +557,7 @@ const downloadPDF = async (req, res) => {
     const letter = await GeneratedLetter.findById(req.params.id);
     
     if (!letter) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Generated letter not found' 
-      });
+      return res.status(404).json({ message: 'Generated letter not found' });
     }
     
     const pdfBuffer = await generatePDF(letter.htmlContent);
@@ -759,11 +567,7 @@ const downloadPDF = async (req, res) => {
     res.send(pdfBuffer);
   } catch (error) {
     console.error('PDF download error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Error generating PDF',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Error generating PDF' });
   }
 };
 
@@ -773,17 +577,11 @@ const sendOfferLetter = async (req, res) => {
     const letter = await GeneratedLetter.findById(req.params.id);
     
     if (!letter) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Generated letter not found' 
-      });
+      return res.status(404).json({ message: 'Generated letter not found' });
     }
     
     if (!letter.candidateEmail) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Candidate email is required' 
-      });
+      return res.status(400).json({ message: 'Candidate email is required' });
     }
     
     const pdfBuffer = await generatePDF(letter.htmlContent);
@@ -792,15 +590,11 @@ const sendOfferLetter = async (req, res) => {
       letter.candidateEmail,
       letter.candidateName,
       pdfBuffer,
-      letter.formData,
-      letter.trackingId
+      letter.formData
     );
     
     if (!emailResult.success) {
-      return res.status(500).json({ 
-        success: false,
-        message: 'Failed to send email: ' + emailResult.error 
-      });
+      return res.status(500).json({ message: 'Failed to send email: ' + emailResult.error });
     }
     
     letter.status = 'sent';
@@ -809,82 +603,12 @@ const sendOfferLetter = async (req, res) => {
     await letter.save();
     
     res.json({
-      success: true,
       message: 'Offer letter sent successfully',
-      data: {
-        emailId: emailResult.messageId,
-        trackingId: letter.trackingId,
-        sentAt: letter.sentAt
-      }
+      emailId: emailResult.messageId
     });
   } catch (error) {
     console.error('Send offer letter error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Error sending offer letter',
-      error: error.message 
-    });
-  }
-};
-
-// Get offer letter statistics
-const getOfferLetterStats = async (req, res) => {
-  try {
-    const totalLetters = await GeneratedLetter.countDocuments();
-    const sentLetters = await GeneratedLetter.countDocuments({ status: 'sent' });
-    const acceptedLetters = await GeneratedLetter.countDocuments({ status: 'accepted' });
-    const draftLetters = await GeneratedLetter.countDocuments({ status: 'draft' });
-    const rejectedLetters = await GeneratedLetter.countDocuments({ status: 'rejected' });
-    
-    // Recent activity (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const recentActivity = await GeneratedLetter.countDocuments({
-      createdAt: { $gte: thirtyDaysAgo }
-    });
-    
-    // Monthly stats for the current year
-    const currentYear = new Date().getFullYear();
-    const monthlyStats = await GeneratedLetter.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: new Date(currentYear, 0, 1),
-            $lt: new Date(currentYear + 1, 0, 1)
-          }
-        }
-      },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { "_id": 1 }
-      }
-    ]);
-    
-    res.json({
-      success: true,
-      data: {
-        total: totalLetters,
-        sent: sentLetters,
-        accepted: acceptedLetters,
-        draft: draftLetters,
-        rejected: rejectedLetters,
-        recentActivity: recentActivity,
-        monthlyStats: monthlyStats
-      }
-    });
-  } catch (error) {
-    console.error('Get stats error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Failed to fetch statistics',
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Error sending offer letter' });
   }
 };
 
@@ -902,7 +626,5 @@ module.exports = {
   deleteGeneratedLetter,
   downloadPDF,
   sendOfferLetter,
-  getOfferLetterStats,
-  upload,
-  handleUploadError
+  upload
 };

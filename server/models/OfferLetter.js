@@ -4,58 +4,46 @@ const mongoose = require('mongoose');
 const offerLetterSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Template name is required'],
-    trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    required: true,
+    trim: true
   },
   description: {
     type: String,
-    trim: true,
-    maxlength: [500, 'Description cannot exceed 500 characters']
+    default: ''
   },
   template: {
     type: String,
-    required: [true, 'Template content is required']
+    required: true
   },
   templateType: {
     type: String,
-    enum: ['professional', 'contract', 'internship', 'word_upload', 'custom'],
-    default: 'professional'
+    enum: ['default', 'word_upload'],
+    default: 'default'
   },
-  category: {
-    type: String,
-    enum: ['Full-Time', 'Contract', 'Internship', 'Part-Time', 'Custom'],
-    default: 'Full-Time'
-  },
-  variables: [{
-    type: String,
-    trim: true
-  }],
   originalFileName: {
     type: String
   },
   filePath: {
     type: String
   },
-  preview: {
-    type: String,
-    maxlength: [200, 'Preview cannot exceed 200 characters']
-  },
-  icon: {
-    type: String,
-    default: '📄'
-  },
-  color: {
-    type: String,
-    default: 'blue'
+  variables: [{
+    type: String
+  }],
+  isActive: {
+    type: Boolean,
+    default: true
   },
   isTemplate: {
     type: Boolean,
     default: true
   },
-  isActive: {
-    type: Boolean,
-    default: true
+  category: {
+    type: String,
+    default: 'General'
+  },
+  preview: {
+    type: String,
+    default: ''
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -66,9 +54,11 @@ const offerLetterSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better query performance
-offerLetterSchema.index({ isActive: 1, isTemplate: 1 });
-offerLetterSchema.index({ createdBy: 1 });
-offerLetterSchema.index({ category: 1 });
+// Extract variables from template
+offerLetterSchema.methods.extractVariables = function() {
+  const variableRegex = /{{(\w+)}}/g;
+  const matches = this.template.match(variableRegex);
+  return matches ? matches.map(match => match.replace(/{{|}}/g, '')) : [];
+};
 
 module.exports = mongoose.model('OfferLetter', offerLetterSchema);
