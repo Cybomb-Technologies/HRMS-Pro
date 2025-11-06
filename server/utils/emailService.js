@@ -34,7 +34,7 @@ const sendOfferLetterEmail = async (toEmail, candidateName, pdfBuffer, formData,
       };
     }
     
-    const companyName = formData.company_name || 'Cybomb Technologies LLP';
+    const companyName = formData.company_name || 'Cybomb Technologies Pvt Ltd';
     const designation = formData.designation || 'Not specified';
     const joiningDate = formData.date_of_joining || 'To be confirmed';
     const workLocation = formData.work_location || 'Chennai';
