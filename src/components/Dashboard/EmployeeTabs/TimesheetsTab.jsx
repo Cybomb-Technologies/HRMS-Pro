@@ -328,7 +328,8 @@ const TimesheetsTab = () => {
   // FIX: Added Employee Name and ID to CSV export and fixed the header row
   const exportTimesheet = (timesheet) => {
     const user = getUserData();
-    const employeeId = user?.employeeId || timesheet.employeeId?.employeeId || 'N/A'; // Assuming employeeId is present in timesheet object or user data
+    const employeeId = user?.employeeId || timesheet.employeeId || 'N/A';
+// Assuming employeeId is present in timesheet object or user data
 
     const csvData = [
       [`Employee Name: ${timesheet.employeeName || user.name || 'N/A'}`],

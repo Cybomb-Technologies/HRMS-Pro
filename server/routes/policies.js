@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Policy = require('../models/Policy');
+const Employee = require('../models/Employee');
+const User = require('../models/User');
 const { authMiddleware: auth } = require('../middleware/authMiddleware');
 const { check, validationResult } = require('express-validator');
 const multer = require('multer');
@@ -15,7 +17,6 @@ const storage = multer.diskStorage({
     try {
       const uploadDir = 'uploads/policies/';
       
-      // Create directory if it doesn't exist
       if (!fsSync.existsSync(uploadDir)) {
         await fs.mkdir(uploadDir, { recursive: true });
       }
@@ -26,7 +27,6 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    // Generate unique filename with timestamp
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const fileExtension = path.extname(file.originalname);
     cb(null, 'policy-' + uniqueSuffix + fileExtension);
@@ -49,7 +49,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 5 * 1024 * 1024
   }
 });
 
@@ -71,28 +71,26 @@ const handleMulterError = (error, req, res, next) => {
   next();
 };
 
-// Middleware to authenticate via token query parameter for document access
-const authQueryToken = (req, res, next) => {
+// in policies.js, keep your existing function but add the fallback:
+const authQueryToken = async (req, res, next) => {
   try {
     const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
+    if (!token) return res.status(401).json({ success:false, message:'No token provided' });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+
+    if (!decoded.employeeId && decoded.id) {
+      const emp = await Employee.findById(decoded.id).select('employeeId');
+      if (emp?.employeeId) decoded.employeeId = emp.employeeId;
+    }
+
     req.user = decoded;
     next();
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid token'
-    });
+  } catch (e) {
+    return res.status(401).json({ success:false, message:'Invalid token' });
   }
 };
+
 
 // Helper function to get active document
 const getActiveDocument = (policy) => {
@@ -104,29 +102,154 @@ const getActiveDocument = (policy) => {
   return activeDocuments.length > 0 ? activeDocuments[0] : null;
 };
 
+// @route   GET /api/policies/employees/validate
+// @desc    Fetch employees by list of empids and validate them
+// @access  Private (Admin/Employer/HR)
+router.get('/employees/validate', auth, async (req, res) => {
+  try {
+    if (!['admin', 'employer', 'hr'].includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied. Only admin, employer and HR can access employee validation.' 
+      });
+    }
+    
+    const { empIds } = req.query;
+    if (!empIds) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Employee IDs (empIds) query parameter is required.' 
+      });
+    }
+
+    const employeeIdArray = empIds.split(',')
+      .map(id => id.trim())
+      .filter(id => id.length > 0);
+
+    if (employeeIdArray.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'No valid employee IDs provided.' 
+      });
+    }
+
+    const employees = await Employee.find({
+      employeeId: { $in: employeeIdArray }
+    }).select('employeeId name email designation department');
+
+    const foundIds = employees.map(emp => emp.employeeId);
+    const notFoundIds = employeeIdArray.filter(id => !foundIds.includes(id));
+
+    res.json({
+      success: true,
+      data: {
+        validEmployees: employees,
+        invalidEmployeeIds: notFoundIds
+      }
+    });
+
+  } catch (error) {
+    console.error('Error validating employee IDs:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+});
+
+// @route   GET /api/policies/employees/list
+// @desc    Get all employees for dropdown selection
+// @access  Private (Admin/Employer/HR)
+router.get('/employees/list', auth, async (req, res) => {
+  try {
+    if (!['admin', 'employer', 'hr'].includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied. Only admin, employer and HR can access employee list.' 
+      });
+    }
+    
+    const employees = await Employee.find({})
+      .select('employeeId name email designation department')
+      .sort({ name: 1 });
+
+    res.json({
+      success: true,
+      data: employees,
+      count: employees.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+});
+
 // @route   GET /api/policies
-// @desc    Get all policies with active document info
+// @desc    Get all policies with active document info visible to the user
 // @access  Private
 router.get('/', auth, async (req, res) => {
+  console.log('Logged-in user:', req.user);
   try {
-    const policies = await Policy.find({ isActive: true })
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+    
+
+    let findQuery = { isActive: true };
+
+    // Admin/Employer/HR can see ALL active policies
+    if (['admin', 'employer', 'hr'].includes(userRole)) {
+      const policies = await Policy.find(findQuery)
+        .populate('createdBy', 'name email')
+        .populate('lastModifiedBy', 'name email')
+        .sort({ createdAt: -1 });
+
+      const policiesWithDocument = policies.map(policy => {
+        const policyObj = policy.toObject();
+        const activeDocument = getActiveDocument(policy);
+        policyObj.document = activeDocument;
+        return policyObj;
+      });
+
+      return res.json({
+        success: true,
+        data: policiesWithDocument,
+        count: policiesWithDocument.length
+      });
+    } else {
+      // Regular employees only see policies visible to ALL or policies specifically allowed for their employeeId
+      const policies = await Policy.find({
+        isActive: true,
+        $or: [
+          { visibility: 'ALL' },
+          { 
+            visibility: 'SELECTED',
+            allowedEmployeeIds: userEmployeeId 
+          }
+        ]
+      })
       .populate('createdBy', 'name email')
       .populate('lastModifiedBy', 'name email')
       .sort({ createdAt: -1 });
 
-    // Add active document to each policy for easier frontend access
-    const policiesWithDocument = policies.map(policy => {
-      const policyObj = policy.toObject();
-      const activeDocument = getActiveDocument(policy);
-      policyObj.document = activeDocument; // Add document field for frontend compatibility
-      return policyObj;
-    });
+      const policiesWithDocument = policies.map(policy => {
+        const policyObj = policy.toObject();
+        const activeDocument = getActiveDocument(policy);
+        policyObj.document = activeDocument;
+        return policyObj;
+      });
 
-    res.json({
-      success: true,
-      data: policiesWithDocument,
-      count: policiesWithDocument.length
-    });
+      return res.json({
+        success: true,
+        data: policiesWithDocument,
+        count: policiesWithDocument.length
+      });
+    }
   } catch (error) {
     console.error('Error fetching policies:', error);
     res.status(500).json({ 
@@ -142,7 +265,23 @@ router.get('/', auth, async (req, res) => {
 // @access  Private
 router.get('/categories/list', auth, async (req, res) => {
   try {
-    const categories = await Policy.distinct('category', { isActive: true });
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+    
+    let matchQuery = { isActive: true };
+    
+    if (!['admin', 'employer', 'hr'].includes(userRole)) {
+      matchQuery.$or = [
+        { visibility: 'ALL' },
+        { 
+          visibility: 'SELECTED',
+          allowedEmployeeIds: userEmployeeId 
+        }
+      ];
+    }
+    
+    const categories = await Policy.distinct('category', matchQuery);
+    
     res.json({
       success: true,
       data: categories
@@ -157,51 +296,8 @@ router.get('/categories/list', auth, async (req, res) => {
   }
 });
 
-// @route   GET /api/policies/search/:query
-// @desc    Search policies
-// @access  Private
-router.get('/search/:query', auth, async (req, res) => {
-  try {
-    const { query } = req.params;
-    
-    const policies = await Policy.find({
-      isActive: true,
-      $or: [
-        { title: { $regex: query, $options: 'i' } },
-        { content: { $regex: query, $options: 'i' } },
-        { category: { $regex: query, $options: 'i' } },
-        { policyType: { $regex: query, $options: 'i' } },
-        { tags: { $in: [new RegExp(query, 'i')] } }
-      ]
-    })
-    .populate('createdBy', 'name email')
-    .sort({ createdAt: -1 });
-
-    // Add active document to each policy
-    const policiesWithDocument = policies.map(policy => {
-      const policyObj = policy.toObject();
-      const activeDocument = getActiveDocument(policy);
-      policyObj.document = activeDocument;
-      return policyObj;
-    });
-
-    res.json({
-      success: true,
-      data: policiesWithDocument,
-      count: policiesWithDocument.length
-    });
-  } catch (error) {
-    console.error('Error searching policies:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Server error', 
-      error: error.message 
-    });
-  }
-});
-
 // @route   GET /api/policies/:id
-// @desc    Get single policy with active document
+// @desc    Get single policy with active document, and check visibility
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
@@ -216,7 +312,23 @@ router.get('/:id', auth, async (req, res) => {
       });
     }
 
-    // Add active document for frontend
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+
+    // Check visibility for regular employees
+    if (!['admin', 'employer', 'hr'].includes(userRole)) {
+      const isVisibleToAll = policy.visibility === 'ALL';
+      const isSelectedEmployee = policy.visibility === 'SELECTED' && 
+        policy.allowedEmployeeIds.includes(userEmployeeId);
+
+      if (!isVisibleToAll && !isSelectedEmployee) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. You are not authorized to view this policy.' 
+        });
+      }
+    }
+    
     const policyObj = policy.toObject();
     const activeDocument = getActiveDocument(policy);
     policyObj.document = activeDocument;
@@ -242,7 +354,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // @route   GET /api/policies/:id/document
-// @desc    Serve active policy document from file system
+// @desc    Serve active policy document from file system - check visibility
 // @access  Private (with token query parameter support)
 router.get('/:id/document', authQueryToken, async (req, res) => {
   try {
@@ -253,6 +365,23 @@ router.get('/:id/document', authQueryToken, async (req, res) => {
         success: false,
         message: 'Policy not found' 
       });
+    }
+
+    const userEmployeeId = req.user.employeeId;
+    const userRole = req.user.role;
+
+    // Check visibility for regular employees
+    if (!['admin', 'employer', 'hr'].includes(userRole)) {
+      const isVisibleToAll = policy.visibility === 'ALL';
+      const isSelectedEmployee = policy.visibility === 'SELECTED' && 
+        policy.allowedEmployeeIds.includes(userEmployeeId);
+
+      if (!isVisibleToAll && !isSelectedEmployee) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Access denied. You are not authorized to view this policy document.' 
+        });
+      }
     }
 
     const document = getActiveDocument(policy);
@@ -275,89 +404,12 @@ router.get('/:id/document', authQueryToken, async (req, res) => {
       });
     }
 
-    // Set appropriate headers
-    // FIX for COEP/CORP violation in iframe: Add Cross-Origin-Resource-Policy header
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
     res.setHeader('Content-Length', document.fileSize);
     res.setHeader('Content-Disposition', `inline; filename="${document.originalName}"`);
     res.setHeader('Cache-Control', 'private, max-age=3600');
 
-    // Stream the file
-    const fileStream = fsSync.createReadStream(document.filePath);
-    
-    fileStream.on('error', (error) => {
-      console.error('File stream error:', error);
-      if (!res.headersSent) {
-        res.status(500).json({
-          success: false,
-          message: 'Error streaming file',
-          error: error.message
-        });
-      }
-    });
-
-    fileStream.pipe(res);
-
-  } catch (error) {
-    console.error('Error serving document:', error);
-    if (error.kind === 'ObjectId') {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Policy not found' 
-      });
-    }
-    res.status(500).json({ 
-      success: false,
-      message: 'Server error', 
-      error: error.message 
-    });
-  }
-});
-
-// @route   GET /api/policies/:id/document/:docId
-// @desc    Serve specific policy document from file system
-// @access  Private (with token query parameter support)
-router.get('/:id/document/:docId', authQueryToken, async (req, res) => {
-  try {
-    const policy = await Policy.findById(req.params.id);
-    
-    if (!policy) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Policy not found' 
-      });
-    }
-
-    const document = policy.documents.id(req.params.docId);
-    
-    if (!document || document.status !== 'active') {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Document not found' 
-      });
-    }
-
-    // Check if file exists
-    try {
-      await fs.access(document.filePath);
-    } catch (err) {
-      console.error('File not found on server:', document.filePath);
-      return res.status(404).json({ 
-        success: false,
-        message: 'File not found on server' 
-      });
-    }
-
-    // Set appropriate headers
-    // FIX for COEP/CORP violation in iframe: Add Cross-Origin-Resource-Policy header
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Length', document.fileSize);
-    res.setHeader('Content-Disposition', `inline; filename="${document.originalName}"`);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-
-    // Stream the file
     const fileStream = fsSync.createReadStream(document.filePath);
     
     fileStream.on('error', (error) => {
@@ -391,7 +443,7 @@ router.get('/:id/document/:docId', authQueryToken, async (req, res) => {
 
 // @route   POST /api/policies
 // @desc    Create new policy
-// @access  Private (Admin/Employer)
+// @access  Private (Admin/Employer/HR)
 router.post('/', [
   auth,
   upload.single('document'),
@@ -400,11 +452,11 @@ router.post('/', [
     check('title', 'Title is required').not().isEmpty().trim(),
     check('policyType', 'Policy type is required').not().isEmpty().trim(),
     check('category', 'Category is required').not().isEmpty().trim(),
+    check('visibility', 'Visibility is required').not().isEmpty().isIn(['ALL', 'SELECTED'])
   ]
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    // Clean up uploaded file if validation fails
     if (req.file) {
       try {
         await fs.unlink(req.file.path);
@@ -421,9 +473,7 @@ router.post('/', [
   }
 
   try {
-    // Check user role
-    if (!['admin', 'employer'].includes(req.user.role)) {
-      // Clean up uploaded file if unauthorized
+    if (!['admin', 'employer', 'hr'].includes(req.user.role)) {
       if (req.file) {
         try {
           await fs.unlink(req.file.path);
@@ -434,11 +484,10 @@ router.post('/', [
       
       return res.status(403).json({ 
         success: false,
-        message: 'Access denied. Only admin and employer can create policies.' 
+        message: 'Access denied. Only admin, employer and HR can create policies.' 
       });
     }
 
-    // Check if file was uploaded
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -446,12 +495,39 @@ router.post('/', [
       });
     }
     
-    const { title, policyType, category, content, tags } = req.body;
+    const { title, policyType, category, content, tags, visibility, allowedEmployeeIds: allowedIdsString } = req.body;
+    let allowedEmployeeIds = [];
 
-    // Get file extension
+    if (visibility === 'SELECTED' && allowedIdsString) {
+      const rawIds = allowedIdsString.split(',')
+        .map(id => id.trim())
+        .filter(id => id.length > 0);
+
+      if (rawIds.length === 0) {
+        if (req.file) {
+          try {
+            await fs.unlink(req.file.path);
+          } catch (unlinkError) {
+            console.error('Error cleaning up file:', unlinkError);
+          }
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Visibility is set to SELECTED, but no valid Employee IDs were provided.'
+        });
+      }
+      
+      const existingEmployees = await Employee.find({ employeeId: { $in: rawIds } }).select('employeeId');
+      allowedEmployeeIds = existingEmployees.map(emp => emp.employeeId);
+      
+      if (allowedEmployeeIds.length !== rawIds.length) {
+        const notFoundIds = rawIds.filter(id => !allowedEmployeeIds.includes(id));
+        console.warn('The following employee IDs were not found:', notFoundIds);
+      }
+    }
+
     const fileExtension = path.extname(req.file.originalname).toLowerCase();
 
-    // Create document object
     const document = {
       name: req.file.filename,
       originalName: req.file.originalname,
@@ -469,14 +545,15 @@ router.post('/', [
       policyType,
       category,
       content: content || '',
-      documents: [document],
+      visibility,
+      allowedEmployeeIds: visibility === 'SELECTED' ? allowedEmployeeIds : [],
       tags: tags ? JSON.parse(tags) : [],
+      documents: [document],
       createdBy: req.user.id
     });
 
     await policy.save();
     
-    // Populate and add document field for response
     await Policy.populate(policy, { 
       path: 'createdBy', 
       select: 'name email' 
@@ -493,7 +570,6 @@ router.post('/', [
   } catch (error) {
     console.error('Error creating policy:', error);
     
-    // Clean up uploaded file if policy creation fails
     if (req.file) {
       try {
         await fs.unlink(req.file.path);
@@ -509,7 +585,6 @@ router.post('/', [
       });
     }
     
-    // Handle JSON parsing errors for tags
     if (error instanceof SyntaxError && error.message.includes('JSON')) {
       return res.status(400).json({
         success: false,
@@ -527,7 +602,7 @@ router.post('/', [
 
 // @route   PUT /api/policies/:id
 // @desc    Update policy
-// @access  Private (Admin/Employer)
+// @access  Private (Admin/Employer/HR)
 router.put('/:id', [
   auth,
   upload.single('document'),
@@ -535,12 +610,12 @@ router.put('/:id', [
   [
     check('title', 'Title is required').not().isEmpty().trim(),
     check('policyType', 'Policy type is required').not().isEmpty().trim(),
-    check('category', 'Category is required').not().isEmpty().trim()
+    check('category', 'Category is required').not().isEmpty().trim(),
+    check('visibility', 'Visibility is required').not().isEmpty().isIn(['ALL', 'SELECTED'])
   ]
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    // Clean up uploaded file if validation fails
     if (req.file) {
       try {
         await fs.unlink(req.file.path);
@@ -557,9 +632,7 @@ router.put('/:id', [
   }
 
   try {
-    // Check user role
-    if (!['admin', 'employer'].includes(req.user.role)) {
-      // Clean up uploaded file if unauthorized
+    if (!['admin', 'employer', 'hr'].includes(req.user.role)) {
       if (req.file) {
         try {
           await fs.unlink(req.file.path);
@@ -570,16 +643,45 @@ router.put('/:id', [
       
       return res.status(403).json({ 
         success: false,
-        message: 'Access denied. Only admin and employer can update policies.' 
+        message: 'Access denied. Only admin, employer and HR can update policies.' 
       });
     }
 
-    const { title, policyType, category, content, tags } = req.body;
+    const { title, policyType, category, content, tags, visibility, allowedEmployeeIds: allowedIdsString } = req.body;
+
+    let allowedEmployeeIds = [];
+    
+    if (visibility === 'SELECTED' && allowedIdsString) {
+      const rawIds = allowedIdsString.split(',')
+        .map(id => id.trim())
+        .filter(id => id.length > 0);
+
+      if (rawIds.length === 0) {
+        if (req.file) {
+          try {
+            await fs.unlink(req.file.path);
+          } catch (unlinkError) {
+            console.error('Error cleaning up file:', unlinkError);
+          }
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Visibility is set to SELECTED, but no valid Employee IDs were provided.'
+        });
+      }
+      
+      const existingEmployees = await Employee.find({ employeeId: { $in: rawIds } }).select('employeeId');
+      allowedEmployeeIds = existingEmployees.map(emp => emp.employeeId);
+      
+      if (allowedEmployeeIds.length !== rawIds.length) {
+        const notFoundIds = rawIds.filter(id => !allowedEmployeeIds.includes(id));
+        console.warn('The following employee IDs were not found during update:', notFoundIds);
+      }
+    }
 
     let policy = await Policy.findById(req.params.id);
 
     if (!policy) {
-      // Clean up uploaded file if policy not found
       if (req.file) {
         try {
           await fs.unlink(req.file.path);
@@ -599,23 +701,21 @@ router.put('/:id', [
       policyType,
       category,
       content: content || '',
+      visibility,
+      allowedEmployeeIds: visibility === 'SELECTED' ? allowedEmployeeIds : [],
       tags: tags ? JSON.parse(tags) : policy.tags,
       lastModifiedBy: req.user.id
     };
 
-    // If a new file is uploaded, update the document
     if (req.file) {
-      // Get file extension
       const fileExtension = path.extname(req.file.originalname).toLowerCase();
 
-      // Mark old active documents as deleted
       policy.documents.forEach(doc => {
         if (doc.status === 'active') {
           doc.status = 'deleted';
         }
       });
 
-      // Create new document object
       const newDocument = {
         name: req.file.filename,
         originalName: req.file.originalname,
@@ -628,12 +728,10 @@ router.put('/:id', [
         status: 'active'
       };
 
-      // Add new document to the array
       policy.documents.push(newDocument);
       await policy.save();
     }
     
-    // Update policy fields
     policy = await Policy.findByIdAndUpdate(
       req.params.id,
       updateFields,
@@ -642,7 +740,6 @@ router.put('/:id', [
     .populate('createdBy', 'name email')
     .populate('lastModifiedBy', 'name email');
 
-    // Add active document for response
     const policyObj = policy.toObject();
     const activeDocument = getActiveDocument(policy);
     policyObj.document = activeDocument;
@@ -655,7 +752,6 @@ router.put('/:id', [
   } catch (error) {
     console.error('Error updating policy:', error);
     
-    // Clean up uploaded file if update fails
     if (req.file) {
       try {
         await fs.unlink(req.file.path);
@@ -671,7 +767,6 @@ router.put('/:id', [
       });
     }
     
-    // Handle JSON parsing errors for tags
     if (error instanceof SyntaxError && error.message.includes('JSON')) {
       return res.status(400).json({
         success: false,
@@ -695,14 +790,13 @@ router.put('/:id', [
 
 // @route   DELETE /api/policies/:id
 // @desc    Delete policy (soft delete)
-// @access  Private (Admin/Employer)
+// @access  Private (Admin/Employer/HR)
 router.delete('/:id', auth, async (req, res) => {
   try {
-    // Check user role
-    if (!['admin', 'employer'].includes(req.user.role)) {
+    if (!['admin', 'employer', 'hr'].includes(req.user.role)) {
       return res.status(403).json({ 
         success: false,
-        message: 'Access denied. Only admin and employer can delete policies.' 
+        message: 'Access denied. Only admin, employer and HR can delete policies.' 
       });
     }
 
@@ -715,7 +809,6 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    // Soft delete
     policy.isActive = false;
     policy.lastModifiedBy = req.user.id;
     await policy.save();
@@ -726,69 +819,6 @@ router.delete('/:id', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting policy:', error);
-    if (error.kind === 'ObjectId') {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Policy not found' 
-      });
-    }
-    res.status(500).json({ 
-      success: false,
-      message: 'Server error', 
-      error: error.message 
-    });
-  }
-});
-
-// @route   DELETE /api/policies/:id/document/:docId
-// @desc    Delete policy document
-// @access  Private (Admin/Employer)
-router.delete('/:id/document/:docId', auth, async (req, res) => {
-  try {
-    // Check user role
-    if (!['admin', 'employer'].includes(req.user.role)) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Access denied. Only admin and employer can delete policy documents.' 
-      });
-    }
-
-    const policy = await Policy.findById(req.params.id);
-
-    if (!policy) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Policy not found' 
-      });
-    }
-
-    const document = policy.documents.id(req.params.docId);
-    
-    if (!document) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Document not found' 
-      });
-    }
-
-    // Delete file from filesystem
-    try {
-      await fs.unlink(document.filePath);
-    } catch (err) {
-      console.warn(`Could not delete file: ${document.filePath}`, err.message);
-    }
-
-    // Remove document from policy (soft delete)
-    document.status = 'deleted';
-    await policy.save();
-
-    res.json({
-      success: true,
-      message: 'Document deleted successfully'
-    });
-
-  } catch (error) {
-    console.error('Error deleting policy document:', error);
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ 
         success: false,

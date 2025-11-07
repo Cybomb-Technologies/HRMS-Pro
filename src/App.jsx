@@ -36,9 +36,12 @@ import FeedsSection from "@/pages/FeedsSection";
 import EmployeeLeavePage from "./pages/EmployeeLeavePage";
 import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab";
 import EmployeePayslipsPage from "./pages/EmployeePayslipsPage";
+import PolicyEmployee from "./pages/EmployeePolicy"
+import EmployeeDashboard from "./components/Dashboard/EmployeeDashboard"
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
+  const ishr = user?.role === "hr"
 
   return (
     <Routes>
@@ -49,6 +52,16 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               <Dashboard />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              {ishr &&  <EmployeeDashboard />}
             </Layout>
           </ProtectedRoute>
         }
@@ -132,11 +145,21 @@ const AppRoutes = () => {
         }
       />
       <Route
-        path="/attendance"
+        path="/attendance-details"
         element={
           <ProtectedRoute>
             <Layout>
               {isEmployee ? <AttendanceTab /> : <AttendanceSection />}
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/attendance"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              {ishr && <AttendanceTab />}
             </Layout>
           </ProtectedRoute>
         }
@@ -230,7 +253,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-              <CompanyPolicyPage />
+               {isEmployee ? <PolicyEmployee/> : < CompanyPolicyPage/>}
             </Layout>
           </ProtectedRoute>
         }

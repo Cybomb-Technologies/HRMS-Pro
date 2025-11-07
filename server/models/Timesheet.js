@@ -10,11 +10,11 @@ const timesheetEntrySchema = new mongoose.Schema({
 });
 
 const timesheetSchema = new mongoose.Schema({
-  employeeId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
-  },
+employeeId: { 
+  type: String, 
+  required: true 
+},
+
   employeeName: { type: String, required: true },
   periodType: { 
     type: String, 

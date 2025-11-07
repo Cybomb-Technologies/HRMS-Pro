@@ -6,7 +6,7 @@ const employeeShiftRoutes = require("./routes/employeeShiftRoutes");
 const employeeProfileRoutes = require("./routes/employeeProfileRoutes");
 const path = require("path");
 const dashboardRoutes = require("./routes/dashboardRoutes");
-
+const searchRoutes = require('./routes/searchRoutes');
 dotenv.config();
 connectDB();
 
@@ -45,6 +45,7 @@ app.use((req, res, next) => {
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
+app.use('/api/search', searchRoutes);
 app.use("/api/admin/dashboard", dashboardRoutes);
 app.use("/api/auth", require("./routes/authRoutes.js"));
 app.use("/api/employees", require("./routes/employeeRoutes.js"));

@@ -23,7 +23,17 @@ const policySchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  // Document storage exactly like employee documents
+  visibility: {
+    type: String,
+    required: [true, 'Policy visibility is required'],
+    enum: ['ALL', 'SELECTED'],
+    default: 'ALL'
+  },
+  allowedEmployeeIds: [{
+    type: String,
+    trim: true,
+    index: true
+  }],
   documents: [{
     name: { type: String, required: true },
     originalName: { type: String, required: true },
@@ -37,9 +47,9 @@ const policySchema = new mongoose.Schema({
     uploadDate: { type: Date, default: Date.now },
     fileSize: { type: Number, required: true },
     mimeType: { type: String, required: true },
-    fileType: { type: String }, // pdf, doc, docx, etc.
-    uploadedBy: { type: String }, // Employee ID who uploaded
-    status: { type: String, default: 'active' } // active, deleted
+    fileType: { type: String },
+    uploadedBy: { type: String },
+    status: { type: String, default: 'active' }
   }],
   version: {
     type: Number,
@@ -90,7 +100,6 @@ policySchema.methods.removeDocument = function(documentId) {
     throw new Error('Document not found');
   }
   
-  // Soft delete by setting status to deleted
   document.status = 'deleted';
   return this.save();
 };
