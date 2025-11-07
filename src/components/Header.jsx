@@ -56,13 +56,52 @@ const Header = ({ onMenuClick }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
+  const [profilePicture, setProfilePicture] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // FIXED: Get profile picture URL function (same as EmployeeSection)
+  const getProfilePictureUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `http://localhost:5000${profilePicture}`;
+  };
+
+  // FIXED: Fetch profile picture from database - UPDATED LOGIC
+  const fetchProfilePicture = async () => {
+    if (!user?.email) return;
+
+    try {
+      // First try to find employee by email
+      const employeesResponse = await fetch("http://localhost:5000/api/employees");
+      if (employeesResponse.ok) {
+        const employees = await employeesResponse.json();
+        const employee = employees.find((emp) => emp.email === user.email);
+        
+        if (employee) {
+          // Check for profile picture in employee data (direct fields)
+          if (employee.profilePicture) {
+            setProfilePicture(getProfilePictureUrl(employee.profilePicture));
+          } else if (employee.profilePhoto) {
+            setProfilePicture(getProfilePictureUrl(employee.profilePhoto));
+          } else if (employee.personalInfo?.profilePicture) {
+            setProfilePicture(getProfilePictureUrl(employee.personalInfo.profilePicture));
+          }
+          
+          // Also set current employee ID if found
+          if (employee.employeeId) {
+            setCurrentEmployeeId(employee.employeeId);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching profile picture:", error);
+    }
+  };
 
   // FIXED: Get current employee ID - HANDLES BOTH USER COLLECTION AND EMPLOYEE COLLECTION
   const getCurrentEmployeeId = async () => {
-    
-
     if (!user?.email) {
-      
       return null;
     }
 
@@ -71,7 +110,6 @@ const Header = ({ onMenuClick }) => {
       user._id &&
       ["admin", "hr", "manager", "employer"].includes(user.role)
     ) {
-     
       return user._id.toString();
     }
 
@@ -83,18 +121,16 @@ const Header = ({ onMenuClick }) => {
         const employee = employees.find((emp) => emp.email === user.email);
 
         if (employee) {
-          
           return employee.employeeId;
         }
       }
     } catch (error) {
-     
+      console.error("Error finding employee:", error);
     }
 
     // Final fallback
     const fallbackId =
       user?.employeeId || user?.id || user?._id?.toString() || user?.email;
-    
     return fallbackId;
   };
 
@@ -110,49 +146,35 @@ const Header = ({ onMenuClick }) => {
       }
     }
 
-    
-
     if (!employeeId) {
-      
       return;
     }
 
     setLoading(true);
     try {
-      
       const response = await notifications.get(employeeId);
-    
 
       let notifs = [];
 
       // Handle response - should be direct array after AppContext fix
       if (Array.isArray(response)) {
         notifs = response;
-       
-      } else {
-       
       }
-
-      
 
       // Get unread count
       let count = 0;
       try {
-       
         const countResponse = await notifications.getUnreadCount(employeeId);
-        
         count = countResponse.count || countResponse || 0;
       } catch (countError) {
-        
         // Fallback: calculate from array
         count = notifs.filter((notif) => !notif.isRead).length;
       }
 
       setNotificationList(notifs);
       setUnreadCount(count);
-      c
     } catch (error) {
-      
+      console.error("Error loading notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -160,11 +182,9 @@ const Header = ({ onMenuClick }) => {
 
   const handleMarkAsRead = async (notificationId) => {
     try {
-     
       await notifications.markAsRead(notificationId);
       await loadNotifications(); // Reload to update counts
     } catch (error) {
-     
       toast({
         title: "Error",
         description: "Failed to mark notification as read",
@@ -180,7 +200,6 @@ const Header = ({ onMenuClick }) => {
     }
 
     try {
-      
       await notifications.markAllAsRead(currentEmployeeId);
       await loadNotifications();
       toast({
@@ -188,7 +207,6 @@ const Header = ({ onMenuClick }) => {
         description: "All notifications marked as read",
       });
     } catch (error) {
-      
       toast({
         title: "Error",
         description: "Failed to mark all notifications as read",
@@ -212,25 +230,99 @@ const Header = ({ onMenuClick }) => {
     }
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+  // Global search functionality
+  const handleSearch = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/search?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const results = await response.json();
+        setSearchResults(results);
+        setShowSearchResults(true);
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      toast({
+        title: "Search Error",
+        description: "Failed to perform search",
+        variant: "destructive",
+      });
     }
   };
 
-  // Load notifications on component mount and set up refresh interval
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setShowSearchResults(false);
+      setSearchQuery("");
+    }
+  };
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    // Debounced search as user types
+    if (value.trim().length > 2) {
+      const timeoutId = setTimeout(() => {
+        handleSearch(value);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+
+  const handleSearchItemClick = (item) => {
+    // Navigate based on item type
+    switch (item.type) {
+      case 'employee':
+        navigate(`/employees/${item.id}`);
+        break;
+      case 'department':
+        navigate(`/organization?dept=${item.id}`);
+        break;
+      case 'document':
+        navigate(`/documents/${item.id}`);
+        break;
+      default:
+        navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+    
+    setShowSearchResults(false);
+    setSearchQuery("");
+  };
+
+  // Load profile picture and notifications on component mount
   useEffect(() => {
-    const initializeNotifications = async () => {
+    const initializeData = async () => {
+      await fetchProfilePicture();
       await loadNotifications();
     };
 
-    initializeNotifications();
+    initializeData();
 
     // Refresh notifications every 30 seconds for real-time updates
     const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowSearchResults(false);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   return (
     <header className="bg-card shadow-sm border-b border-border px-6 py-4">
@@ -280,19 +372,65 @@ const Header = ({ onMenuClick }) => {
           </div>
         </div>
 
-        <div className="flex-1 max-w-xs mx-4">
-          <form onSubmit={handleSearch}>
+        {/* Global Search Bar - Now Functional */}
+        <div className="flex-1 max-w-md mx-4 relative">
+          <form onSubmit={handleSearchSubmit}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search employees, departments, documents..."
                 className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </form>
+
+          {/* Search Results Dropdown */}
+          {showSearchResults && searchResults.length > 0 && (
+            <div 
+              className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {searchResults.map((item) => (
+                <div
+                  key={`${item.type}-${item.id}`}
+                  className="p-3 hover:bg-accent cursor-pointer border-b border-border last:border-b-0"
+                  onClick={() => handleSearchItemClick(item)}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                      {item.type === 'employee' && <User className="h-4 w-4 text-blue-500" />}
+                      {item.type === 'department' && <Building2 className="h-4 w-4 text-green-500" />}
+                      {item.type === 'document' && <BookOpen className="h-4 w-4 text-purple-500" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {item.type} • {item.department || 'General'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* No Results Message */}
+          {showSearchResults && searchQuery.length > 2 && searchResults.length === 0 && (
+            <div 
+              className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-sm text-muted-foreground text-center">
+                No results found for "{searchQuery}"
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center space-x-4">
@@ -387,9 +525,13 @@ const Header = ({ onMenuClick }) => {
                 className="flex items-center space-x-3 p-2"
               >
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.avatar} />
+                  <AvatarImage 
+                    src={profilePicture || user?.avatar} 
+                    alt={user?.name}
+                    className="object-cover"
+                  />
                   <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                    {user?.name?.charAt(0)}
+                    {user?.name?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block text-left">
@@ -405,7 +547,7 @@ const Header = ({ onMenuClick }) => {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/")}>
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>

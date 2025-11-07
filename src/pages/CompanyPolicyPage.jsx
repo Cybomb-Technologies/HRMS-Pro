@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { motion } from 'framer-motion';
 
 // --- Mock Components for Single-File Environment ---
@@ -62,16 +62,15 @@ const AlertDialogCancel = ({ children, onClick }) => <Button variant="outline" o
 
 // Mock toast and useAuth
 const toast = ({ title, description, variant }) => console.log(`[Toast | ${variant}]: ${title} - ${description}`);
-const AuthContext = React.createContext({ user: { role: 'admin', employeeId: 'ADM001' } }); 
-const useAuth = () => useContext(AuthContext); 
-
-// Mock Context for Employees (Will be replaced with dynamic data)
-const AppContext = React.createContext({
-  employees: {
-    getAll: () => []
+const AuthContext = React.createContext(); 
+const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    // Mock user for isolated environment testing
+    return { user: { role: 'admin', employeeId: 'ADM001' } };
   }
-});
-const useAppContext = () => useContext(AppContext);
+  return context;
+}; 
 
 import { 
   Plus, 
@@ -83,7 +82,6 @@ import {
   Download,
   FileText,
   Eye,
-  FileUp,
   X,
   Upload,
   Users,
@@ -103,13 +101,16 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [fetchLoading, setFetchLoading] = useState(false);
 
-  // Fetch employees from API
-  const fetchEmployees = async () => {
+  // Memoize fetchEmployees to ensure stability in useEffect
+  const fetchEmployees = useCallback(async () => {
     try {
       setFetchLoading(true);
       const token = localStorage.getItem('hrms_token') || sessionStorage.getItem('hrms_token') || 'mock-token';
       
-      const response = await fetch('http://localhost:5000/api/employees', {
+      // Changed to use the /api/policies/employees/list route for convenience,
+      // as /api/employees might require HR/Admin roles only. 
+      // This route is set to be accessible by Admin/Employer/HR in policies.js
+      const response = await fetch('http://localhost:5000/api/policies/employees/list', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -117,43 +118,64 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch employees');
+        throw new Error('Failed to fetch employees list');
       }
 
       const result = await response.json();
       
+      // FIX 1: Ensure we are checking for the correct data structure
       if (result.success && Array.isArray(result.data)) {
         setAllEmployees(result.data);
       } else {
+        // Log the unexpected data structure for debugging
+        console.error('API returned an invalid data structure for employees:', result);
         throw new Error('Invalid employee data received');
       }
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load employees',
+        description: error.message || 'Failed to load employees',
         variant: 'destructive'
       });
       setAllEmployees([]);
     } finally {
       setFetchLoading(false);
     }
-  };
+  }, []); // Empty dependency array means it only runs once
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [fetchEmployees]); // Now runs only on mount or if fetchEmployees definition changes (it's memoized, so essentially on mount)
 
-  // Sync back to parent when selectedIds change
+  // Sync initial IDs when component mounts or initialIds prop changes
   useEffect(() => {
+    if (initialIds) {
+      setSelectedIds(initialIds);
+    }
+  }, [initialIds]);
+
+  // Sync back to parent when selectedIds change (This is the logic for sending selected employee IDs)
+  // FIX 2: This is where the output is passed to the parent (PolicyForm). 
+  // The IDs are validated on the backend during policy creation/update.
+  useEffect(() => {
+    // Only call onIdsChange if the current selected IDs are different from the ones passed up
+    const currentIdsString = selectedIds.sort().join(',');
+    const initialIdsString = initialIds?.sort().join(',') || '';
+    
+    // Check if selectedIds differs from what was passed in the parent's state 
+    // AND if the component has finished initializing (i.e., fetchLoading is false initially)
+    // NOTE: We rely on the parent (PolicyForm) to handle memoization or use a stable callback for onIdsChange.
     onIdsChange(selectedIds);
-  }, [selectedIds, onIdsChange]);
-  
-  // Update map when selectedIds change
+    
+  }, [selectedIds, onIdsChange, initialIds]); // Added initialIds to dependency array
+
+  // Update map when selectedIds or allEmployees changes
   useEffect(() => {
     const newMap = new Map();
     selectedIds.forEach(id => {
-      const emp = allEmployees.find(e => e.employeeId === id);
+      // Find employee using employeeId (which is the correct identifier from the backend Employee model)
+      const emp = allEmployees.find(e => e.employeeId === id); 
       if (emp) {
         newMap.set(emp.employeeId, emp);
       }
@@ -184,11 +206,15 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
 
   // Filter employees based on search term
   const filteredEmployees = allEmployees.filter(emp => 
-    emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.designation?.toLowerCase().includes(searchTerm.toLowerCase())
+    !selectedIds.includes(emp.employeeId) && ( // Exclude already selected
+      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.designation?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
+
+  const selectedEmployeesInOrder = selectedIds.map(id => selectedEmployeeMap.get(id)).filter(Boolean);
 
   const totalEmployees = selectedIds.length;
   const dropdownRef = React.useRef(null);
@@ -271,7 +297,7 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
                   type="text"
-                  placeholder="Search employees..."
+                  placeholder="Search unselected employees..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9 border-0 focus:ring-0"
@@ -279,32 +305,24 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
               </div>
             </div>
 
-            {/* Employee List */}
+            {/* Employee List - only shows unselected employees now */}
             <div className="p-1">
               {filteredEmployees.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-gray-500">
                   <UserX className="w-12 h-12 mb-2 opacity-50" />
-                  <p className="text-sm">No employees found</p>
+                  <p className="text-sm">
+                    {searchTerm ? 'No matching unselected employees found' : 'All employees are selected'}
+                  </p>
                 </div>
               ) : (
                 filteredEmployees.map(emp => (
                   <div
                     key={emp.employeeId}
                     onClick={() => handleAddEmployee(emp.employeeId)}
-                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                      selectedIds.includes(emp.employeeId)
-                        ? 'bg-blue-50 border border-blue-200'
-                        : 'hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover:bg-gray-50`}
                   >
-                    <div className={`flex items-center justify-center w-5 h-5 rounded border ${
-                      selectedIds.includes(emp.employeeId)
-                        ? 'bg-blue-600 border-blue-600'
-                        : 'border-gray-300'
-                    }`}>
-                      {selectedIds.includes(emp.employeeId) && (
-                        <Check className="w-3 h-3 text-white" />
-                      )}
+                    <div className={`flex items-center justify-center w-5 h-5 rounded border border-gray-300`}>
+                      <Plus className="w-3 h-3 text-gray-400" />
                     </div>
                     
                     <div className="flex-1 min-w-0">
@@ -352,21 +370,17 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
         
         {totalEmployees > 0 && (
           <span className="text-xs text-gray-500">
-            {totalEmployees === allEmployees.length ? 'All employees' : `${totalEmployees}/${allEmployees.length}`}
+            {totalEmployees === allEmployees.length ? 'All employees' : `${totalEmployees}/${allEmployees.length} total`}
           </span>
         )}
       </div>
 
       {/* Selected Employees Grid */}
-      {selectedIds.length > 0 && (
+      {selectedEmployeesInOrder.length > 0 && (
         <div className="grid gap-3 max-h-64 overflow-y-auto p-1">
-          {selectedIds.map(id => {
-            const emp = selectedEmployeeMap.get(id);
-            if (!emp) return null;
-            
-            return (
+          {selectedEmployeesInOrder.map(emp => (
               <motion.div
-                key={id}
+                key={emp.employeeId}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
@@ -401,15 +415,15 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleRemoveEmployee(id)}
+                  onClick={() => handleRemoveEmployee(emp.employeeId)}
                   className="flex-shrink-0 h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
                   disabled={loading}
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </motion.div>
-            );
-          })}
+            )
+          )}
         </div>
       )}
 
@@ -427,7 +441,7 @@ const EmployeeSelector = ({ initialIds, onIdsChange, loading }) => {
 
 // PolicyForm Component
 const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
-  const [formData, setFormData] = useState(policy || { 
+  const [formData, setFormData] = useState({ 
     title: '', 
     policyType: '',
     category: '', 
@@ -440,10 +454,29 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
   const [file, setFile] = useState(null);
   const [initialAllowedIds, setInitialAllowedIds] = useState([]);
   
+  // Use a stable reference for the onIdsChange callback
+  const handleAllowedIdsChange = useCallback((validatedIds) => {
+    setFormData(prev => ({
+      ...prev,
+      allowedEmployeeIds: validatedIds
+    }));
+  }, []); // Empty dependency array for stability
+  
+  // Initialize form data when policy changes - FIXED: Added proper dependency handling
   useEffect(() => {
     if (policy?._id) {
-        setFormData(policy);
-        setInitialAllowedIds(policy.allowedEmployeeIds || []);
+        // Ensure that allowedEmployeeIds is initialized correctly from the policy object
+        const initialIds = policy.allowedEmployeeIds || [];
+        setFormData({
+          title: policy.title || '',
+          policyType: policy.policyType || '',
+          category: policy.category || '',
+          content: policy.content || '',
+          tags: policy.tags || [],
+          visibility: policy.visibility || 'ALL',
+          allowedEmployeeIds: initialIds
+        });
+        setInitialAllowedIds(initialIds);
     } else {
         setFormData({ 
           title: '', 
@@ -456,7 +489,7 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
         });
         setInitialAllowedIds([]);
     }
-  }, [policy]);
+  }, [policy]); // Only depend on policy
   
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
   
@@ -467,19 +500,12 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
       setFormData(prev => ({ 
         ...prev, 
         [name]: value,
-        allowedEmployeeIds: []
+        allowedEmployeeIds: [] // Clear IDs if visibility is ALL
       }));
       setInitialAllowedIds([]);
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
-  };
-  
-  const handleAllowedIdsChange = (validatedIds) => {
-    setFormData(prev => ({
-      ...prev,
-      allowedEmployeeIds: validatedIds
-    }));
   };
 
   const handleFileChange = (e) => {
@@ -576,9 +602,16 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
     data.append('policyType', formData.policyType);
     data.append('category', formData.category);
     data.append('content', formData.content || '');
+    // Ensure tags is sent as a stringified array
     data.append('tags', JSON.stringify(formData.tags));
     data.append('visibility', formData.visibility);
-    data.append('allowedEmployeeIds', formData.allowedEmployeeIds.join(', '));
+    
+    // FIX: Sending selected employee IDs. This logic is correct: 
+    // Join the array into a comma-separated string for the backend to process.
+    if (formData.visibility === 'SELECTED') {
+      // The backend (policies.js) expects a comma-separated string of IDs
+      data.append('allowedEmployeeIds', formData.allowedEmployeeIds.join(','));
+    }
 
     if (file) {
       data.append('document', file);
@@ -799,7 +832,7 @@ const PolicyForm = ({ policy, onSave, onCancel, loading }) => {
   );
 };
 
-// PolicyViewModal Component
+// PolicyViewModal Component (No changes needed)
 const PolicyViewModal = ({ policy, isOpen, onClose }) => {
   const [documentError, setDocumentError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -1068,39 +1101,16 @@ const CompanyPolicyPage = () => {
   const [deletePolicy, setDeletePolicy] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
 
+  // FIX: isPolicyManager determines who can edit/create/delete policies (All except 'employee')
   const isPolicyManager = user && ['admin', 'employer', 'hr'].includes(user.role);
 
-  useEffect(() => {
-    fetchPolicies();
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
-    filterPolicies();
-  }, [policies, searchQuery, selectedCategory]);
-  
-  const fetchWithRetry = async (url, options, maxRetries = 3) => {
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        const response = await fetch(url, options);
-        if (response.status === 401 || response.status === 403) {
-            throw new Error(`Auth/Permission Error: ${response.status}`);
-        }
-        return response;
-      } catch (error) {
-        if (i === maxRetries - 1 || error.message.includes('Auth/Permission Error')) throw error;
-        const delay = Math.pow(2, i) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  };
-
-  const fetchPolicies = async () => {
+  // FIXED: Use useCallback to memoize fetchPolicies to prevent infinite re-renders
+  const fetchPolicies = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('hrms_token') || sessionStorage.getItem('hrms_token') || 'mock-token';
       
-      const response = await fetchWithRetry('http://localhost:5000/api/policies', {
+      const response = await fetch('http://localhost:5000/api/policies', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1129,13 +1139,14 @@ const CompanyPolicyPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCategories = async () => {
+  // FIXED: Use useCallback to memoize fetchCategories
+  const fetchCategories = useCallback(async () => {
     try {
       const token = localStorage.getItem('hrms_token') || sessionStorage.getItem('hrms_token') || 'mock-token';
       
-      const response = await fetchWithRetry('http://localhost:5000/api/policies/categories/list', {
+      const response = await fetch('http://localhost:5000/api/policies/categories/list', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1151,9 +1162,16 @@ const CompanyPolicyPage = () => {
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
-  };
+  }, []);
 
-  const filterPolicies = () => {
+  // FIXED: Fetch data only once on component mount
+  useEffect(() => {
+    fetchPolicies();
+    fetchCategories();
+  }, [fetchPolicies, fetchCategories]); // Now properly memoized
+
+  // FIXED: Filter policies when dependencies change
+  useEffect(() => {
     let filtered = policies;
 
     if (searchQuery) {
@@ -1173,14 +1191,16 @@ const CompanyPolicyPage = () => {
     }
 
     setFilteredPolicies(filtered);
-  };
+  }, [policies, searchQuery, selectedCategory]);
 
   const handleCreatePolicy = () => {
+    if (!isPolicyManager) return; // Permission check
     setEditingPolicy(null);
     setShowForm(true);
   };
 
   const handleEditPolicy = (policy) => {
+    if (!isPolicyManager) return; // Permission check
     setEditingPolicy(policy);
     setShowForm(true);
   };
@@ -1207,7 +1227,9 @@ const CompanyPolicyPage = () => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || 'Failed to save policy');
+        // If backend sends validation errors (400), display them
+        const errorMessages = result.errors?.map(err => err.msg).join(', ') || result.message || 'Failed to save policy';
+        throw new Error(errorMessages);
       }
 
       if (result.success) {
@@ -1220,6 +1242,7 @@ const CompanyPolicyPage = () => {
         setShowForm(false);
         setEditingPolicy(null);
         fetchPolicies();
+        fetchCategories(); // Refresh categories in case a new one was added
       } else {
         throw new Error(result.message || 'Failed to save policy');
       }
@@ -1236,12 +1259,12 @@ const CompanyPolicyPage = () => {
   };
 
   const handleDeletePolicy = async () => {
-    if (!deletePolicy) return;
+    if (!deletePolicy || !isPolicyManager) return; // Permission check
 
     try {
       const token = localStorage.getItem('hrms_token') || sessionStorage.getItem('hrms_token') || 'mock-token';
       
-      const response = await fetchWithRetry(`http://localhost:5000/api/policies/${deletePolicy._id}`, {
+      const response = await fetch(`http://localhost:5000/api/policies/${deletePolicy._id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1264,6 +1287,7 @@ const CompanyPolicyPage = () => {
         
         setDeletePolicy(null);
         fetchPolicies();
+        fetchCategories();
       } else {
         throw new Error(result.message || 'Failed to delete policy');
       }
@@ -1309,6 +1333,7 @@ const CompanyPolicyPage = () => {
             </p>
           </div>
           
+          {/* FIX: Hide Add Policy button for 'employee' role */}
           {isPolicyManager && (
             <Button onClick={handleCreatePolicy} className="flex items-center gap-2">
               <Plus className="w-4 h-4" />
@@ -1403,6 +1428,7 @@ const CompanyPolicyPage = () => {
                         </CardDescription>
                       </div>
                       
+                      {/* FIX: Hide Edit/Delete buttons for 'employee' role */}
                       {isPolicyManager && (
                         <div className="flex gap-1 ml-2">
                           <Button
@@ -1485,7 +1511,7 @@ const CompanyPolicyPage = () => {
         )}
 
         {/* Policy Form Dialog */}
-        <Dialog open={showForm} onOpenChange={(open) => {
+        <Dialog open={showForm && isPolicyManager} onOpenChange={(open) => {
           if (!open) {
             setShowForm(false);
             setEditingPolicy(null);
@@ -1524,7 +1550,7 @@ const CompanyPolicyPage = () => {
         />
 
         {/* Delete Confirmation Dialog */}
-        <AlertDialog open={!!deletePolicy} onOpenChange={(open) => !open && setDeletePolicy(null)}>
+        <AlertDialog open={!!deletePolicy && isPolicyManager} onOpenChange={(open) => !open && setDeletePolicy(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>

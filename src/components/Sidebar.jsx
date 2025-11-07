@@ -30,6 +30,12 @@ const allMenuItems = [
     path: "/",
     roles: ["admin", "hr", "employee"],
   },
+   {
+    icon: LayoutDashboard,
+    label: "Profile",
+    path: "/profile",
+    roles: ["hr"],
+  },
   {
     icon: Shield,
     label: "Announcements",
@@ -68,10 +74,16 @@ const allMenuItems = [
     path: "/leave",
     roles: ["admin", "hr", "employee"],
   },
-  {
+    {
     icon: Clock,
     label: "Attendance",
     path: "/attendance",
+    roles: ["hr"],
+  },
+  {
+    icon: Clock,
+    label: "Attendance details",
+    path: "/attendance-details",
     roles: ["admin", "hr", "employee"],
   },
   {

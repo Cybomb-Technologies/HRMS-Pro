@@ -18,14 +18,14 @@ const getTimesheets = async (req, res) => {
     
     let filter = {};
 
-    // Role-based filtering with null checks - UPDATED to use req.user
+    // Role-based filtering with null checks - use employeeId STRING
     const userRole = req.user?.role || (req.user?.roles && req.user.roles[0]);
     const isAdmin = ['admin', 'hr', 'manager', 'employer'].includes(userRole);
     
     if (!isAdmin) {
-      filter.employeeId = req.user?.id;
+      filter.employeeId = req.user?.employeeId; // <-- string like EMPID1001
     } else if (employeeId) {
-      filter.employeeId = employeeId;
+      filter.employeeId = employeeId; // allow admin filter by string EMPID
     }
 
     if (periodType) filter.periodType = periodType;
@@ -43,9 +43,7 @@ const getTimesheets = async (req, res) => {
     }
 
     const timesheets = await Timesheet.find(filter)
-      // Populating employeeId to get employee details for the frontend
-      .populate('employeeId', 'name email employeeId') 
-      .populate('approverId', 'name email')
+      .populate('approverId', 'name email') // keep approver population
       .sort({ startDate: -1, createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));
@@ -101,19 +99,18 @@ const createTimesheet = async (req, res) => {
       });
     }
 
-    // Get employee ID from req.user (set by your middleware)
-    const employeeId = req.user?.id || req.user?._id;
-    
+    // Get employee ID (string like "EMPID1001") from auth middleware
+    const employeeId = req.user?.employeeId;
     if (!employeeId) {
       return res.status(401).json({ 
         success: false,
-        message: 'Authentication required' 
+        message: 'Employee ID not found in user data' 
       });
     }
 
-    // Check if timesheet already exists for this period
+    // Ensure uniqueness per employee/period
     const existingTimesheet = await Timesheet.findOne({
-      employeeId: employeeId,
+      employeeId,
       periodType,
       startDate: new Date(startDate),
       endDate: new Date(endDate)
@@ -126,60 +123,24 @@ const createTimesheet = async (req, res) => {
       });
     }
 
-    let employee = null;
-    
-    // Try finding by ID first (assuming req.user.id is the User/Employee ID)
-    if (mongoose.Types.ObjectId.isValid(employeeId)) {
-      employee = await Employee.findById(employeeId);
-    }
-    
-    // Fallback if employee is not found in Employee collection
-    if (!employee) {
-      // Use basic user info from auth token if Employee record isn't found
-      const timesheet = new Timesheet({
-        employeeId: employeeId, // Use the ID from auth
-        employeeName: employeeName || req.user.name || 'Unknown Employee',
-        periodType,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        entries: validEntries,
-        comments: comments,
-        status: 'draft'
-      });
-
-      await timesheet.save();
-      
-      const populatedTimesheet = await Timesheet.findById(timesheet._id)
-        .populate('employeeId', 'name email employeeId')
-        .populate('approverId', 'name email');
-
-      return res.status(201).json({ 
-        success: true,
-        message: 'Timesheet created successfully', 
-        timesheet: populatedTimesheet 
-      });
-    }
-
-    // Original flow if employee is found
+    // Create timesheet (employeeId is a STRING now)
     const timesheet = new Timesheet({
-      employeeId: employee._id,
-      employeeName: employeeName || employee.name || `Employee ${employee.employeeId}`,
+      employeeId, // string ID like EMPID1001
+      employeeName: employeeName || req.user.name || 'Unknown Employee',
       periodType,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       entries: validEntries,
-      teamId: employee.teamId && mongoose.Types.ObjectId.isValid(employee.teamId) ? employee.teamId : undefined,
-      comments: comments,
+      comments,
       status: 'draft'
     });
 
     await timesheet.save();
-    
+      
     const populatedTimesheet = await Timesheet.findById(timesheet._id)
-      .populate('employeeId', 'name email employeeId')
       .populate('approverId', 'name email');
 
-    res.status(201).json({ 
+    return res.status(201).json({ 
       success: true,
       message: 'Timesheet created successfully', 
       timesheet: populatedTimesheet 
@@ -222,7 +183,7 @@ const updateTimesheet = async (req, res) => {
     // Check ownership or admin access
     const userRole = req.user.role || (req.user.roles && req.user.roles[0]);
     const isAdmin = ['admin', 'hr', 'manager', 'employer'].includes(userRole);
-    const isOwner = timesheet.employeeId.toString() === (req.user.id).toString();
+    const isOwner = timesheet.employeeId === req.user.employeeId; // string compare
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ 
@@ -261,7 +222,6 @@ const updateTimesheet = async (req, res) => {
     await timesheet.save(); // pre('save') hook recalculates totalHours
     
     const updatedTimesheet = await Timesheet.findById(id)
-      .populate('employeeId', 'name email employeeId')
       .populate('approverId', 'name email');
 
     res.json({ 
@@ -293,8 +253,8 @@ const submitTimesheet = async (req, res) => {
       });
     }
 
-    // Check ownership
-    const isOwner = timesheet.employeeId.toString() === (req.user.id).toString();
+    // Check ownership (string compare)
+    const isOwner = timesheet.employeeId === req.user.employeeId;
     if (!isOwner) {
       return res.status(403).json({ 
         success: false,
@@ -310,7 +270,7 @@ const submitTimesheet = async (req, res) => {
     }
 
     // Validate minimum hours requirement
-    if (timesheet.totalHours < 0.5) { // Adjusted minimum hours for flexibility
+    if (timesheet.totalHours < 0.5) {
       return res.status(400).json({ 
         success: false,
         message: 'Timesheet must have at least 0.5 hours of work to submit' 
@@ -322,7 +282,6 @@ const submitTimesheet = async (req, res) => {
     await timesheet.save();
 
     const updatedTimesheet = await Timesheet.findById(id)
-      .populate('employeeId', 'name email employeeId')
       .populate('approverId', 'name email');
 
     res.json({ 
@@ -340,7 +299,7 @@ const submitTimesheet = async (req, res) => {
   }
 };
 
-// Approve/reject timesheet (No changes needed here based on the request)
+// Approve/reject timesheet
 const updateTimesheetStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -373,13 +332,10 @@ const updateTimesheetStatus = async (req, res) => {
       });
     }
 
-    // FIX: Get approver details properly
+    // Get approver details properly (approverId stays ObjectId)
     let approver = null;
-    
-    // Try multiple ways to find the approver
     const approverId = req.user?.id || req.user?._id;
-    
-    if (mongoose.Types.ObjectId.isValid(approverId)) {
+    if (approverId && mongoose.Types.ObjectId.isValid(approverId)) {
       approver = await Employee.findById(approverId);
     }
 
@@ -400,7 +356,6 @@ const updateTimesheetStatus = async (req, res) => {
     await timesheet.save();
 
     const updatedTimesheet = await Timesheet.findById(id)
-      .populate('employeeId', 'name email employeeId')
       .populate('approverId', 'name email');
 
     res.json({ 
@@ -418,7 +373,7 @@ const updateTimesheetStatus = async (req, res) => {
   }
 };
 
-// Get timesheet statistics - UPDATED for dynamic status counting
+// Get timesheet statistics
 const getTimesheetStats = async (req, res) => {
   try {
     const { employeeId, startDate, endDate } = req.query;
@@ -430,9 +385,9 @@ const getTimesheetStats = async (req, res) => {
     const isAdmin = ['admin', 'hr', 'manager', 'employer'].includes(userRole);
     
     if (!isAdmin) {
-      filter.employeeId = req.user.id;
+      filter.employeeId = req.user.employeeId; // string
     } else if (employeeId) {
-      filter.employeeId = employeeId;
+      filter.employeeId = employeeId; // string
     }
 
     // Date range filtering
@@ -448,14 +403,7 @@ const getTimesheetStats = async (req, res) => {
 
     const stats = await Timesheet.aggregate([
       { $match: filter },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-          // Also sum totalHours per status group for richer data (optional but useful)
-          // totalHoursGroup: { $sum: '$totalHours' } 
-        }
-      }
+      { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
     const totalTimesheets = await Timesheet.countDocuments(filter);
@@ -468,7 +416,7 @@ const getTimesheetStats = async (req, res) => {
 
     res.json({
       success: true,
-      statusBreakdown: stats, // This provides dynamic status counts
+      statusBreakdown: stats,
       totalTimesheets,
       totalHours: totalHoursResult[0]?.total || 0
     });
@@ -482,13 +430,12 @@ const getTimesheetStats = async (req, res) => {
   }
 };
 
-// Get timesheet by ID (No changes needed here based on the request)
+// Get timesheet by ID
 const getTimesheetById = async (req, res) => {
   try {
     const { id } = req.params;
 
     const timesheet = await Timesheet.findById(id)
-      .populate('employeeId', 'name email employeeId')
       .populate('approverId', 'name email');
 
     if (!timesheet) {
@@ -501,7 +448,7 @@ const getTimesheetById = async (req, res) => {
     // Check access rights
     const userRole = req.user.role || (req.user.roles && req.user.roles[0]);
     const isAdmin = ['admin', 'hr', 'manager', 'employer'].includes(userRole);
-    const isOwner = timesheet.employeeId._id.toString() === (req.user.id).toString();
+    const isOwner = timesheet.employeeId === req.user.employeeId; // string
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ 
