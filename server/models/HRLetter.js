@@ -60,7 +60,7 @@ const hrLetterSchema = new mongoose.Schema({
     name: {
       type: String,
       required: true,
-      default: 'Cybomb Technologies LLP'
+      default: 'Cybomb Technologies Pvt Ltd.'
     },
     address: {
       line1: String,

@@ -78,7 +78,7 @@ const hrLettersController = {
         responsibilities: responsibilities?.trim() || 'Not specified',
         achievements: achievements?.trim() || 'Not specified',
         companyDetails: companyDetails || {
-          name: 'Cybomb Technologies LLP',
+          name: 'Cybomb Technologies Pvt Ltd.',
           address: {
             line1: '',
             line2: '',

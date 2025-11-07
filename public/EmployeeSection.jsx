@@ -1777,8 +1777,8 @@ const EmployeeSection = () => {
               }`}
             >
               <span className="text-white font-bold text-sm">
-  {employee.name ? employee.name.split(' ').map((n) => n?.[0] || '').join('') : 'US'}
-</span>
+                {employee.name.split(' ').map((n) => n?.[0] || '').join('')}
+              </span>
             </div>
           </div>
 
