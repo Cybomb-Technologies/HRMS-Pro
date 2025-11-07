@@ -1,4 +1,5 @@
-const Announcement = require('../models/Announcements');
+const Announcement = require("../models/Announcements");
+const Employee = require("../models/Employee"); // Add Employee model import
 
 // @desc    Get all announcements with filtering
 // @route   GET /api/announcements
@@ -8,35 +9,40 @@ const getAnnouncements = async (req, res) => {
     const {
       category,
       priority,
-      status = 'all',
+      status = "all",
       search,
       page = 1,
-      limit = 50
+      limit = 50,
     } = req.query;
 
-    console.log('Received request with filters:', { category, priority, status, search });
+    console.log("Received request with filters:", {
+      category,
+      priority,
+      status,
+      search,
+    });
 
     let query = {};
 
     // Build filter query
-    if (category && category !== 'all') {
+    if (category && category !== "all") {
       query.category = category;
     }
-    
-    if (priority && priority !== 'all') {
+
+    if (priority && priority !== "all") {
       query.priority = priority;
     }
-    
-    if (status && status !== 'all') {
+
+    if (status && status !== "all") {
       query.status = status;
     }
 
     // Search functionality
-    if (search && search.trim() !== '') {
+    if (search && search.trim() !== "") {
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } },
-        { author: { $regex: search, $options: 'i' } }
+        { title: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+        { author: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -48,21 +54,23 @@ const getAnnouncements = async (req, res) => {
 
     const total = await Announcement.countDocuments(query);
 
-    console.log(`Found ${announcements.length} announcements out of ${total} total`);
+    console.log(
+      `Found ${announcements.length} announcements out of ${total} total`
+    );
 
     res.json({
       success: true,
       announcements,
       totalPages: Math.ceil(total / limit),
       currentPage: parseInt(page),
-      total
+      total,
     });
   } catch (error) {
-    console.error('Get announcements error:', error);
-    res.status(500).json({ 
+    console.error("Get announcements error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while fetching announcements', 
-      error: error.message 
+      message: "Server error while fetching announcements",
+      error: error.message,
     });
   }
 };
@@ -73,11 +81,11 @@ const getAnnouncements = async (req, res) => {
 const getAnnouncement = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
-    
+
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
@@ -87,14 +95,14 @@ const getAnnouncement = async (req, res) => {
 
     res.json({
       success: true,
-      announcement
+      announcement,
     });
   } catch (error) {
-    console.error('Get announcement error:', error);
-    res.status(500).json({ 
+    console.error("Get announcement error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while fetching announcement', 
-      error: error.message 
+      message: "Server error while fetching announcement",
+      error: error.message,
     });
   }
 };
@@ -107,46 +115,46 @@ const createAnnouncement = async (req, res) => {
     const {
       title,
       content,
-      category = 'general',
-      priority = 'normal',
-      status = 'published',
-      isPinned = false
+      category = "general",
+      priority = "normal",
+      status = "published",
+      isPinned = false,
     } = req.body;
 
-    console.log('Creating announcement with data:', { 
-      title: title?.substring(0, 50) + '...', 
-      category, 
-      priority, 
+    console.log("Creating announcement with data:", {
+      title: title?.substring(0, 50) + "...",
+      category,
+      priority,
       status,
-      isPinned 
+      isPinned,
     });
 
     // Basic validation
     if (!title || !title.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Title is required'
+        message: "Title is required",
       });
     }
 
     if (!content || !content.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Content is required'
+        message: "Content is required",
       });
     }
 
     if (title.trim().length < 5) {
       return res.status(400).json({
         success: false,
-        message: 'Title must be at least 5 characters long'
+        message: "Title must be at least 5 characters long",
       });
     }
 
     if (content.trim().length < 10) {
       return res.status(400).json({
         success: false,
-        message: 'Content must be at least 10 characters long'
+        message: "Content must be at least 10 characters long",
       });
     }
 
@@ -157,34 +165,37 @@ const createAnnouncement = async (req, res) => {
       priority,
       status,
       isPinned,
-      author: req.user?.name || 'Admin'
+      author: req.user?.name || "Admin",
     });
 
     const createdAnnouncement = await announcement.save();
-    
-    console.log('Announcement created successfully with ID:', createdAnnouncement._id);
+
+    console.log(
+      "Announcement created successfully with ID:",
+      createdAnnouncement._id
+    );
 
     res.status(201).json({
       success: true,
-      message: 'Announcement created successfully',
-      announcement: createdAnnouncement
+      message: "Announcement created successfully",
+      announcement: createdAnnouncement,
     });
   } catch (error) {
-    console.error('Create announcement error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
+    console.error("Create announcement error:", error);
+
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
-        errors: errors
+        message: "Validation error",
+        errors: errors,
       });
     }
-    
+
     res.status(500).json({
       success: false,
-      message: 'Server error while creating announcement',
-      error: error.message
+      message: "Server error while creating announcement",
+      error: error.message,
     });
   }
 };
@@ -194,21 +205,14 @@ const createAnnouncement = async (req, res) => {
 // @access  Private (Admin/HR)
 const updateAnnouncement = async (req, res) => {
   try {
-    const {
-      title,
-      content,
-      category,
-      priority,
-      status,
-      isPinned
-    } = req.body;
+    const { title, content, category, priority, status, isPinned } = req.body;
 
     const announcement = await Announcement.findById(req.params.id);
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
@@ -221,30 +225,30 @@ const updateAnnouncement = async (req, res) => {
     if (isPinned !== undefined) announcement.isPinned = isPinned;
 
     const updatedAnnouncement = await announcement.save();
-    
-    console.log('Announcement updated successfully');
+
+    console.log("Announcement updated successfully");
 
     res.json({
       success: true,
-      message: 'Announcement updated successfully',
-      announcement: updatedAnnouncement
+      message: "Announcement updated successfully",
+      announcement: updatedAnnouncement,
     });
   } catch (error) {
-    console.error('Update announcement error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
+    console.error("Update announcement error:", error);
+
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
-        errors: errors
+        message: "Validation error",
+        errors: errors,
       });
     }
-    
+
     res.status(500).json({
       success: false,
-      message: 'Server error while updating announcement',
-      error: error.message
+      message: "Server error while updating announcement",
+      error: error.message,
     });
   }
 };
@@ -257,26 +261,26 @@ const deleteAnnouncement = async (req, res) => {
     const announcement = await Announcement.findById(req.params.id);
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
     await Announcement.deleteOne({ _id: req.params.id });
-    
-    console.log('Announcement deleted successfully:', req.params.id);
-    
-    res.json({ 
+
+    console.log("Announcement deleted successfully:", req.params.id);
+
+    res.json({
       success: true,
-      message: 'Announcement deleted successfully' 
+      message: "Announcement deleted successfully",
     });
   } catch (error) {
-    console.error('Delete announcement error:', error);
-    res.status(500).json({ 
+    console.error("Delete announcement error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while deleting announcement', 
-      error: error.message 
+      message: "Server error while deleting announcement",
+      error: error.message,
     });
   }
 };
@@ -287,31 +291,35 @@ const deleteAnnouncement = async (req, res) => {
 const toggleLike = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
-    const userId = req.body.userId || 'anonymous-user';
+    const userId = req.body.userId || req.user?.employeeId || "anonymous-user";
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
     const isLiked = announcement.toggleLike(userId);
     await announcement.save();
-    
-    console.log(`User ${userId} ${isLiked ? 'liked' : 'unliked'} announcement ${announcement._id}`);
+
+    console.log(
+      `User ${userId} ${isLiked ? "liked" : "unliked"} announcement ${
+        announcement._id
+      }`
+    );
 
     res.json({
       success: true,
       likes: announcement.likes,
-      isLiked
+      isLiked,
     });
   } catch (error) {
-    console.error('Toggle like error:', error);
-    res.status(500).json({ 
+    console.error("Toggle like error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while toggling like', 
-      error: error.message 
+      message: "Server error while toggling like",
+      error: error.message,
     });
   }
 };
@@ -322,87 +330,103 @@ const toggleLike = async (req, res) => {
 const toggleBookmark = async (req, res) => {
   try {
     const announcement = await Announcement.findById(req.params.id);
-    const userId = req.body.userId || 'anonymous-user';
+    const userId = req.body.userId || req.user?.employeeId || "anonymous-user";
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
     const isBookmarked = announcement.toggleBookmark(userId);
     await announcement.save();
-    
-    console.log(`User ${userId} ${isBookmarked ? 'bookmarked' : 'unbookmarked'} announcement ${announcement._id}`);
+
+    console.log(
+      `User ${userId} ${
+        isBookmarked ? "bookmarked" : "unbookmarked"
+      } announcement ${announcement._id}`
+    );
 
     res.json({
       success: true,
-      isBookmarked
+      isBookmarked,
     });
   } catch (error) {
-    console.error('Toggle bookmark error:', error);
-    res.status(500).json({ 
+    console.error("Toggle bookmark error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while toggling bookmark', 
-      error: error.message 
+      message: "Server error while toggling bookmark",
+      error: error.message,
     });
   }
 };
 
-// @desc    Add comment to announcement
+// @desc    Add comment to announcement - FIXED: Proper employee lookup
 // @route   POST /api/announcements/:id/comment
 // @access  Private
 const addComment = async (req, res) => {
   try {
-    const { content, author } = req.body; // author should come from frontend
+    const { content, author, authorId } = req.body;
     const announcement = await Announcement.findById(req.params.id);
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
     if (!content || !content.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Comment content is required'
+        message: "Comment content is required",
       });
     }
 
     if (content.trim().length > 500) {
       return res.status(400).json({
         success: false,
-        message: 'Comment cannot exceed 500 characters'
+        message: "Comment cannot exceed 500 characters",
       });
     }
 
-    // Use the author sent from frontend (employee name)
+    // FIXED: Proper employee lookup - use employeeId field instead of MongoDB _id
+    let employeeName = author;
+    if (authorId) {
+      const employee = await Employee.findOne({ employeeId: authorId });
+      if (employee) {
+        employeeName = employee.name;
+      }
+    }
+
     const comment = {
-      author: author || 'Employee', // Fallback to 'Employee' if not provided
+      author: employeeName || "Employee",
+      authorId: authorId,
       content: content.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     announcement.comments.push(comment);
     const updatedAnnouncement = await announcement.save();
 
-    const newComment = updatedAnnouncement.comments[updatedAnnouncement.comments.length - 1];
-    
-    console.log(`New comment added to announcement ${announcement._id} by ${comment.author}`);
+    const newComment =
+      updatedAnnouncement.comments[updatedAnnouncement.comments.length - 1];
+
+    console.log(
+      `New comment added to announcement ${announcement._id} by ${comment.author}`
+    );
 
     res.json({
       success: true,
-      comment: newComment
+      comment: newComment,
     });
   } catch (error) {
-    console.error('Add comment error:', error);
-    res.status(500).json({ 
+    console.error("Add comment error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while adding comment', 
-      error: error.message 
+      message: "Server error while adding comment",
+      error: error.message,
     });
   }
 };
@@ -418,37 +442,45 @@ const addCommentReaction = async (req, res) => {
     if (!emoji || !emoji.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Emoji is required'
+        message: "Emoji is required",
       });
     }
 
     const announcement = await Announcement.findById(id);
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
-    const hadReaction = announcement.addCommentReaction(commentId, emoji.trim(), userId || 'anonymous-user');
+    const hadReaction = announcement.addCommentReaction(
+      commentId,
+      emoji.trim(),
+      userId || req.user?.employeeId || "anonymous-user"
+    );
     await announcement.save();
 
     const updatedComment = announcement.comments.id(commentId);
-    
-    console.log(`User ${userId} ${hadReaction ? 'removed' : 'added'} reaction ${emoji} to comment ${commentId}`);
+
+    console.log(
+      `User ${userId} ${
+        hadReaction ? "removed" : "added"
+      } reaction ${emoji} to comment ${commentId}`
+    );
 
     res.json({
       success: true,
       comment: updatedComment,
-      hadReaction
+      hadReaction,
     });
   } catch (error) {
-    console.error('Add comment reaction error:', error);
-    res.status(500).json({ 
+    console.error("Add comment reaction error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while adding reaction', 
-      error: error.message 
+      message: "Server error while adding reaction",
+      error: error.message,
     });
   }
 };
@@ -461,27 +493,29 @@ const togglePin = async (req, res) => {
     const announcement = await Announcement.findById(req.params.id);
 
     if (!announcement) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Announcement not found' 
+        message: "Announcement not found",
       });
     }
 
     announcement.isPinned = !announcement.isPinned;
     const updatedAnnouncement = await announcement.save();
 
-    console.log(`Announcement ${announcement._id} pin status: ${updatedAnnouncement.isPinned}`);
+    console.log(
+      `Announcement ${announcement._id} pin status: ${updatedAnnouncement.isPinned}`
+    );
 
-    res.json({ 
+    res.json({
       success: true,
-      isPinned: updatedAnnouncement.isPinned 
+      isPinned: updatedAnnouncement.isPinned,
     });
   } catch (error) {
-    console.error('Toggle pin error:', error);
-    res.status(500).json({ 
+    console.error("Toggle pin error:", error);
+    res.status(500).json({
       success: false,
-      message: 'Server error while toggling pin', 
-      error: error.message 
+      message: "Server error while toggling pin",
+      error: error.message,
     });
   }
 };
@@ -491,32 +525,43 @@ const togglePin = async (req, res) => {
 // @access  Public
 const getEmployeeFeed = async (req, res) => {
   try {
-    const { category, priority, search, bookmarked, page = 1, limit = 20 } = req.query;
+    const {
+      category,
+      priority,
+      search,
+      bookmarked,
+      page = 1,
+      limit = 20,
+    } = req.query;
 
-    console.log('Fetching employee feed with filters:', { category, priority, search, bookmarked });
+    console.log("Fetching employee feed with filters:", {
+      category,
+      priority,
+      search,
+      bookmarked,
+    });
 
-    let query = { status: 'published' };
+    let query = { status: "published" };
 
-    if (category && category !== 'all') {
+    if (category && category !== "all") {
       query.category = category;
     }
-    
-    if (priority && priority !== 'all') {
+
+    if (priority && priority !== "all") {
       query.priority = priority;
     }
 
     // Handle bookmark filtering
-    if (bookmarked && bookmarked !== 'all') {
-      // In a real app, you'd get userId from authentication
-      const userId = 'current-user'; // This should come from auth middleware
+    if (bookmarked && bookmarked !== "all") {
+      const userId = req.query.userId || "current-user";
       query.bookmarkedBy = userId;
     }
 
-    if (search && search.trim() !== '') {
+    if (search && search.trim() !== "") {
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } },
-        { author: { $regex: search, $options: 'i' } }
+        { title: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+        { author: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -528,21 +573,23 @@ const getEmployeeFeed = async (req, res) => {
 
     const total = await Announcement.countDocuments(query);
 
-    console.log(`Employee feed: Found ${announcements.length} published announcements`);
+    console.log(
+      `Employee feed: Found ${announcements.length} published announcements`
+    );
 
     res.json({
       success: true,
       announcements,
       totalPages: Math.ceil(total / limit),
       currentPage: parseInt(page),
-      total
+      total,
     });
   } catch (error) {
-    console.error('Get employee feed error:', error);
+    console.error("Get employee feed error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching employee feed',
-      error: error.message
+      message: "Server error while fetching employee feed",
+      error: error.message,
     });
   }
 };
@@ -553,19 +600,19 @@ const getEmployeeFeed = async (req, res) => {
 const getBookmarkedAnnouncements = async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     const announcements = await Announcement.getBookmarkedByUser(userId);
 
     res.json({
       success: true,
-      announcements
+      announcements,
     });
   } catch (error) {
-    console.error('Get bookmarked announcements error:', error);
+    console.error("Get bookmarked announcements error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching bookmarked announcements',
-      error: error.message
+      message: "Server error while fetching bookmarked announcements",
+      error: error.message,
     });
   }
 };
@@ -576,21 +623,29 @@ const getBookmarkedAnnouncements = async (req, res) => {
 const getAnnouncementStats = async (req, res) => {
   try {
     const total = await Announcement.countDocuments();
-    const published = await Announcement.countDocuments({ status: 'published' });
-    const draft = await Announcement.countDocuments({ status: 'draft' });
-    const archived = await Announcement.countDocuments({ status: 'archived' });
+    const published = await Announcement.countDocuments({
+      status: "published",
+    });
+    const draft = await Announcement.countDocuments({ status: "draft" });
+    const archived = await Announcement.countDocuments({ status: "archived" });
     const pinned = await Announcement.countDocuments({ isPinned: true });
 
     // Calculate total engagement (likes + comments)
-    const announcements = await Announcement.find().select('likes comments');
-    const totalLikes = announcements.reduce((sum, ann) => sum + (ann.likes || 0), 0);
-    const totalComments = announcements.reduce((sum, ann) => sum + (ann.comments?.length || 0), 0);
+    const announcements = await Announcement.find().select("likes comments");
+    const totalLikes = announcements.reduce(
+      (sum, ann) => sum + (ann.likes || 0),
+      0
+    );
+    const totalComments = announcements.reduce(
+      (sum, ann) => sum + (ann.comments?.length || 0),
+      0
+    );
     const totalEngagement = totalLikes + totalComments;
 
     // Get most popular categories
     const categoryStats = await Announcement.aggregate([
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }
+      { $group: { _id: "$category", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
     ]);
 
     res.json({
@@ -604,15 +659,15 @@ const getAnnouncementStats = async (req, res) => {
         totalLikes,
         totalComments,
         totalEngagement,
-        categoryStats
-      }
+        categoryStats,
+      },
     });
   } catch (error) {
-    console.error('Get announcement stats error:', error);
+    console.error("Get announcement stats error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching statistics',
-      error: error.message
+      message: "Server error while fetching statistics",
+      error: error.message,
     });
   }
 };
@@ -630,5 +685,5 @@ module.exports = {
   togglePin,
   getEmployeeFeed,
   getBookmarkedAnnouncements,
-  getAnnouncementStats
+  getAnnouncementStats,
 };

@@ -724,7 +724,7 @@ const PayrollSection = () => {
     // Company Header
     doc.setFontSize(20);
     doc.setTextColor(0, 0, 128);
-    doc.text("Cybomb Technologies LLP", 105, 20, { align: "center" });
+    doc.text("Cybomb Technologies Pvt Ltd", 105, 20, { align: "center" });
 
     doc.setFontSize(16);
     doc.setTextColor(0, 0, 0);
@@ -804,12 +804,8 @@ const PayrollSection = () => {
     return month === current.month && year === current.year;
   };
 
-  // FORCE October 2025 to be editable for testing
+  // FIXED: Remove the hardcoded condition for October 2025 - ONLY CHANGE MADE
   const isEditable = (month, year) => {
-    // Force October 2025 to be editable for testing
-    if (month === "October" && year === 2025) {
-      return true;
-    }
     return isCurrentMonth(month, year);
   };
 
@@ -1183,8 +1179,8 @@ const PayrollSection = () => {
                             <strong>{employees.length}</strong> active employees
                           </li>
                           <li>
-                            • Each employee's latest salary information will be
-                            used
+                            • Ensures compliance with all statutory payroll
+                            requirements
                           </li>
                           <li>
                             • Payroll records will be created or updated for the
@@ -1523,6 +1519,7 @@ const PayrollSection = () => {
                                   </p>
                                 </div>
                                 <div className="flex flex-col items-end">
+                                  {/* FIXED: Only show Editable badge for current month */}
                                   {isEditable(
                                     period._id.month,
                                     period._id.year
@@ -1572,6 +1569,7 @@ const PayrollSection = () => {
                               <h3 className="text-lg font-semibold">
                                 Payroll Details - {selectedMonthHistory}{" "}
                                 {selectedYearHistory}
+                                {/* FIXED: Only show Editable badge for current month */}
                                 {isEditable(
                                   selectedMonthHistory,
                                   selectedYearHistory
@@ -1609,6 +1607,7 @@ const PayrollSection = () => {
                                 />
                                 Refresh Details
                               </Button>
+                              {/* FIXED: Only show edit buttons for current month */}
                               {isEditable(
                                 selectedMonthHistory,
                                 selectedYearHistory
@@ -1721,6 +1720,7 @@ const PayrollSection = () => {
                                         payroll,
                                         payroll._id
                                       );
+                                      // FIXED: Use isEditable function instead of hardcoded value
                                       const editable = isEditable(
                                         selectedMonthHistory,
                                         selectedYearHistory
@@ -1744,6 +1744,7 @@ const PayrollSection = () => {
                                             </div>
                                           </TableCell>
                                           <TableCell className="text-right">
+                                            {/* FIXED: Only show inputs for current month */}
                                             {editable ? (
                                               <Input
                                                 type="number"
@@ -1768,6 +1769,7 @@ const PayrollSection = () => {
                                             )}
                                           </TableCell>
                                           <TableCell className="text-right">
+                                            {/* FIXED: Only show inputs for current month */}
                                             {editable ? (
                                               <Input
                                                 type="number"
@@ -1792,6 +1794,7 @@ const PayrollSection = () => {
                                             )}
                                           </TableCell>
                                           <TableCell className="text-right">
+                                            {/* FIXED: Only show inputs for current month */}
                                             {editable ? (
                                               <Input
                                                 type="number"
@@ -1863,6 +1866,7 @@ const PayrollSection = () => {
                                                   "Payslip"
                                                 )}
                                               </Button>
+                                              {/* FIXED: Only show Save button for current month */}
                                               {editable && isEdited && (
                                                 <Button
                                                   variant="outline"

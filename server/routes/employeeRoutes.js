@@ -14,7 +14,7 @@ const {
   getEmployeeById 
 } = require('../controllers/employeeController.js');
 const { getEmployeeShiftAssignments } = require("../controllers/employeeShiftController.js");
-const upload = require('../middleware/uploadMiddleware');
+const {upload} = require('../middleware/uploadMiddleware');
 
 // Existing routes
 router.get('/', getEmployees);

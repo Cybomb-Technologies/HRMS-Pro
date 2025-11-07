@@ -1,9 +1,14 @@
-// middleware/authMiddleware.js - UPDATED
 const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    // Check multiple possible token locations
+    let token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      // Also check cookies
+      token = req.cookies?.token;
+    }
     
     if (!token) {
       return res.status(401).json({ 
@@ -14,7 +19,6 @@ const authMiddleware = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
     
-    // FIX: Ensure user object has all required properties
     req.user = {
       id: decoded.id || decoded._id,
       _id: decoded._id || decoded.id,
@@ -23,14 +27,13 @@ const authMiddleware = (req, res, next) => {
       teamId: decoded.teamId || 1,
       email: decoded.email || 'user@example.com',
       name: decoded.name || decoded.email?.split('@')[0] || 'User',
-      employeeId: decoded.employeeId // Add this line
+      employeeId: decoded.employeeId
     };
     
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
     
-    // Handle specific JWT errors
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ 
         success: false,
@@ -58,13 +61,21 @@ const authMiddleware = (req, res, next) => {
 const hrMiddleware = (req, res, next) => {
   try {
     const userRole = req.user.role || (req.user.roles && req.user.roles[0]);
-    if (userRole !== 'admin' && userRole !== 'hr' && userRole !== 'employer') {
-      return res.status(403).json({ message: 'Access denied. HR/Admin role required.' });
+    const allowedRoles = ['admin', 'hr', 'employer'];
+    
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied. HR/Admin role required.' 
+      });
     }
     next();
   } catch (error) {
     console.error('HR middleware error:', error);
-    res.status(403).json({ message: 'Access denied' });
+    res.status(403).json({ 
+      success: false,
+      message: 'Access denied' 
+    });
   }
 };
 

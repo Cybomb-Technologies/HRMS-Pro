@@ -22,7 +22,7 @@ import OffboardingSection from "@/pages/OffboardingSection";
 import LeaveSection from "@/pages/LeaveSection";
 import AttendanceSection from "@/pages/AttendanceSection";
 import PayrollSection from "@/pages/PayrollSection";
-import HRLettersSection from "@/pages/HRLettersSection";
+import HRLetters from "@/pages/HRLettersSection";
 import SettingsSection from "@/pages/SettingsSection";
 import AuditSection from "@/pages/AuditSection";
 import ReportsSection from "@/pages/ReportsSection";
@@ -34,7 +34,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { AdminAttendanceProvider } from "@/contexts/AdminAttendanceContext";
 import FeedsSection from "@/pages/FeedsSection";
 import EmployeeLeavePage from "./pages/EmployeeLeavePage";
-import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab"
+import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab";
+import EmployeePayslipsPage from "./pages/EmployeePayslipsPage";
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
@@ -151,11 +152,25 @@ const AppRoutes = () => {
         }
       />
       <Route
+        path="/my-payslips"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              {isEmployee ? (
+                <EmployeePayslipsPage />
+              ) : (
+                <Navigate to="/payroll" replace />
+              )}
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/hr-letters"
         element={
           <ProtectedRoute>
             <Layout>
-              {isEmployee ? <Navigate to="/" replace /> : <HRLettersSection />}
+              {isEmployee ? <Navigate to="/" replace /> : <HRLetters />}
             </Layout>
           </ProtectedRoute>
         }
