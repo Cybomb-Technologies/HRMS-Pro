@@ -1,11 +1,93 @@
 const Onboarding = require('../models/onboardingModel');
 const Employee = require('../models/Employee');
+const mongoose = require('mongoose');
 
 // Get all onboarding records
 const getAllOnboarding = async (req, res) => {
   try {
     const onboardingRecords = await Onboarding.find().sort({ createdAt: -1 });
     res.json(onboardingRecords);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Upload document - FIXED VERSION
+const uploadDocument = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    
+    // Get data from FormData (not req.body when using multipart/form-data)
+    const { stepId, stepName } = req.body;
+    const file = req.file;
+
+    console.log('Upload document request:', {
+      employeeId,
+      stepId,
+      stepName,
+      file: file ? file.originalname : 'No file'
+    });
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    if (!stepId) {
+      return res.status(400).json({ error: 'Step ID is required' });
+    }
+
+    const onboarding = await Onboarding.findOne({ employeeId });
+    if (!onboarding) {
+      return res.status(404).json({ error: 'Onboarding record not found' });
+    }
+
+    const document = {
+      _id: new mongoose.Types.ObjectId(),
+      filename: file.originalname,
+      url: `/uploads/${file.filename}`,
+      uploadedAt: new Date(),
+      status: 'pending'
+    };
+
+    // Add document to the specific step
+    const step = onboarding.steps.find(s => s.stepId === parseInt(stepId));
+    if (!step) {
+      return res.status(404).json({ error: 'Step not found' });
+    }
+
+    if (!step.documents) {
+      step.documents = [];
+    }
+    step.documents.push(document);
+
+    await onboarding.save();
+    
+    console.log('Document uploaded successfully:', document);
+    res.json({ document, message: 'Document uploaded successfully' });
+  } catch (error) {
+    console.error('Upload document error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+// Delete document
+const deleteDocument = async (req, res) => {
+  try {
+    const { employeeId, documentId } = req.params;
+
+    const onboarding = await Onboarding.findOne({ employeeId });
+    if (!onboarding) {
+      return res.status(404).json({ error: 'Onboarding record not found' });
+    }
+
+    // Find and remove document from all steps
+    onboarding.steps.forEach(step => {
+      if (step.documents) {
+        step.documents = step.documents.filter(doc => doc._id.toString() !== documentId);
+      }
+    });
+
+    await onboarding.save();
+    res.json({ message: 'Document deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -194,5 +276,7 @@ module.exports = {
   completeStep,
   updateStepNotes,
   deleteOnboarding,
-  getOnboardingStats
+  getOnboardingStats,
+  uploadDocument,
+  deleteDocument
 };

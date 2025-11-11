@@ -38,6 +38,8 @@ import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab";
 import EmployeePayslipsPage from "./pages/EmployeePayslipsPage";
 import PolicyEmployee from "./pages/EmployeePolicy"
 import EmployeeDashboard from "./components/Dashboard/EmployeeDashboard"
+import EmpOnboarding from "./pages/emponboarding"
+import EmpOffboarding from "./pages/empoffboarding"
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
@@ -133,6 +135,23 @@ const AppRoutes = () => {
             </Layout>
           </ProtectedRoute>
         }
+      />
+      <Route path="/employee-onboarding" 
+      element = {
+      <ProtectedRoute>
+        <Layout>
+          <EmpOnboarding/>
+        </Layout>
+        </ProtectedRoute> 
+      }
+      />
+      <Route path="/employee-offboarding"element = {
+      <ProtectedRoute>
+        <Layout>
+          <EmpOffboarding/>
+        </Layout>
+        </ProtectedRoute> 
+      }
       />
       <Route
         path="/leave"

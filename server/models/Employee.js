@@ -94,12 +94,32 @@ const employeeSchema = new mongoose.Schema({
   role: String,
   zohoRole: String,
   employmentType: { type: String, default: 'Permanent' },
-  status: { type: String, default: 'active' },
+  status: { 
+    type: String, 
+    default: 'active',
+    enum: ['active', 'on-probation', 'inactive', 'suspended'] // Removed 'offboarding' from status
+  },
   employeeStatus: { type: String, default: 'Active' },
   sourceOfHire: { type: String, default: 'Direct' },
   location: String,
   seatingLocation: String,
   reportingManager: String,
+  
+  // Offboarding Information
+  offboardingInProgress: {
+    type: Boolean,
+    default: false
+  },
+  offboardingStartDate: {
+    type: Date
+  },
+  exitDate: {
+    type: Date
+  },
+  offboardingReason: {
+    type: String,
+    enum: ['resignation', 'termination', 'retirement', 'end-of-contract', 'other']
+  },
   
   // Dates
   dateOfJoining: Date,
@@ -201,15 +221,36 @@ employeeSchema.virtual('documentsBySection').get(function() {
   return sections;
 });
 
-// Pre-save middleware to ensure name is populated
+// Virtual to check if employee can login
+employeeSchema.virtual('canLogin').get(function() {
+  // Allow login if:
+  // 1. Status is active or on-probation, OR
+  // 2. Offboarding is in progress (employee needs to participate in offboarding)
+  return (this.status === 'active' || this.status === 'on-probation' || this.offboardingInProgress === true);
+});
+
 employeeSchema.pre('save', function(next) {
   if (!this.name && this.firstName && this.lastName) {
     this.name = `${this.firstName} ${this.lastName}`.trim();
   } else if (!this.name) {
     this.name = this.fullName;
   }
+  
+  // ✅ FIXED: Auto-update employeeStatus based on status and offboarding
+  if (this.status === 'inactive') {
+    this.employeeStatus = 'Inactive';
+    this.offboardingInProgress = false;
+  } else if (this.offboardingInProgress) {
+    this.employeeStatus = 'Offboarding';
+  } else if (this.status === 'active') {
+    this.employeeStatus = 'Active';
+  } else if (this.status === 'on-probation') {
+    this.employeeStatus = 'On Probation';
+  }
+  
   next();
 });
+
 
 // Method to add documents
 employeeSchema.methods.addDocuments = function(documents) {
@@ -249,6 +290,40 @@ employeeSchema.methods.getDocumentsBySection = function(section) {
   return this.documents.filter(doc => doc.section === section && doc.status === 'active');
 };
 
+// Method to start offboarding process
+employeeSchema.methods.startOffboarding = function(reason, lastWorkingDay) {
+  this.offboardingInProgress = true;
+  this.offboardingStartDate = new Date();
+  this.offboardingReason = reason;
+  this.exitDate = lastWorkingDay;
+  
+  return this.save();
+};
+
+// Method to complete offboarding process
+employeeSchema.methods.completeOffboarding = function() {
+  this.offboardingInProgress = false;
+  this.status = 'inactive';
+  this.employeeStatus = 'Inactive';
+  this.exitDate = this.exitDate || new Date();
+  
+  return this.save();
+};
+
+// Method to cancel offboarding process
+employeeSchema.methods.cancelOffboarding = function() {
+  this.offboardingInProgress = false;
+  this.offboardingReason = undefined;
+  this.exitDate = undefined;
+  
+  // Restore previous status if it was changed
+  if (this.status !== 'active' && this.status !== 'on-probation') {
+    this.status = 'active';
+  }
+  
+  return this.save();
+};
+
 // Static method to find by employeeId
 employeeSchema.statics.findByEmployeeId = function(employeeId) {
   return this.findOne({ employeeId });
@@ -259,9 +334,24 @@ employeeSchema.statics.findActive = function() {
   return this.find({ status: 'active' });
 };
 
+// Static method to find employees in offboarding process
+employeeSchema.statics.findInOffboarding = function() {
+  return this.find({ offboardingInProgress: true });
+};
+
 // Static method to find employees by document status
 employeeSchema.statics.findByDocumentStatus = function(section, status = true) {
   return this.find({ [`documentUploadStatus.${section}`]: status });
+};
+
+// Static method to find employees who can login
+employeeSchema.statics.findCanLogin = function() {
+  return this.find({
+    $or: [
+      { status: { $in: ['active', 'on-probation'] } },
+      { offboardingInProgress: true }
+    ]
+  });
 };
 
 // Instance method to get complete profile
@@ -279,8 +369,11 @@ employeeSchema.methods.getCompleteProfile = function() {
       role: this.role,
       employmentType: this.employmentType,
       status: this.status,
+      employeeStatus: this.employeeStatus,
+      offboardingInProgress: this.offboardingInProgress,
+      offboardingStartDate: this.offboardingStartDate,
+      exitDate: this.exitDate,
       dateOfJoining: this.dateOfJoining,
-      
     },
     personalInfo: {
       dateOfBirth: this.dateOfBirth,
@@ -293,8 +386,16 @@ employeeSchema.methods.getCompleteProfile = function() {
       personalMobile: this.personalMobile,
       location: this.location
     },
-    documentStatus: this.documentUploadStatus
+    documentStatus: this.documentUploadStatus,
+    loginEligibility: this.canLogin
   };
 };
+
+// Index for better query performance
+employeeSchema.index({ employeeId: 1 });
+employeeSchema.index({ email: 1 });
+employeeSchema.index({ status: 1 });
+employeeSchema.index({ offboardingInProgress: 1 });
+employeeSchema.index({ department: 1 });
 
 module.exports = mongoose.model('Employee', employeeSchema);
