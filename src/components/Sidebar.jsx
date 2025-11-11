@@ -58,15 +58,27 @@ const allMenuItems = [
   },
   {
     icon: UserPlus,
-    label: "Onboarding",
+    label: "Manage Onboarding",
     path: "/onboarding",
     roles: ["admin", "hr"],
   },
   {
+    icon: UserPlus,
+    label: "Onboarding",
+    path: "/employee-onboarding",
+    roles: ["employee", "hr"],
+  },
+  {
     icon: UserMinus,
-    label: "Offboarding",
+    label: "Manage Offboarding",
     path: "/offboarding",
     roles: ["admin", "hr"],
+  },
+   {
+    icon: UserMinus,
+    label: "Offboarding",
+    path: "/employee-offboarding",
+    roles: ["employee", "hr"],
   },
   {
     icon: Calendar,
@@ -133,6 +145,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
     if (user?.role === "employee") {
       return ![
         "/teams",
+        "/profile",
         "/organization",
         "/employees",
         "/onboarding",

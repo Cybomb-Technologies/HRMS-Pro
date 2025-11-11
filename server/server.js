@@ -64,5 +64,19 @@ app.use('/api/employee-profiles', employeeProfileRoutes);
 app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
 app.use("/api/organization", require("./routes/organizationRoutes.js"));
 app.use("/api/policies", require("./routes/policies"));
+app.use("/api/settings", require("./routes/settingsRoutes"));
+
+// Add the missing endpoint that your frontend is looking for
+app.get("/api/settings/organization", (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      roles: [],
+      companySettings: {},
+      availablePages: []
+    }
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
