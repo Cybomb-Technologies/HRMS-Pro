@@ -90,13 +90,13 @@ const allMenuItems = [
     icon: Clock,
     label: "Attendance",
     path: "/attendance",
-    roles: ["hr"],
+    roles: ["hr", "employee"],
   },
   {
     icon: Clock,
     label: "Attendance details",
     path: "/attendance-details",
-    roles: ["admin", "hr", "employee"],
+    roles: ["admin", "hr"],
   },
   {
     icon: DollarSign,
@@ -147,6 +147,7 @@ const Sidebar = ({ isOpen, onToggle }) => {
         "/teams",
         "/profile",
         "/organization",
+        "/attendance-details",
         "/employees",
         "/onboarding",
         "/offboarding",

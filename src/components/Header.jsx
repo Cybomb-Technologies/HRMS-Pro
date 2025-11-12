@@ -59,21 +59,82 @@ const Header = ({ onMenuClick }) => {
   const [profilePicture, setProfilePicture] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState({
+    timezone: "Asia/Calcutta",
+    currency: "AED (AED)",
+    companyName: "cybomb"
+  });
 
-  // FIXED: Get profile picture URL function (same as EmployeeSection)
+  // FIXED: Get token from localStorage directly to ensure it's available
+  const getAuthToken = () => {
+    return localStorage.getItem("hrms_token");
+  };
+
+  // FIXED: Fetch company timezone and info from database with proper token handling
+  const fetchCompanyInfo = async () => {
+    const token = getAuthToken();
+    
+    if (!token) {
+      console.warn("No authentication token found");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:5000/api/settings/company/timezone", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include' // Include cookies if needed
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setCompanyInfo({
+            timezone: data.data.timezone,
+            currency: data.data.currency,
+            companyName: data.data.companyName
+          });
+        }
+      } else if (response.status === 401) {
+        console.error("Authentication failed - token may be expired");
+        // Don't logout here, just use fallback values
+      }
+    } catch (error) {
+      console.error("Error fetching company info:", error);
+      // Fallback to default values if fetch fails
+      setCompanyInfo({
+        timezone: "Asia/Calcutta",
+        currency: "AED (AED)",
+        companyName: "cybomb"
+      });
+    }
+  };
+
+  // FIXED: Get profile picture URL function
   const getProfilePictureUrl = (profilePicture) => {
     if (!profilePicture) return null;
     if (profilePicture.startsWith('http')) return profilePicture;
     return `http://localhost:5000${profilePicture}`;
   };
 
-  // FIXED: Fetch profile picture from database - UPDATED LOGIC
+  // FIXED: Fetch profile picture from database
   const fetchProfilePicture = async () => {
     if (!user?.email) return;
 
+    const token = getAuthToken();
+    if (!token) return;
+
     try {
       // First try to find employee by email
-      const employeesResponse = await fetch("http://localhost:5000/api/employees");
+      const employeesResponse = await fetch("http://localhost:5000/api/employees", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
       if (employeesResponse.ok) {
         const employees = await employeesResponse.json();
         const employee = employees.find((emp) => emp.email === user.email);
@@ -105,6 +166,9 @@ const Header = ({ onMenuClick }) => {
       return null;
     }
 
+    const token = getAuthToken();
+    if (!token) return null;
+
     // For User collection admins (like admin@company.com) - USE _id
     if (
       user._id &&
@@ -115,7 +179,13 @@ const Header = ({ onMenuClick }) => {
 
     // For Employee collection users - try to find by email
     try {
-      const response = await fetch("http://localhost:5000/api/employees");
+      const response = await fetch("http://localhost:5000/api/employees", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
       if (response.ok) {
         const employees = await response.json();
         const employee = employees.find((emp) => emp.email === user.email);
@@ -134,8 +204,11 @@ const Header = ({ onMenuClick }) => {
     return fallbackId;
   };
 
-  // Load notifications from backend
+  // FIXED: Load notifications from backend with proper authentication
   const loadNotifications = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+
     let employeeId = currentEmployeeId;
 
     // If we don't have employeeId yet, try to get it
@@ -230,7 +303,7 @@ const Header = ({ onMenuClick }) => {
     }
   };
 
-  // Global search functionality
+  // FIXED: Global search functionality with authentication
   const handleSearch = async (query) => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -238,20 +311,30 @@ const Header = ({ onMenuClick }) => {
       return;
     }
 
+    const token = getAuthToken();
+    if (!token) return;
+
     try {
-      const response = await fetch(`http://localhost:5000/api/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`http://localhost:5000/api/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
       if (response.ok) {
         const results = await response.json();
         setSearchResults(results);
         setShowSearchResults(true);
+      } else {
+        console.error("Search API error:", response.status);
+        setSearchResults([]);
+        setShowSearchResults(false);
       }
     } catch (error) {
       console.error("Search error:", error);
-      toast({
-        title: "Search Error",
-        description: "Failed to perform search",
-        variant: "destructive",
-      });
+      setSearchResults([]);
+      setShowSearchResults(false);
     }
   };
 
@@ -280,29 +363,37 @@ const Header = ({ onMenuClick }) => {
     }
   };
 
-  const handleSearchItemClick = (item) => {
-    // Navigate based on item type
-    switch (item.type) {
-      case 'employee':
-        navigate(`/employees/${item.id}`);
-        break;
-      case 'department':
-        navigate(`/organization?dept=${item.id}`);
-        break;
-      case 'document':
-        navigate(`/documents/${item.id}`);
-        break;
-      default:
-        navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-    }
+  // const handleSearchItemClick = (item) => {
+  //   // Navigate based on item type
+  //   switch (item.type) {
+  //     case 'employee':
+  //       navigate(`/employees/${item.id}`);
+  //       break;
+  //     case 'department':
+  //       navigate(`/organization?dept=${item.id}`);
+  //       break;
+  //     case 'document':
+  //       navigate(`/documents/${item.id}`);
+  //       break;
+  //     default:
+  //       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+  //   }
     
-    setShowSearchResults(false);
-    setSearchQuery("");
-  };
+  //   setShowSearchResults(false);
+  //   setSearchQuery("");
+  // };
 
-  // Load profile picture and notifications on component mount
+  // FIXED: Load profile picture, company info, and notifications on component mount
   useEffect(() => {
     const initializeData = async () => {
+      // Check if we have a token before making API calls
+      const token = getAuthToken();
+      if (!token) {
+        console.warn("No authentication token available");
+        return;
+      }
+
+      await fetchCompanyInfo();
       await fetchProfilePicture();
       await loadNotifications();
     };
@@ -316,8 +407,11 @@ const Header = ({ onMenuClick }) => {
 
   // Close search results when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => {
-      setShowSearchResults(false);
+    const handleClickOutside = (event) => {
+      const searchContainer = document.querySelector('.search-container');
+      if (searchContainer && !searchContainer.contains(event.target)) {
+        setShowSearchResults(false);
+      }
     };
 
     document.addEventListener('click', handleClickOutside);
@@ -341,7 +435,7 @@ const Header = ({ onMenuClick }) => {
             <div className="flex items-center space-x-2">
               <Globe className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
-                {tenant?.country} • {tenant?.timezone}
+                {companyInfo.companyName} • {companyInfo.timezone}
               </span>
             </div>
             {user?.role !== "employee" && (
@@ -373,7 +467,7 @@ const Header = ({ onMenuClick }) => {
         </div>
 
         {/* Global Search Bar - Now Functional */}
-        <div className="flex-1 max-w-md mx-4 relative">
+        {/* <div className="flex-1 max-w-md mx-4 relative search-container">
           <form onSubmit={handleSearchSubmit}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -383,44 +477,79 @@ const Header = ({ onMenuClick }) => {
                 className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background focus:ring-2 focus:ring-ring focus:border-transparent"
                 value={searchQuery}
                 onChange={handleSearchChange}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (searchResults.length > 0) {
+                    setShowSearchResults(true);
+                  }
+                }}
               />
             </div>
           </form>
 
-          {/* Search Results Dropdown */}
-          {showSearchResults && searchResults.length > 0 && (
-            <div 
-              className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {searchResults.map((item) => (
-                <div
-                  key={`${item.type}-${item.id}`}
-                  className="p-3 hover:bg-accent cursor-pointer border-b border-border last:border-b-0"
-                  onClick={() => handleSearchItemClick(item)}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-shrink-0">
-                      {item.type === 'employee' && <User className="h-4 w-4 text-blue-500" />}
-                      {item.type === 'department' && <Building2 className="h-4 w-4 text-green-500" />}
-                      {item.type === 'document' && <BookOpen className="h-4 w-4 text-purple-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {item.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {item.type} • {item.department || 'General'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+{showSearchResults && searchResults.length > 0 && (
+  <div 
+    className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
+    onClick={(e) => e.stopPropagation()}
+  >
+    {searchResults.map((item) => {
+      // DEBUG: Log each item to see the actual structure
+      console.log('Search result item:', item);
+      
+      // FIX: Robust name handling
+      const getDisplayName = (item) => {
+        // If name field exists and is not empty
+        if (item.name && item.name.trim() !== '') {
+          return item.name;
+        }
+        // If we have both first and last name
+        if (item.firstName && item.lastName) {
+          return `${item.firstName} ${item.lastName}`.trim();
+        }
+        // If only first name
+        if (item.firstName) {
+          return item.firstName;
+        }
+        // If only last name
+        if (item.lastName) {
+          return item.lastName;
+        }
+        // Fallback
+        return 'Unknown';
+      };
 
-          {/* No Results Message */}
+      const displayName = getDisplayName(item);
+      
+      return (
+        <div
+          key={`${item.type}-${item.id}`}
+          className="p-3 hover:bg-accent cursor-pointer border-b border-border last:border-b-0"
+          onClick={() => handleSearchItemClick(item)}
+        >
+          <div className="flex items-center space-x-3">
+            <div className="flex-shrink-0">
+              {item.type === 'employee' && <User className="h-4 w-4 text-blue-500" />}
+              {item.type === 'department' && <Building2 className="h-4 w-4 text-green-500" />}
+              {item.type === 'document' && <BookOpen className="h-4 w-4 text-purple-500" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {displayName}
+              </p>
+              <p className="text-xs text-muted-foreground capitalize">
+                {item.type} • {item.department || item.description || item.designation || 'General'}
+              </p>
+              {item.email && (
+                <p className="text-xs text-muted-foreground truncate">{item.email}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
+    
           {showSearchResults && searchQuery.length > 2 && searchResults.length === 0 && (
             <div 
               className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 p-4"
@@ -431,7 +560,7 @@ const Header = ({ onMenuClick }) => {
               </p>
             </div>
           )}
-        </div>
+        </div> */}
 
         <div className="flex items-center space-x-4">
           <DropdownMenu>

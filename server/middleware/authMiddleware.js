@@ -1,7 +1,6 @@
 // middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');       // ✅ add this
-// const Employee = require('../models/Employee'); // not needed for backfill
+const User = require('../models/User');
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -13,6 +12,16 @@ const authMiddleware = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+
+    // Check if 2FA verification is still valid
+    if (decoded.twoFactorExpiresAt && Date.now() > decoded.twoFactorExpiresAt) {
+      // 2FA verification has expired
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Two-factor authentication verification has expired. Please verify again.',
+        code: '2FA_EXPIRED'
+      });
+    }
 
     // ✅ Backfill employeeId from User when missing
     if (!decoded.employeeId && decoded.id) {
@@ -33,6 +42,8 @@ const authMiddleware = async (req, res, next) => {
       email: decoded.email || 'user@example.com',
       name: decoded.name || decoded.email?.split('@')[0] || 'User',
       employeeId: decoded.employeeId || null,
+      twoFactorVerified: decoded.twoFactorVerifiedAt ? true : false,
+      twoFactorExpiresAt: decoded.twoFactorExpiresAt || null
     };
 
     next();
@@ -43,6 +54,9 @@ const authMiddleware = async (req, res, next) => {
     }
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ success: false, message: 'Invalid token', code: 'INVALID_TOKEN' });
+    }
+    if (error.message === '2FA_EXPIRED') {
+      return res.status(401).json({ success: false, message: 'Two-factor authentication verification has expired', code: '2FA_EXPIRED' });
     }
     res.status(401).json({ success: false, message: 'Token is not valid', code: 'AUTH_ERROR' });
   }

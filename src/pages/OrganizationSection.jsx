@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet';
 import { Card } from '@/components/ui/card';
@@ -33,6 +33,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Building2,
   Plus,
   Target,
@@ -43,103 +51,60 @@ import {
   Users,
   Clock,
   User,
-  Eye
+  Eye,
+  Search
 } from 'lucide-react';
 
-// Timezone data - comprehensive list of world timezones
-const timezones = [
-  'UTC',
-  'Africa/Abidjan', 'Africa/Accra', 'Africa/Addis_Ababa', 'Africa/Algiers', 'Africa/Asmara',
-  'Africa/Bamako', 'Africa/Bangui', 'Africa/Banjul', 'Africa/Bissau', 'Africa/Blantyre',
-  'Africa/Brazzaville', 'Africa/Bujumbura', 'Africa/Cairo', 'Africa/Casablanca', 'Africa/Ceuta',
-  'Africa/Conakry', 'Africa/Dakar', 'Africa/Dar_es_Salaam', 'Africa/Djibouti', 'Africa/Douala',
-  'Africa/El_Aaiun', 'Africa/Freetown', 'Africa/Gaborone', 'Africa/Harare', 'Africa/Johannesburg',
-  'Africa/Juba', 'Africa/Kampala', 'Africa/Khartoum', 'Africa/Kigali', 'Africa/Kinshasa',
-  'Africa/Lagos', 'Africa/Libreville', 'Africa/Lome', 'Africa/Luanda', 'Africa/Lubumbashi',
-  'Africa/Lusaka', 'Africa/Malabo', 'Africa/Maputo', 'Africa/Maseru', 'Africa/Mbabane',
-  'Africa/Mogadishu', 'Africa/Monrovia', 'Africa/Nairobi', 'Africa/Ndjamena', 'Africa/Niamey',
-  'Africa/Nouakchott', 'Africa/Ouagadougou', 'Africa/Porto-Novo', 'Africa/Sao_Tome', 'Africa/Tripoli',
-  'Africa/Tunis', 'Africa/Windhoek', 'America/Adak', 'America/Anchorage', 'America/Anguilla',
-  'America/Antigua', 'America/Araguaina', 'America/Argentina/Buenos_Aires', 'America/Argentina/Catamarca',
-  'America/Argentina/Cordoba', 'America/Argentina/Jujuy', 'America/Argentina/La_Rioja', 'America/Argentina/Mendoza',
-  'America/Argentina/Rio_Gallegos', 'America/Argentina/Salta', 'America/Argentina/San_Juan', 'America/Argentina/San_Luis',
-  'America/Argentina/Tucuman', 'America/Argentina/Ushuaia', 'America/Aruba', 'America/Asuncion', 'America/Atikokan',
-  'America/Bahia', 'America/Bahia_Banderas', 'America/Barbados', 'America/Belem', 'America/Belize',
-  'America/Blanc-Sablon', 'America/Boa_Vista', 'America/Bogota', 'America/Boise', 'America/Cambridge_Bay',
-  'America/Campo_Grande', 'America/Cancun', 'America/Caracas', 'America/Cayenne', 'America/Cayman',
-  'America/Chicago', 'America/Chihuahua', 'America/Costa_Rica', 'America/Creston', 'America/Cuiaba',
-  'America/Curacao', 'America/Danmarkshavn', 'America/Dawson', 'America/Dawson_Creek', 'America/Denver',
-  'America/Detroit', 'America/Dominica', 'America/Edmonton', 'America/Eirunepe', 'America/El_Salvador',
-  'America/Fort_Nelson', 'America/Fortaleza', 'America/Glace_Bay', 'America/Godthab', 'America/Goose_Bay',
-  'America/Grand_Turk', 'America/Grenada', 'America/Guadeloupe', 'America/Guatemala', 'America/Guayaquil',
-  'America/Guyana', 'America/Halifax', 'America/Havana', 'America/Hermosillo', 'America/Indiana/Indianapolis',
-  'America/Indiana/Knox', 'America/Indiana/Marengo', 'America/Indiana/Petersburg', 'America/Indiana/Tell_City',
-  'America/Indiana/Vevay', 'America/Indiana/Vincennes', 'America/Indiana/Winamac', 'America/Inuvik',
-  'America/Iqaluit', 'America/Jamaica', 'America/Juneau', 'America/Kentucky/Louisville', 'America/Kentucky/Monticello',
-  'America/Kralendijk', 'America/La_Paz', 'America/Lima', 'America/Los_Angeles', 'America/Lower_Princes',
-  'America/Maceio', 'America/Managua', 'America/Manaus', 'America/Marigot', 'America/Martinique',
-  'America/Matamoros', 'America/Mazatlan', 'America/Menominee', 'America/Merida', 'America/Metlakatla',
-  'America/Mexico_City', 'America/Miquelon', 'America/Moncton', 'America/Monterrey', 'America/Montevideo',
-  'America/Montserrat', 'America/Nassau', 'America/New_York', 'America/Nipigon', 'America/Nome',
-  'America/Noronha', 'America/North_Dakota/Beulah', 'America/North_Dakota/Center', 'America/North_Dakota/New_Salem',
-  'America/Ojinaga', 'America/Panama', 'America/Pangnirtung', 'America/Paramaribo', 'America/Phoenix',
-  'America/Port-au-Prince', 'America/Port_of_Spain', 'America/Porto_Velho', 'America/Puerto_Rico',
-  'America/Punta_Arenas', 'America/Rainy_River', 'America/Rankin_Inlet', 'America/Recife', 'America/Regina',
-  'America/Resolute', 'America/Rio_Branco', 'America/Santarem', 'America/Santiago', 'America/Santo_Domingo',
-  'America/Sao_Paulo', 'America/Scoresbysund', 'America/Sitka', 'America/St_Barthelemy', 'America/St_Johns',
-  'America/St_Kitts', 'America/St_Lucia', 'America/St_Thomas', 'America/St_Vincent', 'America/Swift_Current',
-  'America/Tegucigalpa', 'America/Thule', 'America/Thunder_Bay', 'America/Tijuana', 'America/Toronto',
-  'America/Tortola', 'America/Vancouver', 'America/Whitehorse', 'America/Winnipeg', 'America/Yakutat',
-  'America/Yellowknife', 'Antarctica/Casey', 'Antarctica/Davis', 'Antarctica/DumontDUrville', 'Antarctica/Macquarie',
-  'Antarctica/Mawson', 'Antarctica/McMurdo', 'Antarctica/Palmer', 'Antarctica/Rothera', 'Antarctica/Syowa',
-  'Antarctica/Troll', 'Antarctica/Vostok', 'Arctic/Longyearbyen', 'Asia/Aden', 'Asia/Almaty', 'Asia/Amman',
-  'Asia/Anadyr', 'Asia/Aqtau', 'Asia/Aqtobe', 'Asia/Ashgabat', 'Asia/Atyrau', 'Asia/Baghdad', 'Asia/Bahrain',
-  'Asia/Baku', 'Asia/Bangkok', 'Asia/Barnaul', 'Asia/Beirut', 'Asia/Bishkek', 'Asia/Brunei', 'Asia/Chita',
-  'Asia/Choibalsan', 'Asia/Colombo', 'Asia/Damascus', 'Asia/Dhaka', 'Asia/Dili', 'Asia/Dubai', 'Asia/Dushanbe',
-  'Asia/Famagusta', 'Asia/Gaza', 'Asia/Hebron', 'Asia/Ho_Chi_Minh', 'Asia/Hong_Kong', 'Asia/Hovd', 'Asia/Irkutsk',
-  'Asia/Jakarta', 'Asia/Jayapura', 'Asia/Jerusalem', 'Asia/Kabul', 'Asia/Kamchatka', 'Asia/Karachi', 'Asia/Kathmandu',
-  'Asia/Khandyga', 'Asia/Kolkata', 'Asia/Krasnoyarsk', 'Asia/Kuala_Lumpur', 'Asia/Kuching', 'Asia/Kuwait',
-  'Asia/Macau', 'Asia/Magadan', 'Asia/Makassar', 'Asia/Manila', 'Asia/Muscat', 'Asia/Nicosia', 'Asia/Novokuznetsk',
-  'Asia/Novosibirsk', 'Asia/Omsk', 'Asia/Oral', 'Asia/Phnom_Penh', 'Asia/Pontianak', 'Asia/Pyongyang', 'Asia/Qatar',
-  'Asia/Qostanay', 'Asia/Qyzylorda', 'Asia/Riyadh', 'Asia/Sakhalin', 'Asia/Samarkand', 'Asia/Seoul', 'Asia/Shanghai',
-  'Asia/Singapore', 'Asia/Srednekolymsk', 'Asia/Taipei', 'Asia/Tashkent', 'Asia/Tbilisi', 'Asia/Tehran', 'Asia/Thimphu',
-  'Asia/Tokyo', 'Asia/Tomsk', 'Asia/Ulaanbaatar', 'Asia/Urumqi', 'Asia/Ust-Nera', 'Asia/Vientiane', 'Asia/Vladivostok',
-  'Asia/Yakutsk', 'Asia/Yangon', 'Asia/Yekaterinburg', 'Asia/Yerevan', 'Atlantic/Azores', 'Atlantic/Bermuda',
-  'Atlantic/Canary', 'Atlantic/Cape_Verde', 'Atlantic/Faroe', 'Atlantic/Madeira', 'Atlantic/Reykjavik',
-  'Atlantic/South_Georgia', 'Atlantic/St_Helena', 'Atlantic/Stanley', 'Australia/Adelaide', 'Australia/Brisbane',
-  'Australia/Broken_Hill', 'Australia/Currie', 'Australia/Darwin', 'Australia/Eucla', 'Australia/Hobart',
-  'Australia/Lindeman', 'Australia/Lord_Howe', 'Australia/Melbourne', 'Australia/Perth', 'Australia/Sydney',
-  'Europe/Amsterdam', 'Europe/Andorra', 'Europe/Astrakhan', 'Europe/Athens', 'Europe/Belgrade', 'Europe/Berlin',
-  'Europe/Bratislava', 'Europe/Brussels', 'Europe/Bucharest', 'Europe/Budapest', 'Europe/Busingen', 'Europe/Chisinau',
-  'Europe/Copenhagen', 'Europe/Dublin', 'Europe/Gibraltar', 'Europe/Guernsey', 'Europe/Helsinki', 'Europe/Isle_of_Man',
-  'Europe/Istanbul', 'Europe/Jersey', 'Europe/Kaliningrad', 'Europe/Kiev', 'Europe/Kirov', 'Europe/Lisbon',
-  'Europe/Ljubljana', 'Europe/London', 'Europe/Luxembourg', 'Europe/Madrid', 'Europe/Malta', 'Europe/Mariehamn',
-  'Europe/Minsk', 'Europe/Monaco', 'Europe/Moscow', 'Europe/Oslo', 'Europe/Paris', 'Europe/Podgorica', 'Europe/Prague',
-  'Europe/Riga', 'Europe/Rome', 'Europe/Samara', 'Europe/San_Marino', 'Europe/Sarajevo', 'Europe/Saratov',
-  'Europe/Simferopol', 'Europe/Skopje', 'Europe/Sofia', 'Europe/Stockholm', 'Europe/Tallinn', 'Europe/Tirane',
-  'Europe/Ulyanovsk', 'Europe/Uzhgorod', 'Europe/Vaduz', 'Europe/Vatican', 'Europe/Vienna', 'Europe/Vilnius',
-  'Europe/Volgograd', 'Europe/Warsaw', 'Europe/Zagreb', 'Europe/Zaporozhye', 'Europe/Zurich', 'Indian/Antananarivo',
-  'Indian/Chagos', 'Indian/Christmas', 'Indian/Cocos', 'Indian/Comoro', 'Indian/Kerguelen', 'Indian/Mahe',
-  'Indian/Maldives', 'Indian/Mauritius', 'Indian/Mayotte', 'Indian/Reunion', 'Pacific/Apia', 'Pacific/Auckland',
-  'Pacific/Bougainville', 'Pacific/Chatham', 'Pacific/Chuuk', 'Pacific/Easter', 'Pacific/Efate', 'Pacific/Enderbury',
-  'Pacific/Fakaofo', 'Pacific/Fiji', 'Pacific/Funafuti', 'Pacific/Galapagos', 'Pacific/Gambier', 'Pacific/Guadalcanal',
-  'Pacific/Guam', 'Pacific/Honolulu', 'Pacific/Kiritimati', 'Pacific/Kosrae', 'Pacific/Kwajalein', 'Pacific/Majuro',
-  'Pacific/Marquesas', 'Pacific/Midway', 'Pacific/Nauru', 'Pacific/Niue', 'Pacific/Norfolk', 'Pacific/Noumea',
-  'Pacific/Pago_Pago', 'Pacific/Palau', 'Pacific/Pitcairn', 'Pacific/Pohnpei', 'Pacific/Port_Moresby', 'Pacific/Rarotonga',
-  'Pacific/Saipan', 'Pacific/Tahiti', 'Pacific/Tarawa', 'Pacific/Tongatapu', 'Pacific/Wake', 'Pacific/Wallis'
-];
-
 const getProfilePictureUrl = (profilePicture) => {
-    if (!profilePicture) return null;
-    if (profilePicture.startsWith('http')) return profilePicture;
-    return `http://localhost:5000${profilePicture}`;
-  };
+  if (!profilePicture) return null;
+  if (profilePicture.startsWith('http')) return profilePicture;
+  return `http://localhost:5000${profilePicture}`;
+};
+
+// Timezone utility functions
+const getTimezones = () => {
+  if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) {
+    try {
+      const timeZones = Intl.supportedValuesOf('timeZone');
+      return timeZones.map(zone => {
+        const date = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          timeZoneName: 'shortOffset'
+        });
+        const offset = formatter.formatToParts(date)
+          .find(part => part.type === 'timeZoneName')?.value || 'UTC';
+        return {
+          value: zone,
+          label: `(${offset}) ${zone.replace(/_/g, ' ').replace('/', ' / ')}`,
+        };
+      }).sort((a, b) => a.label.localeCompare(b.label));
+    } catch (err) {
+      return [{ value: 'UTC', label: 'UTC' }];
+    }
+  }
+  return [{ value: 'UTC', label: 'UTC' }];
+};
+
 const OrganizationForm = ({ item, type, employees, departments, onSave, onCancel }) => {
   const [formData, setFormData] = useState(item || {});
   const [loading, setLoading] = useState(false);
+  const [timezoneSearch, setTimezoneSearch] = useState('');
+
+  // Generate timezones list
+  const allTimezones = useMemo(getTimezones, []);
+  
+  // Filter timezones based on search input
+  const filteredTimezones = allTimezones.filter(tz => 
+    tz.label.toLowerCase().includes(timezoneSearch.toLowerCase())
+  );
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -152,9 +117,11 @@ const OrganizationForm = ({ item, type, employees, departments, onSave, onCancel
       setLoading(false);
     }
   };
-useEffect(() => {
-  console.log('Employees state updated:', employees);
-}, [employees]);
+
+  useEffect(() => {
+    console.log('Employees state updated:', employees);
+  }, [employees]);
+
   const renderFields = () => {
     switch (type) {
       case 'departments':
@@ -184,34 +151,33 @@ useEffect(() => {
               />
             </div>
             <div className="space-y-2">
-  <Label htmlFor="head">Department Head</Label>
-  <select
-    id="head"
-    name="head"
-    value={formData.head || ''}
-    onChange={handleChange}
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-  >
-    <option value="">Select Department Head</option>
-    {console.log('Employees data:', employees)} {/* Debug line */}
-    {employees.map(employee => {
-  // Safely access properties with fallbacks
-  const employeeName = employee.name || employee.fullName || employee.employeeName || 'Unknown';
-  const employeeId = employee.employeeId || employee.id || employee._id || 'N/A';
-  const employeeDesignation = employee.designation || employee.role || employee.title || 'N/A';
-  
-  return (
-    <option key={employee._id || employee.id} value={employeeId}>
-      {employeeName} - {employeeId} ({employeeDesignation})
-    </option>
-  );
-})}
-  </select>
-  <p className="text-xs text-gray-500">
-    Select an employee by their Employee ID
-  </p>
-</div>
-         
+              <Label htmlFor="head">Department Head</Label>
+              <select
+                id="head"
+                name="head"
+                value={formData.head || ''}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Department Head</option>
+                {console.log('Employees data:', employees)}
+                {employees.map(employee => {
+                  const employeeName = employee.name || employee.fullName || employee.employeeName || 'Unknown';
+                  const employeeId = employee.employeeId || employee.id || employee._id || 'N/A';
+                  const employeeDesignation = employee.designation || employee.role || employee.title || 'N/A';
+                  
+                  return (
+                    <option key={employee._id || employee.id} value={employeeId}>
+                      {employeeName} - {employeeId} ({employeeDesignation})
+                    </option>
+                  );
+                })}
+              </select>
+              <p className="text-xs text-gray-500">
+                Select an employee by their Employee ID
+              </p>
+            </div>
+           
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input 
@@ -348,19 +314,43 @@ useEffect(() => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
-              <select
-                id="timezone"
-                name="timezone"
+              <Select 
                 value={formData.timezone || 'UTC'}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onValueChange={(value) => handleSelectChange('timezone', value)}
               >
-                {timezones.map(tz => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a timezone..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <div className="p-2 sticky top-0 bg-white dark:bg-gray-900 z-10 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search timezone..."
+                        className="pl-8"
+                        value={timezoneSearch}
+                        onChange={(e) => setTimezoneSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <SelectGroup>
+                    {filteredTimezones.length > 0 ? (
+                      filteredTimezones.map((tz) => (
+                        <SelectItem 
+                          key={tz.value} 
+                          value={tz.value}
+                        >
+                          {tz.label}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-2 text-center text-sm text-muted-foreground">
+                        No timezones found.
+                      </div>
+                    )}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
           </>
         );
@@ -556,47 +546,47 @@ const OrganizationSection = () => {
     }
   };
 
-// In OrganizationSection.jsx - Update fetchItems function
-const fetchItems = async () => {
-  setLoading(true);
-  try {
-    const result = await apiFetch(`http://localhost:5000/api/organization/${activeTab}`);
-    if (result.success) {
-      // For departments, ensure headcount is calculated
-      if (activeTab === 'departments') {
-        const departmentsWithHeadcount = await Promise.all(
-          result.data.map(async (dept) => {
-            try {
-              // Fetch employees for this department to get accurate count
-              const empResult = await apiFetch(`http://localhost:5000/api/organization/departments/${dept.departmentId}/employees`);
-              return {
-                ...dept,
-                headcount: empResult.success ? empResult.data.employees.length : 0
-              };
-            } catch (error) {
-              console.error(`Error fetching employees for department ${dept.departmentId}:`, error);
-              return { ...dept, headcount: 0 };
-            }
-          })
-        );
-        setItems(departmentsWithHeadcount);
+  // In OrganizationSection.jsx - Update fetchItems function
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      const result = await apiFetch(`http://localhost:5000/api/organization/${activeTab}`);
+      if (result.success) {
+        // For departments, ensure headcount is calculated
+        if (activeTab === 'departments') {
+          const departmentsWithHeadcount = await Promise.all(
+            result.data.map(async (dept) => {
+              try {
+                // Fetch employees for this department to get accurate count
+                const empResult = await apiFetch(`http://localhost:5000/api/organization/departments/${dept.departmentId}/employees`);
+                return {
+                  ...dept,
+                  headcount: empResult.success ? empResult.data.employees.length : 0
+                };
+              } catch (error) {
+                console.error(`Error fetching employees for department ${dept.departmentId}:`, error);
+                return { ...dept, headcount: 0 };
+              }
+            })
+          );
+          setItems(departmentsWithHeadcount);
+        } else {
+          setItems(result.data);
+        }
       } else {
-        setItems(result.data);
+        throw new Error(result.message);
       }
-    } else {
-      throw new Error(result.message);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to load ${activeTab}: ${error.message}`,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error fetching data:', error);
-    toast({
-      title: 'Error',
-      description: `Failed to load ${activeTab}: ${error.message}`,
-      variant: 'destructive'
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchEmployeeList = async (type, id) => {
     setLoadingEmployees(true);
@@ -728,68 +718,68 @@ const fetchItems = async () => {
     }
   };
 
-const renderDepartments = () => (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-    {items.map((dept, index) => (
-      <motion.div 
-        key={dept._id} 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ duration: 0.3, delay: index * 0.1 }}
-      >
-        <Card className="p-6 card-hover border-l-4 border-l-blue-500">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                <Building2 className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                    {dept.departmentId}
-                  </Badge>
-                  <h3 className="font-semibold text-gray-900">{dept.name}</h3>
+  const renderDepartments = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {items.map((dept, index) => (
+        <motion.div 
+          key={dept._id} 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.3, delay: index * 0.1 }}
+        >
+          <Card className="p-6 card-hover border-l-4 border-l-blue-500">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+                  <Building2 className="w-5 h-5 text-white" />
                 </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  {dept.headDetails 
-                    ? `Head: ${dept.headDetails.name} (${dept.head})`
-                    : dept.head 
-                    ? `Head ID: ${dept.head}`
-                    : 'No head assigned'
-                  }
-                </p>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                      {dept.departmentId}
+                    </Badge>
+                    <h3 className="font-semibold text-gray-900">{dept.name}</h3>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {dept.headDetails 
+                      ? `Head: ${dept.headDetails.name} (${dept.head})`
+                      : dept.head 
+                      ? `Head ID: ${dept.head}`
+                      : 'No head assigned'
+                    }
+                  </p>
+                </div>
               </div>
+              <ItemMenu 
+                onEdit={() => handleEdit(dept)} 
+                onDelete={() => handleDelete(dept)}
+                onViewEmployees={() => handleViewEmployees(dept)}
+              />
             </div>
-            <ItemMenu 
-              onEdit={() => handleEdit(dept)} 
-              onDelete={() => handleDelete(dept)}
-              onViewEmployees={() => handleViewEmployees(dept)}
-            />
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Employees</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => handleViewEmployees(dept)}
-                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-              >
-                <Users className="w-4 h-4 mr-1" />
-                <span className="text-sm font-medium">
-                  {dept.headcount || 0}
-                </span>
-              </Button>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Employees</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleViewEmployees(dept)}
+                  className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                >
+                  <Users className="w-4 h-4 mr-1" />
+                  <span className="text-sm font-medium">
+                    {dept.headcount || 0}
+                  </span>
+                </Button>
+              </div>
+              {dept.description && (
+                <p className="text-sm text-gray-600 mt-2">{dept.description}</p>
+              )}
             </div>
-            {dept.description && (
-              <p className="text-sm text-gray-600 mt-2">{dept.description}</p>
-            )}
-          </div>
-        </Card>
-      </motion.div>
-    ))}
-  </div>
-);
+          </Card>
+        </motion.div>
+      ))}
+    </div>
+  );
 
   const renderDesignations = () => (
     <div className="space-y-4">
