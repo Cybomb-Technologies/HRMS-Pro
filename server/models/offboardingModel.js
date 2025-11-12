@@ -1,5 +1,29 @@
 const mongoose = require('mongoose');
 
+const documentSchema = new mongoose.Schema({
+  _id: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId()
+  },
+  filename: {
+    type: String,
+    required: true
+  },
+  url: {
+    type: String,
+    required: true
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  }
+});
+
 const offboardingStepSchema = new mongoose.Schema({
   stepId: {
     type: Number,
@@ -34,7 +58,8 @@ const offboardingStepSchema = new mongoose.Schema({
   estimatedDays: {
     type: Number,
     default: 1
-  }
+  },
+  documents: [documentSchema]
 });
 
 const offboardingSchema = new mongoose.Schema({
@@ -195,7 +220,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: assignedTo,
       required: true,
-      estimatedDays: 1
+      estimatedDays: 1,
+      documents: []
     },
     {
       stepId: 2,
@@ -204,7 +230,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: 'IT Department',
       required: true,
-      estimatedDays: 2
+      estimatedDays: 2,
+      documents: []
     },
     {
       stepId: 3,
@@ -213,7 +240,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: assignedTo,
       required: true,
-      estimatedDays: 3
+      estimatedDays: 3,
+      documents: []
     },
     {
       stepId: 4,
@@ -222,7 +250,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: 'Payroll Department',
       required: true,
-      estimatedDays: 1
+      estimatedDays: 1,
+      documents: []
     },
     {
       stepId: 5,
@@ -231,7 +260,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: 'Payroll Department',
       required: true,
-      estimatedDays: 1
+      estimatedDays: 1,
+      documents: []
     },
     {
       stepId: 6,
@@ -240,7 +270,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: 'Payroll Department',
       required: true,
-      estimatedDays: 2
+      estimatedDays: 2,
+      documents: []
     },
     {
       stepId: 7,
@@ -249,7 +280,8 @@ offboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') 
       completed: false,
       assignedTo: 'IT Department',
       required: true,
-      estimatedDays: 1
+      estimatedDays: 1,
+      documents: []
     }
   ];
 };

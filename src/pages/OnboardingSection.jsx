@@ -41,8 +41,290 @@ import {
   Eye,
   Send,
   RefreshCw,
-  Search
+  Search,
+  Download,
+  Trash2,
+  FileCheck,
+  Upload,
+  X
 } from 'lucide-react';
+
+// ================== Document Viewer Component ==================
+const DocumentViewer = ({ documents, stepName, onDeleteDocument }) => {
+  const [viewingDocument, setViewingDocument] = useState(null);
+
+  const handleDownload = async (document) => {
+    try {
+      const response = await fetch(`http://localhost:5000${document.url}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = document.filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        toast({
+          title: 'Download Started',
+          description: `${document.filename} is being downloaded.`
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Download Failed',
+        description: 'Failed to download document.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleDelete = async (document) => {
+    if (window.confirm(`Are you sure you want to delete ${document.filename}?`)) {
+      onDeleteDocument(document._id);
+    }
+  };
+
+  if (documents.length === 0) {
+    return (
+      <div className="text-center py-6 border-2 border-dashed border-gray-300 rounded-lg">
+        <FileCheck className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+        <p className="text-sm text-gray-500">No documents uploaded yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium">Uploaded Documents ({documents.length})</Label>
+      {documents.map((doc) => (
+        <Card key={doc._id} className="p-3 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3 flex-1">
+              <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{doc.filename}</p>
+                <div className="flex items-center space-x-4 mt-1">
+                  <p className="text-xs text-gray-500">
+                    Uploaded: {new Date(doc.uploadedAt).toLocaleDateString()}
+                  </p>
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs ${
+                      doc.status === 'approved' ? 'bg-green-100 text-green-800' :
+                      doc.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
+                    {doc.status || 'pending'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(`http://localhost:5000${doc.url}`, '_blank')}
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleDownload(doc)}
+              >
+                <Download className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleDelete(doc)}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+      
+      {/* Document Preview Modal */}
+      <Dialog open={!!viewingDocument} onOpenChange={() => setViewingDocument(null)}>
+        {viewingDocument && (
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>{viewingDocument.filename}</DialogTitle>
+              <DialogDescription>
+                Document uploaded for {stepName}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">
+              <p className="text-gray-500">Document preview would be displayed here</p>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
+    </div>
+  );
+};
+
+// ================== Document Upload Modal ==================
+const DocumentUploadModal = ({ step, employeeId, onClose, onUploadSuccess }) => {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const maxSize = 10 * 1024 * 1024;
+
+      if (!validTypes.includes(file.type)) {
+        toast({
+          title: 'Invalid File Type',
+          description: 'Please upload PDF, JPEG, PNG, or Word documents only.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      if (file.size > maxSize) {
+        toast({
+          title: 'File Too Large',
+          description: 'Please upload files smaller than 10MB.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      toast({
+        title: 'No File Selected',
+        description: 'Please select a file to upload.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setUploading(true);
+      
+      const formData = new FormData();
+      formData.append('document', selectedFile);
+      formData.append('stepId', step.stepId.toString());
+      formData.append('stepName', step.name);
+
+      const response = await fetch(`http://localhost:5000/api/onboarding/${employeeId}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      
+      toast({
+        title: 'Document Uploaded',
+        description: 'Your document has been uploaded successfully.',
+      });
+
+      onUploadSuccess();
+      setSelectedFile(null);
+      onClose();
+    } catch (error) {
+      toast({
+        title: 'Upload Failed',
+        description: 'Failed to upload document. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <DialogContent className="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Upload className="w-5 h-5" />
+          Upload Document - {step.name}
+        </DialogTitle>
+        <DialogDescription>
+          Upload required documents for this onboarding step. Supported formats: PDF, JPEG, PNG, Word documents (max 10MB)
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <Label htmlFor="document-upload">Select Document</Label>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+            <Input
+              id="document-upload"
+              type="file"
+              onChange={handleFileSelect}
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              className="hidden"
+            />
+            <Label htmlFor="document-upload" className="cursor-pointer">
+              <div className="space-y-2">
+                <Upload className="w-8 h-8 text-gray-400 mx-auto" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedFile ? selectedFile.name : 'Click to select file'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    PDF, JPEG, PNG, Word documents up to 10MB
+                  </p>
+                </div>
+              </div>
+            </Label>
+          </div>
+          {selectedFile && (
+            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+              <span className="text-sm font-medium text-blue-900">{selectedFile.name}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedFile(null)}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleUpload} 
+          disabled={!selectedFile || uploading}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          {uploading ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Document
+            </>
+          )}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+};
 
 // ================== Employee Select Component ==================
 const EmployeeSelect = ({ employees, selectedEmployee, onEmployeeSelect }) => {
@@ -346,6 +628,7 @@ const OnboardingForm = ({ onSave, onCancel }) => {
 const StepCompletionSection = ({ candidate, onStepUpdate }) => {
   const [completingStep, setCompletingStep] = useState(null);
   const [completionNotes, setCompletionNotes] = useState('');
+  const [selectedStepForDocs, setSelectedStepForDocs] = useState(null);
 
   const handleCompleteStep = async (step) => {
     try {
@@ -382,6 +665,34 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
     }
   };
 
+  const handleDeleteDocument = async (stepId, documentId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/onboarding/${candidate.employeeId}/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Delete failed');
+      
+      toast({
+        title: 'Document Deleted',
+        description: 'Document has been deleted successfully.',
+      });
+
+      // Refresh the onboarding data
+      const onboardingResponse = await fetch(`http://localhost:5000/api/onboarding/${candidate.employeeId}`);
+      if (onboardingResponse.ok) {
+        const updatedOnboarding = await onboardingResponse.json();
+        onStepUpdate(updatedOnboarding);
+      }
+    } catch (error) {
+      toast({
+        title: 'Delete Failed',
+        description: 'Failed to delete document. Please try again.',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const getStepStatus = (step) => {
     if (step.completed) return 'completed';
     const currentStep = candidate.steps.find(s => !s.completed);
@@ -407,13 +718,14 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
     <Card className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 border-0">
       <h3 className="text-lg font-semibold mb-4 text-gray-900 flex items-center gap-2">
         <RefreshCw className="w-5 h-5" />
-        Onboarding Steps
+        Onboarding Steps & Documents
       </h3>
       
-      <div className="space-y-3">
+      <div className="space-y-6">
         {candidate.steps.sort((a, b) => a.stepId - b.stepId).map((step, index) => {
           const status = getStepStatus(step);
           const StepIcon = getStepIcon(step.name);
+          const documents = step.documents || [];
           
           return (
             <motion.div 
@@ -421,7 +733,7 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.1 }}
-              className={`p-3 rounded-lg border transition-all ${
+              className={`p-4 rounded-lg border transition-all ${
                 status === 'completed' 
                   ? 'bg-green-50 border-green-200' 
                   : status === 'current'
@@ -429,88 +741,139 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
                   : 'bg-gray-50 border-gray-200'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3 flex-1">
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                    status === 'completed' 
-                      ? 'bg-green-100 text-green-600' 
-                      : status === 'current'
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'bg-gray-100 text-gray-400'
-                  }`}>
-                    {status === 'completed' ? (
-                      <CheckCircle className="w-4 h-4" />
-                    ) : (
-                      <StepIcon className="w-4 h-4" />
+              <div className="space-y-4">
+                {/* Step Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                      status === 'completed' 
+                        ? 'bg-green-100 text-green-600' 
+                        : status === 'current'
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      {status === 'completed' ? (
+                        <CheckCircle className="w-4 h-4" />
+                      ) : (
+                        <StepIcon className="w-4 h-4" />
+                      )}
+                    </div>
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium ${
+                          status === 'completed' ? 'text-green-800' : 'text-gray-900'
+                        }`}>
+                          {step.name}
+                        </p>
+                        {status === 'current' && (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
+                            Current
+                          </Badge>
+                        )}
+                        {documents.length > 0 && (
+                          <Badge variant="outline" className="text-xs bg-white">
+                            {documents.length} doc{documents.length !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">{step.description}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {step.assignedTo}
+                        </span>
+                        {step.completed && step.completedAt && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(step.completedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 ml-4">
+                    {status === 'current' && (
+                      <>
+                        <Textarea
+                          placeholder="Add completion notes..."
+                          value={completionNotes}
+                          onChange={(e) => setCompletionNotes(e.target.value)}
+                          className="w-48 text-sm"
+                          rows={2}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleCompleteStep(step)}
+                          disabled={completingStep === step.stepId}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          {completingStep === step.stepId ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4" />
+                          )}
+                          Complete
+                        </Button>
+                      </>
+                    )}
+                    
+                    {status === 'pending' && (
+                      <Badge variant="outline" className="text-gray-500">
+                        Pending
+                      </Badge>
                     )}
                   </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className={`font-medium ${
-                        status === 'completed' ? 'text-green-800' : 'text-gray-900'
-                      }`}>
-                        {step.name}
-                      </p>
+                </div>
+
+                {/* Documents Section */}
+                {(documents.length > 0 || status === 'current') && (
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <Label className="text-sm font-medium text-gray-700">
+                        Documents for this step
+                      </Label>
                       {status === 'current' && (
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
-                          Current
-                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedStepForDocs(step)}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Document
+                        </Button>
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">{step.description}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        {step.assignedTo}
-                      </span>
-                      {step.completed && step.completedAt && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(step.completedAt).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
+                    <DocumentViewer 
+                      documents={documents}
+                      stepName={step.name}
+                      onDeleteDocument={(docId) => handleDeleteDocument(step.stepId, docId)}
+                    />
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-2 ml-4">
-                  {status === 'current' && (
-                    <>
-                      <Textarea
-                        placeholder="Add completion notes..."
-                        value={completionNotes}
-                        onChange={(e) => setCompletionNotes(e.target.value)}
-                        className="w-48 text-sm"
-                        rows={2}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => handleCompleteStep(step)}
-                        disabled={completingStep === step.stepId}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        {completingStep === step.stepId ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <CheckCircle className="w-4 h-4" />
-                        )}
-                        Complete
-                      </Button>
-                    </>
-                  )}
-                  
-                  {status === 'pending' && (
-                    <Badge variant="outline" className="text-gray-500">
-                      Pending
-                    </Badge>
-                  )}
-                </div>
+                )}
               </div>
             </motion.div>
           );
         })}
       </div>
+
+      {/* Document Upload Modal */}
+      <Dialog open={!!selectedStepForDocs} onOpenChange={() => setSelectedStepForDocs(null)}>
+        {selectedStepForDocs && (
+          <DocumentUploadModal 
+            step={selectedStepForDocs}
+            employeeId={candidate.employeeId}
+            onClose={() => setSelectedStepForDocs(null)}
+            onUploadSuccess={() => {
+              // Refresh data after upload
+              fetch(`http://localhost:5000/api/onboarding/${candidate.employeeId}`)
+                .then(res => res.json())
+                .then(updatedOnboarding => onStepUpdate(updatedOnboarding));
+            }}
+          />
+        )}
+      </Dialog>
     </Card>
   );
 };
@@ -535,14 +898,14 @@ const OnboardingDetailsModal = ({ candidate, onClose, onUpdateStatus, onStepUpda
   };
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2 text-xl">
           <User className="w-5 h-5" />
           Onboarding Details: {candidate.name}
         </DialogTitle>
         <DialogDescription>
-          View and manage onboarding progress for {candidate.name}
+          View and manage onboarding progress and documents for {candidate.name}
         </DialogDescription>
       </DialogHeader>
       
@@ -601,7 +964,7 @@ const OnboardingDetailsModal = ({ candidate, onClose, onUpdateStatus, onStepUpda
           </div>
         </Card>
 
-        {/* Step Completion Section */}
+        {/* Step Completion Section with Documents */}
         <StepCompletionSection 
           candidate={candidate} 
           onStepUpdate={onStepUpdate}
@@ -842,81 +1205,89 @@ const OnboardingSection = () => {
 
     return (
       <div className="space-y-6">
-        {onboardingCandidates.map((candidate, index) => (
-          <motion.div 
-            key={candidate.employeeId} 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-          >
-            <Card className="p-6 card-hover group">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <span className="text-white font-medium text-lg">
-                      {candidate.name.split(' ').map(n => n[0]).join('')}
-                    </span>
+        {onboardingCandidates.map((candidate, index) => {
+          const totalDocuments = candidate.steps.reduce((total, step) => 
+            total + (step.documents ? step.documents.length : 0), 0
+          );
+
+          return (
+            <motion.div 
+              key={candidate.employeeId} 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+            >
+              <Card className="p-6 card-hover group">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-medium text-lg">
+                        {candidate.name.split(' ').map(n => n[0]).join('')}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{candidate.name}</h3>
+                      <p className="text-sm text-gray-500">{candidate.position} • {candidate.department}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Start Date: {new Date(candidate.startDate).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{candidate.name}</h3>
-                    <p className="text-sm text-gray-500">{candidate.position} • {candidate.department}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Start Date: {new Date(candidate.startDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Badge className={`flex items-center gap-1 ${getStatusColor(candidate.status)}`}>
-                    {getStatusIcon(candidate.status)}
-                    {candidate.status.replace('-', ' ')}
-                  </Badge>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Progress</span>
-                    <span className="text-sm text-gray-500">
-                      {candidate.completedSteps}/{candidate.totalSteps} steps completed
-                    </span>
-                  </div>
-                  <Progress value={candidate.progress} className="h-2" />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Current Step</p>
-                    <p className="text-sm font-medium text-gray-900">{candidate.currentStep}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Assigned To</p>
-                    <p className="text-sm text-gray-900">{candidate.assignedTo}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Email</p>
-                    <p className="text-sm text-gray-900">{candidate.email}</p>
+                  <div className="flex items-center space-x-3">
+                    {totalDocuments > 0 && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        <FileText className="w-3 h-3 mr-1" />
+                        {totalDocuments} doc{totalDocuments !== 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    <Badge className={`flex items-center gap-1 ${getStatusColor(candidate.status)}`}>
+                      {getStatusIcon(candidate.status)}
+                      {candidate.status.replace('-', ' ')}
+                    </Badge>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-2 pt-2">
-                  <Button size="sm" onClick={() => setViewingCandidate(candidate)}>
-                    <Eye className="mr-2 h-4 w-4" />
-                    View Details
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleSendReminder(candidate)}>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send Reminder
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setViewingCandidate(candidate)}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Update Status
-                  </Button>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Progress</span>
+                      <span className="text-sm text-gray-500">
+                        {candidate.completedSteps}/{candidate.totalSteps} steps completed
+                      </span>
+                    </div>
+                    <Progress value={candidate.progress} className="h-2" />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Current Step</p>
+                      <p className="text-sm font-medium text-gray-900">{candidate.currentStep}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Assigned To</p>
+                      <p className="text-sm text-gray-900">{candidate.assignedTo}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Documents</p>
+                      <p className="text-sm text-gray-900">{totalDocuments} uploaded</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 pt-2">
+                    <Button size="sm" onClick={() => setViewingCandidate(candidate)}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Details & Documents
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleSendReminder(candidate)}>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send Reminder
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          </motion.div>
-        ))}
+              </Card>
+            </motion.div>
+          );
+        })}
       </div>
     );
   };
@@ -974,34 +1345,45 @@ const OnboardingSection = () => {
 
     return (
       <div className="space-y-4">
-        {completedOnboarding.map((candidate, index) => (
-          <motion.div 
-            key={candidate.employeeId} 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-          >
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-600 rounded-full flex items-center justify-center">
-                    <CheckCircle className="w-5 h-5 text-white" />
+        {completedOnboarding.map((candidate, index) => {
+          const totalDocuments = candidate.steps.reduce((total, step) => 
+            total + (step.documents ? step.documents.length : 0), 0
+          );
+
+          return (
+            <motion.div 
+              key={candidate.employeeId} 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+            >
+              <Card className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-600 rounded-full flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{candidate.name}</h3>
+                      <p className="text-sm text-gray-500">{candidate.position} • {candidate.department}</p>
+                      {totalDocuments > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {totalDocuments} document{totalDocuments !== 1 ? 's' : ''} uploaded
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{candidate.name}</h3>
-                    <p className="text-sm text-gray-500">{candidate.position} • {candidate.department}</p>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900">
+                      Completed: {new Date(candidate.updatedAt || candidate.startDate).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs text-gray-500">By: {candidate.assignedTo}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                    Completed: {new Date(candidate.updatedAt || candidate.startDate).toLocaleDateString()}
-                  </p>
-                  <p className="text-xs text-gray-500">By: {candidate.assignedTo}</p>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        ))}
+              </Card>
+            </motion.div>
+          );
+        })}
       </div>
     );
   };
@@ -1060,7 +1442,7 @@ const OnboardingSection = () => {
         >
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Employee Onboarding</h1>
-            <p className="text-gray-600 mt-2">Streamline new hire onboarding with automated workflows and tracking</p>
+            <p className="text-gray-600 mt-2">Streamline new hire onboarding with automated workflows, document tracking, and progress monitoring</p>
           </div>
           <Button 
             onClick={() => setModalOpen(true)} 
@@ -1116,11 +1498,17 @@ const OnboardingSection = () => {
           <Card className="p-6">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-purple-100 rounded-lg">
-                <Calendar className="w-5 h-5 text-purple-600" />
+                <FileText className="w-5 h-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Avg. Duration</p>
-                <p className="text-2xl font-bold text-gray-900">10 days</p>
+                <p className="text-sm text-gray-600">Total Documents</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {onboardingCandidates.reduce((total, candidate) => 
+                    total + candidate.steps.reduce((stepTotal, step) => 
+                      stepTotal + (step.documents ? step.documents.length : 0), 0
+                    ), 0
+                  )}
+                </p>
               </div>
             </div>
           </Card>

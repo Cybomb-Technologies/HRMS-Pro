@@ -1,5 +1,29 @@
 const mongoose = require('mongoose');
 
+const documentSchema = new mongoose.Schema({
+  _id: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId()
+  },
+  filename: {
+    type: String,
+    required: true
+  },
+  url: {
+    type: String,
+    required: true
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  }
+});
+
 const onboardingStepSchema = new mongoose.Schema({
   stepId: {
     type: Number,
@@ -26,7 +50,8 @@ const onboardingStepSchema = new mongoose.Schema({
   },
   notes: {
     type: String
-  }
+  },
+  documents: [documentSchema]
 });
 
 const onboardingSchema = new mongoose.Schema({
@@ -117,56 +142,64 @@ onboardingSchema.statics.initializeSteps = function(assignedTo = 'HR Manager') {
       name: 'Offer Letter',
       description: 'Send and receive signed offer letter',
       completed: false,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      documents: []
     },
     {
       stepId: 2,
       name: 'Document Collection',
       description: 'Collect required documents and KYC',
       completed: false,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      documents: []
     },
     {
       stepId: 3,
       name: 'Background Check',
       description: 'Verify employment and education history',
       completed: false,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      documents: []
     },
     {
       stepId: 4,
       name: 'Policy Acknowledgment',
       description: 'Review and acknowledge company policies',
       completed: false,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      documents: []
     },
     {
       stepId: 5,
       name: 'Equipment Request',
       description: 'Request and assign necessary equipment',
       completed: false,
-      assignedTo: 'IT Department'
+      assignedTo: 'IT Department',
+      documents: []
     },
     {
       stepId: 6,
       name: 'Profile Setup',
       description: 'Complete employee profile and system access',
       completed: false,
-      assignedTo: 'IT Department'
+      assignedTo: 'IT Department',
+      documents: []
     },
     {
       stepId: 7,
       name: 'Manager Assignment',
       description: 'Assign reporting manager and team',
       completed: false,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      documents: []
     },
     {
       stepId: 8,
       name: 'Final Activation',
       description: 'Activate employee profile and access',
       completed: false,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      documents: []
     }
   ];
 };
