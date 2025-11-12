@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -23,6 +24,13 @@ const userSchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'suspended'],
     default: 'active'
   },
+  // 2FA Fields
+  twoFactorEnabled: { type: Boolean, default: true },
+  twoFactorSecret: { type: String },
+  twoFactorSetupCompleted: { type: Boolean, default: false }, // NEW: Track if setup is completed
+  // Password reset fields
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date },
   hireDate: Date,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

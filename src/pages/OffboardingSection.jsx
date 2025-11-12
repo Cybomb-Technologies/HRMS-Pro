@@ -1100,7 +1100,7 @@ const OffboardingDetailsModal = ({ employee, onClose, onUpdateStatus, onStepUpda
                </div>
                
                {/* NEW: Complete Offboarding Button */}
-               <div className="flex items-center gap-3">
+               {/* <div className="flex items-center gap-3">
                  {employee.status !== 'completed' && (
                    <Button 
                      className="bg-green-600 hover:bg-green-700"
@@ -1111,7 +1111,7 @@ const OffboardingDetailsModal = ({ employee, onClose, onUpdateStatus, onStepUpda
                      Complete Offboarding (Mark Inactive)
                    </Button>
                  )}
-               </div>
+               </div> */}
             </div>
           </div>
         </Card>

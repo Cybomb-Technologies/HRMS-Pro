@@ -168,7 +168,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-              {isEmployee ? <AttendanceTab /> : <AttendanceSection />}
+           <AttendanceSection />
             </Layout>
           </ProtectedRoute>
         }
@@ -179,6 +179,7 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <Layout>
               {ishr && <AttendanceTab />}
+              {isEmployee ? <AttendanceTab /> : <AttendanceSection />}
             </Layout>
           </ProtectedRoute>
         }

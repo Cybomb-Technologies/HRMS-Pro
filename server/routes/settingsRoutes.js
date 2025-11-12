@@ -36,7 +36,7 @@ router.get('/company', authMiddleware, async (req, res) => {
         name: 'Company Name',
         website: '',
         logo: '',
-        defaultTimezone: '(GMT-05:00) Eastern Time',
+        defaultTimezone: 'Asia/Calcutta',
         defaultCurrency: 'USD ($)',
         paySchedule: 'Monthly',
         holidays: []
@@ -53,6 +53,51 @@ router.get('/company', authMiddleware, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Error fetching company settings', 
+      error: error.message 
+    });
+  }
+});
+
+// FIXED: Get company timezone (for header and general use) - Better error handling
+router.get('/company/timezone', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is authenticated via middleware
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required' 
+      });
+    }
+
+    let settings = await CompanySettings.findOne({});
+    
+    if (!settings) {
+      settings = new CompanySettings({
+        name: 'Company Name',
+        defaultTimezone: 'Asia/Calcutta',
+        defaultCurrency: 'USD ($)'
+      });
+      await settings.save();
+    }
+
+    // Print the actual values from database
+    console.log('Database timezone:', settings.defaultTimezone);
+    console.log('Database company name:', settings.name);
+    console.log('Database currency:', settings.defaultCurrency);
+
+    res.json({
+      success: true,
+      data: {
+        timezone: settings.defaultTimezone, // Direct from DB: "Asia/Calcutta"
+        currency: settings.defaultCurrency, // Direct from DB: "AED (AED)"
+        companyName: settings.name // Direct from DB: "cybomb"
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching company timezone:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching company timezone', 
       error: error.message 
     });
   }
@@ -389,7 +434,7 @@ router.get('/organization', authMiddleware, async (req, res) => {
       name: 'Company Name',
       website: '',
       logo: '',
-      defaultTimezone: '(GMT-05:00) Eastern Time',
+      defaultTimezone: 'Asia/Calcutta',
       defaultCurrency: 'USD ($)',
       paySchedule: 'Monthly',
       holidays: []
