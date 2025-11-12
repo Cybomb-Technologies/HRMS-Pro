@@ -29,17 +29,85 @@ const payrollSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Earnings
     basicSalary: {
       type: Number,
       required: true,
       default: 0,
     },
-    allowances: {
+    hra: {
       type: Number,
       required: true,
       default: 0,
     },
-    deductions: {
+    fixedAllowance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    conveyanceAllowance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    childrenEducationAllowance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    medicalAllowance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    shiftAllowance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    mobileInternetAllowance: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    grossEarnings: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    // Deductions
+    employeeEPF: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    employeeESI: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    professionalTax: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    totalDeductions: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    // CTC & Employer Contributions
+    ctc: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    employerEPF: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    employerESI: {
       type: Number,
       required: true,
       default: 0,
@@ -82,6 +150,29 @@ payrollSchema.virtual("isEditable").get(function () {
   const currentYear = currentDate.getFullYear();
 
   return this.month === currentMonth && this.year === currentYear;
+});
+
+// Pre-save middleware to calculate derived fields
+payrollSchema.pre("save", function (next) {
+  // Calculate Gross Earnings
+  this.grossEarnings =
+    this.basicSalary +
+    this.hra +
+    this.fixedAllowance +
+    this.conveyanceAllowance +
+    this.childrenEducationAllowance +
+    this.medicalAllowance +
+    this.shiftAllowance +
+    this.mobileInternetAllowance;
+
+  // Calculate Total Deductions (EPF + ESI + Professional Tax)
+  this.totalDeductions =
+    this.employeeEPF + this.employeeESI + this.professionalTax;
+
+  // Calculate Net Pay
+  this.netPay = this.grossEarnings - this.totalDeductions;
+
+  next();
 });
 
 module.exports = mongoose.model("Payroll", payrollSchema);
