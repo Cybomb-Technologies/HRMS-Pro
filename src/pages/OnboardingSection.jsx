@@ -1483,35 +1483,20 @@ const OnboardingSection = () => {
             </div>
           </Card>
           <Card className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending Activation</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {onboardingCandidates.filter(c => c.status === 'pending-activation').length}
-                </p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <FileText className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Documents</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {onboardingCandidates.reduce((total, candidate) => 
-                    total + candidate.steps.reduce((stepTotal, step) => 
-                      stepTotal + (step.documents ? step.documents.length : 0), 0
-                    ), 0
-                  )}
-                </p>
-              </div>
-            </div>
-          </Card>
+  <div className="flex items-center space-x-3">
+    <div className="p-2 bg-yellow-100 rounded-lg">
+      <AlertCircle className="w-5 h-5 text-yellow-600" />
+    </div>
+    <div>
+      <p className="text-sm text-gray-600">Pending Activation</p>
+      <p className="text-2xl font-bold text-gray-900">
+        {onboardingCandidates.filter(c => c.status === 'pending-activation').length}
+      </p>
+    </div>
+  </div>
+</Card>
+
+          
         </motion.div>
 
         {/* Tabs Navigation */}

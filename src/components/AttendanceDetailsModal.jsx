@@ -410,25 +410,7 @@ const AttendanceDetailsModal = ({ record, isOpen, onClose }) => {
               </div>
             )}
 
-            {/* Debug Information (for development) */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mt-6 p-4 bg-gray-100 rounded-lg">
-                <h4 className="font-semibold mb-2 text-sm">Debug Info</h4>
-                <details>
-                  <summary className="cursor-pointer text-sm text-muted-foreground">
-                    View raw data
-                  </summary>
-                  <pre className="text-xs mt-2 p-2 bg-white rounded overflow-auto max-h-40">
-                    {JSON.stringify({
-                      record,
-                      detailedRecord,
-                      currentShift,
-                      shiftData
-                    }, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            )}
+          
           </div>
         )}
 

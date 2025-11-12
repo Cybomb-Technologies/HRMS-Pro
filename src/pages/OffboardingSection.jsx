@@ -1690,14 +1690,12 @@ const OffboardingSection = () => {
                 <AlertCircle className="w-5 h-5 text-yellow-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Pending Final</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {offboardingEmployees.filter(c => c.status === 'pending-final').length}
-                </p>
+                <p className="text-sm text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-gray-900">{offboardingEmployees.length}</p>
               </div>
             </div>
           </Card>
-          <Card className="p-6">
+          {/* <Card className="p-6">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <FileText className="w-5 h-5 text-purple-600" />
@@ -1713,7 +1711,7 @@ const OffboardingSection = () => {
                 </p>
               </div>
             </div>
-          </Card>
+          </Card> */}
         </motion.div>
 
         {/* Tabs Navigation */}

@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button'; // Added missing import
+import { Button } from '@/components/ui/button';
 import { Users, CheckCircle, XCircle, CalendarOff, Loader2, Mail, Phone, MapPin } from 'lucide-react';
 
 const TeamsTab = () => {
@@ -13,6 +13,13 @@ const TeamsTab = () => {
   const [teamLead, setTeamLead] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Function to get profile picture URL
+  const getProfilePictureUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `http://localhost:5000${profilePicture}`;
+  };
 
   useEffect(() => {
     const fetchTeamData = async () => {
@@ -100,19 +107,19 @@ const TeamsTab = () => {
   }, [user]);
 
   // Simple status function
-  // const getMemberStatus = (member) => {
-  //   // You can enhance this with actual attendance/status data
-  //   const statuses = [
-  //     { text: 'Available', icon: <CheckCircle className="w-3 h-3 mr-1 text-green-500" />, variant: 'outline' },
-  //     { text: 'In Meeting', icon: <Users className="w-3 h-3 mr-1 text-blue-500" />, variant: 'secondary' },
-  //     { text: 'Away', icon: <CalendarOff className="w-3 h-3 mr-1 text-yellow-500" />, variant: 'outline' },
-  //     { text: 'Offline', icon: <XCircle className="w-3 h-3 mr-1 text-gray-500" />, variant: 'secondary' }
-  //   ];
+  const getMemberStatus = (member) => {
+    // You can enhance this with actual attendance/status data
+    const statuses = [
+      { text: 'Available', icon: <CheckCircle className="w-3 h-3 mr-1 text-green-500" />, variant: 'outline' },
+      { text: 'In Meeting', icon: <Users className="w-3 h-3 mr-1 text-blue-500" />, variant: 'secondary' },
+      { text: 'Away', icon: <CalendarOff className="w-3 h-3 mr-1 text-yellow-500" />, variant: 'outline' },
+      { text: 'Offline', icon: <XCircle className="w-3 h-3 mr-1 text-gray-500" />, variant: 'secondary' }
+    ];
     
-  //   // Simple random status for demo - replace with actual status logic
-  //   const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-  //   return randomStatus;
-  // };
+    // Simple random status for demo - replace with actual status logic
+    const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+    return randomStatus;
+  };
 
   if (loading) {
     return (
@@ -219,7 +226,13 @@ const TeamsTab = () => {
             </h3>
             <div className="flex items-center gap-4">
               <Avatar className="w-12 h-12">
-                <AvatarImage src={teamLead.avatar} alt={teamLead.name} />
+                <AvatarImage 
+                  src={getProfilePictureUrl(teamLead.profilePicture || teamLead.profilePhoto)} 
+                  alt={teamLead.name} 
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
                 <AvatarFallback className="bg-gradient-to-r from-green-500 to-emerald-600 text-white">
                   {teamLead.name?.split(' ').map(n => n[0]).join('') || 'TL'}
                 </AvatarFallback>
@@ -252,8 +265,8 @@ const TeamsTab = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {teamMembers.map((member, index) => {
-              // const status = getMemberStatus(member);
+            {teamMembers.map((member) => {
+              const status = getMemberStatus(member);
               // Find current user by matching email or employeeId
               const isCurrentUser = member.email === user?.email || member.employeeId === user?.employeeId;
               
@@ -268,7 +281,13 @@ const TeamsTab = () => {
                     <Badge className="mb-2 bg-blue-600">You</Badge>
                   )}
                   <Avatar className="w-20 h-20 mb-3 border-4 border-white shadow-md">
-                    <AvatarImage src={member.avatar} alt={member.name} />
+                    <AvatarImage 
+                      src={getProfilePictureUrl(member.profilePicture || member.profilePhoto)} 
+                      alt={member.name} 
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
                     <AvatarFallback className="text-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white">
                       {member.name?.split(' ').map(n => n[0]).join('') || 'U'}
                     </AvatarFallback>
@@ -306,42 +325,19 @@ const TeamsTab = () => {
             <div className="text-2xl font-bold text-blue-600">{teamMembers.length}</div>
             <div className="text-sm text-gray-600">Total Members</div>
           </Card>
-          {/* <Card className="p-4 text-center">
+          <Card className="p-4 text-center">
             <div className="text-2xl font-bold text-green-600">
               {teamMembers.filter(m => getMemberStatus(m).text === 'Available').length}
             </div>
             <div className="text-sm text-gray-600">Available Now</div>
-          </Card> */}
+          </Card>
           <Card className="p-4 text-center">
             <div className="text-2xl font-bold text-purple-600">{team.department}</div>
             <div className="text-sm text-gray-600">Department</div>
           </Card>
         </div>
         
-        {/* Display debug information in development */}
-        {/* {process.env.NODE_ENV === 'development' && (
-          <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-            <h4 className="font-semibold mb-2">Debug Information:</h4>
-            <details>
-              <summary className="cursor-pointer font-medium">User Data from Auth</summary>
-              <pre className="text-xs overflow-auto mt-2 p-2 bg-white rounded">
-                {JSON.stringify(user, null, 2)}
-              </pre>
-            </details>
-            <details className="mt-2">
-              <summary className="cursor-pointer font-medium">Team Data</summary>
-              <pre className="text-xs overflow-auto mt-2 p-2 bg-white rounded">
-                {JSON.stringify(team, null, 2)}
-              </pre>
-            </details>
-            <details className="mt-2">
-              <summary className="cursor-pointer font-medium">Team Members Data</summary>
-              <pre className="text-xs overflow-auto mt-2 p-2 bg-white rounded">
-                {JSON.stringify(teamMembers, null, 2)}
-              </pre>
-            </details>
-          </div>
-        )} */}
+        
       </CardContent>
     </Card>
   );

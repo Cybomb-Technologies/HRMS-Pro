@@ -57,7 +57,9 @@ const AttendanceTab = () => {
   const [detectedFaces, setDetectedFaces] = useState(0);
   const [faceDetectionActive, setFaceDetectionActive] = useState(false);
   const [faceDetectionInterval, setFaceDetectionInterval] = useState(null);
-  
+  const [holidays, setHolidays] = useState([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -173,7 +175,8 @@ const AttendanceTab = () => {
         try {
           await Promise.all([
             fetchTodayAttendance(),
-            fetchRecentAttendance()
+            fetchRecentAttendance(),
+             fetchCompanyHolidays()
           ]);
         } catch (error) {
           console.error('Error loading initial data:', error);
@@ -459,6 +462,47 @@ const AttendanceTab = () => {
           variant: 'destructive'
         });
       }
+    }
+  };
+  const fetchCompanyHolidays = async () => {
+    try {
+      setHolidaysLoading(true);
+      const token = localStorage.getItem('hrms_token');
+      const res = await fetch('http://localhost:5000/api/settings/company/holidays', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!res.ok) {
+        console.warn('Failed to fetch company holidays', res.status);
+        setHolidays([]);
+        setHolidaysLoading(false);
+        return;
+      }
+
+      const json = await res.json();
+      // endpoint returns: { success: true, data: { holidays: [...] } }
+      const rawHolidays = (json?.data?.holidays) || json?.holidays || [];
+      // Normalize to objects with name and date (Date)
+      const normalized = rawHolidays
+        .map(h => {
+          try {
+            const d = h.date ? new Date(h.date) : null;
+            return d && !isNaN(d) ? { id: h.id || h._id || `${h.name}-${h.date}`, name: h.name || 'Holiday', date: d } : null;
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      setHolidays(normalized);
+    } catch (error) {
+      console.error('Error fetching company holidays:', error);
+      setHolidays([]);
+    } finally {
+      setHolidaysLoading(false);
     }
   };
 
@@ -1040,35 +1084,41 @@ const AttendanceTab = () => {
     };
   };
 
-  const DayWithStatus = ({ date, ...props }) => {
+    const DayWithStatus = ({ date, ...props }) => {
     const status = getDayStatus(date);
     const isToday = isSameDay(date, new Date());
-    
+
+    // check holiday for this date
+    const holiday = holidays.find(h => isSameDay(new Date(h.date), date));
+
     const statusColors = {
       present: 'bg-green-500 text-white hover:bg-green-600',
-      absent: 'bg-red-500 text-white hover:bg-red-600', 
+      absent: 'bg-red-500 text-white hover:bg-red-600',
       late: 'bg-yellow-500 text-white hover:bg-yellow-600',
       'half-day': 'bg-blue-500 text-white hover:bg-blue-600',
       weekend: 'bg-gray-300 text-gray-600 hover:bg-gray-400',
+      holiday: 'bg-purple-600 text-white hover:bg-purple-700',
       default: 'bg-white text-gray-900 hover:bg-gray-100'
     };
 
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-    const displayStatus = isWeekend ? 'weekend' : status;
+    // If it's a holiday we want to show 'holiday' regardless of other status
+    const displayStatus = holiday ? 'holiday' : (isWeekend ? 'weekend' : status);
 
     return (
       <div
         className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all duration-200 ${
           statusColors[displayStatus] || statusColors.default
-        } ${
-          isToday ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-        }`}
+        } ${isToday ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
         onClick={() => setDate(date)}
+        // Hover shows holiday name (if any) or status
+        title={holiday ? `${holiday.name} — Holiday` : (displayStatus !== 'default' ? displayStatus : '')}
       >
         {date.getDate()}
       </div>
     );
   };
+
 
   const getDayStatus = (day) => {
     if (!attendance || attendance.length === 0) return 'default';
@@ -1250,14 +1300,16 @@ const AttendanceTab = () => {
         </Card>
       </div>
 
+    
+
       <div className="grid grid-cols-1 gap-6">
     {/* First Row: Today's Status (1/3) and Calendar (2/3) */}
 <div className="flex flex-col space-y-6">
-  {/* First Row: Today's Status and Calendar */}
+  {/* The main content row now uses a single column for the status and legend, and the calendar takes the right side */}
   <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-6">
     
-    {/* Left Card: Today's Status - takes 2 columns (2/3) */}
-    <div className="lg:flex-1">
+    {/* Left Column: Today's Status + Legend (Combined) - takes 2/3 space on large screens */}
+    <div className="lg:w-2/3 flex flex-col space-y-4"> 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center">
@@ -1362,29 +1414,65 @@ const AttendanceTab = () => {
           )}
         </CardContent>
       </Card>
-    </div>
-
-    {/* Right Card: Calendar - takes 1 column (1/3) */}
-    <div className="lg:w-1/3">
+      
+      {/* NEW LEGEND SECTION (Horizontal Row) */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Calendar</CardTitle>
-        </CardHeader>
-        <CardContent className="">
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={setDate}
-            className="rounded-md border"
-            components={{
-              Day: DayWithStatus
-            }}
-          />
+        <CardContent className="p-4">
+          <h4 className="text-sm font-semibold mb-2">Calendar Legend</h4>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <div className="flex items-center">
+                <span className="inline-block w-3 h-3 rounded-full bg-green-500 mr-2" />
+                <span>Present</span>
+              </div>
+              <div className="flex items-center">
+                <span className="inline-block w-3 h-3 rounded-full bg-red-500 mr-2" />
+                <span>Absent</span>
+              </div>
+              <div className="flex items-center">
+                <span className="inline-block w-3 h-3 rounded-full bg-yellow-500 mr-2" />
+                <span>Late</span>
+              </div>
+              
+              <div className="flex items-center">
+                <span className="inline-block w-3 h-3 rounded-full bg-gray-300 border border-gray-400 mr-2" />
+                <span>Weekend</span>
+              </div>
+              <div className="flex items-center">
+                <span className="inline-block w-3 h-3 rounded-full bg-purple-600 mr-2" />
+                <span>Holiday</span>
+              </div>
+          </div>
         </CardContent>
       </Card>
     </div>
+
+   {/* Right Card: Calendar - takes 1/3 space on large screens */}
+<div className="lg:w-1/3">
+  <Card>
+    <CardHeader className="pb-3">
+      <CardTitle className="text-lg">Calendar</CardTitle>
+    </CardHeader>
+
+    {/* Calendar Content: No legend needed inside this card anymore */}
+    <CardContent className="p-4 flex justify-center">
+      <div className="relative z-0">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={setDate}
+          className="rounded-md border"
+          components={{
+            Day: DayWithStatus
+          }}
+        />
+      </div>
+    </CardContent>
+  </Card>
+</div>
+
   </div>
 </div>
+
     {/* Second Row: Recent Attendance - takes full width (1 column) */}
     <Card>
         <CardHeader className="pb-3">
