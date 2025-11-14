@@ -6,7 +6,7 @@ const employeeShiftRoutes = require("./routes/employeeShiftRoutes");
 const employeeProfileRoutes = require("./routes/employeeProfileRoutes");
 const path = require("path");
 const dashboardRoutes = require("./routes/dashboardRoutes");
-const searchRoutes = require('./routes/searchRoutes');
+const searchRoutes = require("./routes/searchRoutes");
 dotenv.config();
 connectDB();
 
@@ -29,10 +29,16 @@ app.use((req, res, next) => {
   if (allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
   }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With,X-CSRF-Token');
-  
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With,X-CSRF-Token"
+  );
+
   // Handle preflight requests
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -45,7 +51,7 @@ app.use((req, res, next) => {
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
-app.use('/api/search', searchRoutes);
+app.use("/api/search", searchRoutes);
 app.use("/api/admin/dashboard", dashboardRoutes);
 app.use("/api/auth", require("./routes/authRoutes.js"));
 app.use("/api/employees", require("./routes/employeeRoutes.js"));
@@ -55,12 +61,11 @@ app.use("/api/offboarding", require("./routes/offboardingRoutes.js"));
 app.use("/api/attendance", require("./routes/attendanceRoutes.js"));
 app.use("/api/admin", require("./routes/adminAttendanceRoutes.js"));
 app.use("/api/teams", require("./routes/teamRoutes.js"));
-app.use("/api/employees", employeeShiftRoutes);
 app.use("/api/announcements", require("./routes/announcementRoutes.js"));
-app.use("/api/notifications", require("./routes/notificationRoutes.js"));
+app.use("/api/notifications", require("./routes/notificationRoutes.js")); // ✅ This must be included
 app.use("/api/payroll", require("./routes/payrollRoutes.js"));
-app.use("/api/hrletters",require("./routes/hrLettersRoutes"));
-app.use('/api/employee-profiles', employeeProfileRoutes);
+app.use("/api/hrletters", require("./routes/hrLettersRoutes"));
+app.use("/api/employee-profiles", employeeProfileRoutes);
 app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
 app.use("/api/organization", require("./routes/organizationRoutes.js"));
 app.use("/api/policies", require("./routes/policies"));
@@ -73,8 +78,8 @@ app.get("/api/settings/organization", (req, res) => {
     data: {
       roles: [],
       companySettings: {},
-      availablePages: []
-    }
+      availablePages: [],
+    },
   });
 });
 
