@@ -27,6 +27,13 @@ const notificationSchema = new mongoose.Schema(
         "leave_approved",
         "leave_rejected",
         "leave_cancelled",
+        "announcement",
+        "announcement_like",
+        "announcement_comment",
+        "onboarding_reminder",
+        "onboarding_step_completed",
+        "onboarding_completed",
+        "onboarding_documents_submitted", // ✅ NEW: Document submission type
       ],
     },
     title: {
@@ -42,7 +49,7 @@ const notificationSchema = new mongoose.Schema(
       default: "leave",
     },
     moduleId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed, // ✅ CHANGED: Allow both ObjectId and String
     },
     relatedEmployeeId: {
       type: String,
