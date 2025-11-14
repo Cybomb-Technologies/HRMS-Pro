@@ -33,7 +33,11 @@ const notificationSchema = new mongoose.Schema(
         "onboarding_reminder",
         "onboarding_step_completed",
         "onboarding_completed",
-        "onboarding_documents_submitted", // ✅ NEW: Document submission type
+        "onboarding_documents_submitted",
+        "offboarding_reminder",
+        "offboarding_completed",
+        "team_member_added", // ✅ NEW: Team member added notification
+        "team_member_removed", // ✅ NEW: Team member removed notification
       ],
     },
     title: {
@@ -49,7 +53,7 @@ const notificationSchema = new mongoose.Schema(
       default: "leave",
     },
     moduleId: {
-      type: mongoose.Schema.Types.Mixed, // ✅ CHANGED: Allow both ObjectId and String
+      type: mongoose.Schema.Types.Mixed,
     },
     relatedEmployeeId: {
       type: String,
