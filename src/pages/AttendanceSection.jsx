@@ -374,20 +374,6 @@ const getEmployeeDetails = (record) => {
             </div>
           </CardContent>
         </Card>
-
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/50 dark:to-purple-900/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Pending Requests</p>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                  {loading.dashboard ? <Loader2 className="w-6 h-6 animate-spin" /> : dashboardStats.pendingRequests || 0}
-                </p>
-              </div>
-              <CalendarDays className="w-8 h-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Recent Attendance Table */}
@@ -439,7 +425,7 @@ const getEmployeeDetails = (record) => {
                   <TableHead>Duration</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Photos</TableHead>
-                  <TableHead>Actions</TableHead>
+                  
                 </TableRow>
               </TableHeader>
 <TableBody>
@@ -511,15 +497,7 @@ const getEmployeeDetails = (record) => {
               />
             </div>
           </TableCell>
-          <TableCell>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleViewDetails(record)}
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-          </TableCell>
+          
         </TableRow>
       );
     })

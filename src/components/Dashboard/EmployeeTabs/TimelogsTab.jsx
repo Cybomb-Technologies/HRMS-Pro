@@ -422,12 +422,7 @@ const TimelogsTab = () => {
               </div>
               <div className="text-muted-foreground">Absent</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
-                {timelogs.filter(log => log.status === 'half-day').length}
-              </div>
-              <div className="text-muted-foreground">Half Day</div>
-            </div>
+            
           </div>
         )}
       </CardContent>

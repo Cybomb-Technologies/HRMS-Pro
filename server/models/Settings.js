@@ -11,6 +11,14 @@ const permissionSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const addressSchema = new mongoose.Schema({
+  street: { type: String },
+  city: { type: String },
+  state: { type: String },
+  country: { type: String, default: 'India' },
+  zipCode: { type: String }
+}, { _id: false });
+
 const roleSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   description: { type: String },
@@ -21,11 +29,12 @@ const roleSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Company Settings Schema (unchanged)
+// Company Settings Schema (updated with address)
 const companySettingsSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   website: { type: String },
   logo: { type: String },
+  address: addressSchema,
   defaultTimezone: { type: String, default: '(GMT-05:00) Eastern Time' },
   defaultCurrency: { type: String, default: 'USD ($)' },
   paySchedule: { type: String, default: 'Monthly' },

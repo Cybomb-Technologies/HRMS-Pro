@@ -5,7 +5,7 @@ const { Role, CompanySettings } = require('../models/Settings');
 const User = require('../models/User');
 const { authMiddleware, hrMiddleware } = require('../middleware/authMiddleware');
 
-// System modules configuration
+// System modules configuration (unchanged)
 const SYSTEM_MODULES = [
   { module: 'dashboard', label: 'Dashboard', pages: [{ path: '/', label: 'Dashboard' }], description: 'Main dashboard overview', icon: '📊' },
   { module: 'profile', label: 'Profile', pages: [{ path: '/profile', label: 'Profile' }], description: 'User profile management', icon: '👤' },
@@ -36,6 +36,13 @@ router.get('/company', authMiddleware, async (req, res) => {
         name: 'Company Name',
         website: '',
         logo: '',
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          country: 'India',
+          zipCode: ''
+        },
         defaultTimezone: 'Asia/Calcutta',
         defaultCurrency: 'USD ($)',
         paySchedule: 'Monthly',
@@ -74,6 +81,13 @@ router.get('/company/timezone', authMiddleware, async (req, res) => {
     if (!settings) {
       settings = new CompanySettings({
         name: 'Company Name',
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          country: 'India',
+          zipCode: ''
+        },
         defaultTimezone: 'Asia/Calcutta',
         defaultCurrency: 'USD ($)'
       });
@@ -106,7 +120,7 @@ router.get('/company/timezone', authMiddleware, async (req, res) => {
 // Update company settings
 router.put('/company', [authMiddleware, hrMiddleware], async (req, res) => {
   try {
-    const { name, website, logo, defaultTimezone, defaultCurrency, paySchedule, security } = req.body;
+    const { name, website, logo, address, defaultTimezone, defaultCurrency, paySchedule, security } = req.body;
     
     let settings = await CompanySettings.findOne({});
 
@@ -118,6 +132,15 @@ router.put('/company', [authMiddleware, hrMiddleware], async (req, res) => {
     if (name !== undefined) settings.name = name;
     if (website !== undefined) settings.website = website;
     if (logo !== undefined) settings.logo = logo;
+    if (address !== undefined) {
+      settings.address = {
+        street: address.street || '',
+        city: address.city || '',
+        state: address.state || '',
+        country: address.country || 'India',
+        zipCode: address.zipCode || ''
+      };
+    }
     if (defaultTimezone !== undefined) settings.defaultTimezone = defaultTimezone;
     if (defaultCurrency !== undefined) settings.defaultCurrency = defaultCurrency;
     if (paySchedule !== undefined) settings.paySchedule = paySchedule;
@@ -139,6 +162,7 @@ router.put('/company', [authMiddleware, hrMiddleware], async (req, res) => {
     });
   }
 });
+
 
 // ==================== ROLES & PERMISSIONS ====================
 
