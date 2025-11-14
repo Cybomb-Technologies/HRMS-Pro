@@ -77,18 +77,32 @@ export const AppProvider = ({ children }) => {
     setAuditLogs((prevLogs) => [newLog, ...prevLogs]);
   };
 
-  // Real notification API functions
+  // ✅ ENHANCED: Real notification API functions with proper error handling and debug logging
   const notificationApi = {
     get: async (employeeId) => {
       try {
-       
+        console.log(
+          "🔔 [DEBUG] Fetching notifications for employee:",
+          employeeId
+        );
+
+        if (!employeeId) {
+          console.error("❌ [DEBUG] No employeeId provided for notifications");
+          return [];
+        }
+
         const response = await fetch(
           `${API_BASE_URL}/notifications/${employeeId}`
         );
 
+        console.log(
+          "🔔 [DEBUG] Notifications API response status:",
+          response.status
+        );
+
         if (!response.ok) {
           console.error(
-            "❌ API response not OK:",
+            "❌ [DEBUG] API response not OK:",
             response.status,
             response.statusText
           );
@@ -96,89 +110,347 @@ export const AppProvider = ({ children }) => {
         }
 
         const data = await response.json();
-        
-        // CORRECTED: Extract notifications array from response
-        const notifications = data.notifications || [];
-        
+        console.log("🔔 [DEBUG] Notifications API raw response:", data);
 
+        // ✅ CORRECTED: Extract notifications array from response
+        const notifications = data.notifications || data || [];
+
+        console.log(
+          "✅ [DEBUG] Loaded notifications from API:",
+          notifications.length
+        );
+        console.log("✅ [DEBUG] Notifications data:", notifications);
         return notifications;
       } catch (error) {
-        console.error("❌ Error fetching notifications:", error);
+        console.error(
+          "❌ [DEBUG] Error fetching notifications:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         return [];
       }
     },
 
     markAsRead: async (notificationId) => {
       try {
-       
+        console.log("📝 [DEBUG] Marking notification as read:", notificationId);
+
+        if (!notificationId) {
+          console.error("❌ [DEBUG] No notificationId provided for markAsRead");
+          return false;
+        }
+
         const response = await fetch(
           `${API_BASE_URL}/notifications/${notificationId}/read`,
           {
             method: "PATCH",
           }
         );
-        return response.ok;
+
+        console.log(
+          "📝 [DEBUG] Mark as read response status:",
+          response.status
+        );
+
+        if (response.ok) {
+          console.log(
+            "✅ [DEBUG] Notification marked as read:",
+            notificationId
+          );
+          return true;
+        } else {
+          console.error(
+            "❌ [DEBUG] Failed to mark notification as read:",
+            response.status
+          );
+          return false;
+        }
       } catch (error) {
-        console.error("❌ Error marking notification as read:", error);
+        console.error(
+          "❌ [DEBUG] Error marking notification as read:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         return false;
       }
     },
 
     markAllAsRead: async (employeeId) => {
       try {
-       
+        console.log(
+          "📝 [DEBUG] Marking all notifications as read for:",
+          employeeId
+        );
+
+        if (!employeeId) {
+          console.error("❌ [DEBUG] No employeeId provided for markAllAsRead");
+          return false;
+        }
+
         const response = await fetch(
           `${API_BASE_URL}/notifications/${employeeId}/read-all`,
           {
             method: "PATCH",
           }
         );
-        return response.ok;
+
+        console.log(
+          "📝 [DEBUG] Mark all as read response status:",
+          response.status
+        );
+
+        if (response.ok) {
+          console.log(
+            "✅ [DEBUG] All notifications marked as read for:",
+            employeeId
+          );
+          return true;
+        } else {
+          console.error(
+            "❌ [DEBUG] Failed to mark all notifications as read:",
+            response.status
+          );
+          return false;
+        }
       } catch (error) {
-        console.error("❌ Error marking all notifications as read:", error);
+        console.error(
+          "❌ [DEBUG] Error marking all notifications as read:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         return false;
       }
     },
 
     getUnreadCount: async (employeeId) => {
       try {
-       
+        console.log("📊 [DEBUG] Getting unread count for:", employeeId);
+
+        if (!employeeId) {
+          console.error("❌ [DEBUG] No employeeId provided for getUnreadCount");
+          return 0;
+        }
+
         const response = await fetch(
           `${API_BASE_URL}/notifications/${employeeId}/unread-count`
         );
+
+        console.log(
+          "📊 [DEBUG] Unread count response status:",
+          response.status
+        );
+
         if (response.ok) {
           const data = await response.json();
-          return data.count || 0;
+          const count = data.count || data || 0;
+          console.log("📊 [DEBUG] Unread count from API:", count);
+          return count;
+        } else {
+          console.error(
+            "❌ [DEBUG] Failed to get unread count:",
+            response.status
+          );
+          console.log("📊 [DEBUG] Fallback unread count: 0");
+          return 0;
         }
-        return 0;
       } catch (error) {
-        console.error("❌ Error getting unread count:", error);
+        console.error("❌ [DEBUG] Error getting unread count:", error.message);
+        console.error("❌ [DEBUG] Full error:", error);
         return 0;
+      }
+    },
+
+    // NEW: Send onboarding reminder with debug logging
+    sendOnboardingReminder: async (onboardingData) => {
+      try {
+        console.log("🔔 [DEBUG] Sending onboarding reminder:", onboardingData);
+
+        if (!onboardingData) {
+          console.error(
+            "❌ [DEBUG] No onboardingData provided for sendOnboardingReminder"
+          );
+          return false;
+        }
+
+        // Validate required fields
+        const requiredFields = [
+          "employeeId",
+          "employeeName",
+          "employeeEmail",
+          "currentStep",
+        ];
+        const missingFields = requiredFields.filter(
+          (field) => !onboardingData[field]
+        );
+
+        if (missingFields.length > 0) {
+          console.error(
+            "❌ [DEBUG] Missing required fields for onboarding reminder:",
+            missingFields
+          );
+          return false;
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/notifications/onboarding/reminder`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(onboardingData),
+          }
+        );
+
+        console.log(
+          "🔔 [DEBUG] Onboarding reminder response status:",
+          response.status
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log(
+            "✅ [DEBUG] Onboarding reminder sent successfully:",
+            result
+          );
+          return true;
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error(
+            "❌ [DEBUG] Failed to send onboarding reminder:",
+            response.status,
+            errorData
+          );
+          return false;
+        }
+      } catch (error) {
+        console.error(
+          "❌ [DEBUG] Error sending onboarding reminder:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
+        return false;
+      }
+    },
+
+    // ✅ NEW: Send document submission notification
+    sendDocumentSubmissionNotification: async (submissionData) => {
+      try {
+        console.log(
+          "🔔 [DEBUG] Sending document submission notification:",
+          submissionData
+        );
+
+        if (!submissionData) {
+          console.error(
+            "❌ [DEBUG] No submissionData provided for document submission notification"
+          );
+          return false;
+        }
+
+        // Validate required fields
+        const requiredFields = [
+          "employeeId",
+          "employeeName",
+          "adminId",
+          "adminEmail",
+        ];
+        const missingFields = requiredFields.filter(
+          (field) => !submissionData[field]
+        );
+
+        if (missingFields.length > 0) {
+          console.error(
+            "❌ [DEBUG] Missing required fields for document submission notification:",
+            missingFields
+          );
+          return false;
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/notifications/documents/submitted`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(submissionData),
+          }
+        );
+
+        console.log(
+          "🔔 [DEBUG] Document submission notification response status:",
+          response.status
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log(
+            "✅ [DEBUG] Document submission notification sent successfully:",
+            result
+          );
+          return true;
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error(
+            "❌ [DEBUG] Failed to send document submission notification:",
+            response.status,
+            errorData
+          );
+          return false;
+        }
+      } catch (error) {
+        console.error(
+          "❌ [DEBUG] Error sending document submission notification:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
+        return false;
       }
     },
   };
 
-  // Leave Settings API
+  // Leave Settings API with debug logging
   const leaveSettingsApi = {
     get: async () => {
       try {
+        console.log("🔄 [DEBUG] Fetching leave settings...");
         const response = await fetch(`${API_BASE_URL}/leaves/settings`);
+
+        console.log(
+          "🔄 [DEBUG] Leave settings response status:",
+          response.status
+        );
+
         if (response.ok) {
           const settings = await response.json();
+          console.log(
+            "✅ [DEBUG] Leave settings fetched successfully:",
+            settings
+          );
           setLeaveSettings(settings);
           return settings;
         } else {
-          console.error("Failed to fetch leave settings");
+          console.error(
+            "❌ [DEBUG] Failed to fetch leave settings:",
+            response.status
+          );
           return leaveSettings;
         }
       } catch (error) {
-        console.error("Error fetching leave settings:", error);
+        console.error(
+          "❌ [DEBUG] Error fetching leave settings:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         return leaveSettings;
       }
     },
 
     update: async (newSettings) => {
       try {
+        console.log("🔄 [DEBUG] Updating leave settings:", newSettings);
+
         const response = await fetch(`${API_BASE_URL}/leaves/settings`, {
           method: "PUT",
           headers: {
@@ -190,26 +462,46 @@ export const AppProvider = ({ children }) => {
           }),
         });
 
+        console.log(
+          "🔄 [DEBUG] Update leave settings response status:",
+          response.status
+        );
+
         if (response.ok) {
           const result = await response.json();
+          console.log(
+            "✅ [DEBUG] Leave settings updated successfully:",
+            result
+          );
           setLeaveSettings(result.settings);
-
           return result.settings;
         } else {
-          throw new Error("Failed to update leave settings");
+          const errorData = await response.json().catch(() => ({}));
+          console.error(
+            "❌ [DEBUG] Failed to update leave settings:",
+            response.status,
+            errorData
+          );
+          throw new Error(
+            errorData.message || "Failed to update leave settings"
+          );
         }
       } catch (error) {
-        console.error("Error updating leave settings:", error);
+        console.error(
+          "❌ [DEBUG] Error updating leave settings:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         throw error;
       }
     },
   };
 
-  // Enhanced API functions for leave requests with better error handling
+  // Enhanced API functions for leave requests with better error handling and debug logging
   const leaveApi = {
     getAll: async (filters = {}) => {
       try {
-        console.log("Fetching all leaves from backend...", filters);
+        console.log("🔄 [DEBUG] Fetching all leaves from backend...", filters);
         const queryParams = new URLSearchParams();
         if (filters.status) queryParams.append("status", filters.status);
         if (filters.employeeId)
@@ -218,19 +510,32 @@ export const AppProvider = ({ children }) => {
         const url = `${API_BASE_URL}/leaves${
           queryParams.toString() ? `?${queryParams.toString()}` : ""
         }`;
+
+        console.log("🔄 [DEBUG] Leaves API URL:", url);
+
         const response = await fetch(url);
+
+        console.log("🔄 [DEBUG] Leaves API response status:", response.status);
 
         if (response.ok) {
           const data = await response.json();
-          console.log("Leaves fetched successfully:", data);
+          console.log(
+            "✅ [DEBUG] Leaves fetched successfully:",
+            data.length,
+            "records"
+          );
           setLeaveRequests(data);
           return data;
         } else {
-          console.error("Failed to fetch leaves, status:", response.status);
+          console.error(
+            "❌ [DEBUG] Failed to fetch leaves, status:",
+            response.status
+          );
           return leaveRequests;
         }
       } catch (error) {
-        console.error("Error fetching leaves:", error);
+        console.error("❌ [DEBUG] Error fetching leaves:", error.message);
+        console.error("❌ [DEBUG] Full error:", error);
         return leaveRequests;
       }
     },
@@ -238,41 +543,66 @@ export const AppProvider = ({ children }) => {
     getLeavesByEmployee: async (employeeId) => {
       try {
         if (!employeeId) {
-          console.error("No employeeId provided");
+          console.error(
+            "❌ [DEBUG] No employeeId provided for getLeavesByEmployee"
+          );
           return [];
         }
 
-        console.log("Fetching leaves for employee:", employeeId);
+        console.log("🔄 [DEBUG] Fetching leaves for employee:", employeeId);
         const response = await fetch(
           `${API_BASE_URL}/leaves/employee/${employeeId}`
         );
 
+        console.log(
+          "🔄 [DEBUG] Employee leaves response status:",
+          response.status
+        );
+
         if (response.ok) {
           const data = await response.json();
-          console.log("Leaves fetched for employee:", data);
+          console.log(
+            "✅ [DEBUG] Leaves fetched for employee:",
+            data.length,
+            "records"
+          );
           return data;
         } else if (response.status === 404) {
-          console.log("No leaves found for employee, returning empty array");
+          console.log(
+            "ℹ️ [DEBUG] No leaves found for employee, returning empty array"
+          );
           return [];
         } else {
           console.error(
-            "Failed to fetch employee leaves, status:",
+            "❌ [DEBUG] Failed to fetch employee leaves, status:",
             response.status
           );
           // Fallback: filter local leave requests by employeeId
           const localLeaves = leaveRequests.filter(
             (req) => req.employeeId === employeeId
           );
-          console.log("Using local leaves as fallback:", localLeaves);
+          console.log(
+            "ℹ️ [DEBUG] Using local leaves as fallback:",
+            localLeaves.length,
+            "records"
+          );
           return localLeaves;
         }
       } catch (error) {
-        console.error("Error fetching employee leaves:", error);
+        console.error(
+          "❌ [DEBUG] Error fetching employee leaves:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         // Fallback to local storage filtered by employeeId
         const localLeaves = leaveRequests.filter(
           (req) => req.employeeId === employeeId
         );
-        console.log("Using local leaves due to error:", localLeaves);
+        console.log(
+          "ℹ️ [DEBUG] Using local leaves due to error:",
+          localLeaves.length,
+          "records"
+        );
         return localLeaves;
       }
     },
@@ -280,46 +610,68 @@ export const AppProvider = ({ children }) => {
     getPendingForApprover: async (approverId) => {
       try {
         if (!approverId) {
-          console.error("No approverId provided");
+          console.error(
+            "❌ [DEBUG] No approverId provided for getPendingForApprover"
+          );
           return [];
         }
 
-        console.log("Fetching pending leaves for approver:", approverId);
+        console.log(
+          "🔄 [DEBUG] Fetching pending leaves for approver:",
+          approverId
+        );
         const response = await fetch(
           `${API_BASE_URL}/leaves/approver/${approverId}`
         );
 
+        console.log(
+          "🔄 [DEBUG] Pending leaves response status:",
+          response.status
+        );
+
         if (response.ok) {
           const data = await response.json();
-          console.log("Pending leaves fetched for approver:", data);
+          console.log(
+            "✅ [DEBUG] Pending leaves fetched for approver:",
+            data.length,
+            "records"
+          );
           return data;
         } else {
           console.error(
-            "Failed to fetch pending leaves, status:",
+            "❌ [DEBUG] Failed to fetch pending leaves, status:",
             response.status
           );
           return [];
         }
       } catch (error) {
-        console.error("Error fetching pending leaves:", error);
+        console.error(
+          "❌ [DEBUG] Error fetching pending leaves:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         return [];
       }
     },
 
     getAllForHR: async (filters = {}) => {
       try {
-        console.log("Fetching all leaves for HR...", filters);
+        console.log("🔄 [DEBUG] Fetching all leaves for HR...", filters);
         const data = await leaveApi.getAll(filters);
         return data;
       } catch (error) {
-        console.error("Error fetching all leaves for HR:", error);
+        console.error(
+          "❌ [DEBUG] Error fetching all leaves for HR:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         return leaveRequests;
       }
     },
 
     create: async (leaveData) => {
       try {
-        console.log("Sending leave data to backend:", leaveData);
+        console.log("🔄 [DEBUG] Creating leave request:", leaveData);
 
         // Validate required fields
         if (!leaveData.employeeId) {
@@ -357,6 +709,11 @@ export const AppProvider = ({ children }) => {
           status: "pending", // Force status to pending
         };
 
+        console.log(
+          "🔄 [DEBUG] Sending leave data to backend:",
+          leaveDataWithStatus
+        );
+
         const response = await fetch(`${API_BASE_URL}/leaves`, {
           method: "POST",
           headers: {
@@ -365,20 +722,28 @@ export const AppProvider = ({ children }) => {
           body: JSON.stringify(leaveDataWithStatus),
         });
 
+        console.log(
+          "🔄 [DEBUG] Create leave response status:",
+          response.status
+        );
+
         if (!response.ok) {
           let errorMessage = `Failed to create leave request: ${response.status}`;
           try {
             const errorData = await response.json();
             errorMessage = errorData.message || errorMessage;
           } catch (parseError) {
-            console.error("Error parsing error response:", parseError);
+            console.error(
+              "❌ [DEBUG] Error parsing error response:",
+              parseError
+            );
           }
           throw new Error(errorMessage);
         }
 
         const newLeave = await response.json();
         console.log(
-          "Leave created successfully in database with PENDING status:",
+          "✅ [DEBUG] Leave created successfully in database with PENDING status:",
           newLeave
         );
 
@@ -394,14 +759,18 @@ export const AppProvider = ({ children }) => {
 
         return newLeave;
       } catch (error) {
-        console.error("Error creating leave in backend:", error);
+        console.error(
+          "❌ [DEBUG] Error creating leave in backend:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         throw error; // Re-throw to handle in the component
       }
     },
 
     update: async (id, updatedData) => {
       try {
-        console.log("Updating leave status:", id, updatedData);
+        console.log("🔄 [DEBUG] Updating leave status:", id, updatedData);
 
         // Include who is performing the action
         const updatePayload = {
@@ -417,9 +786,17 @@ export const AppProvider = ({ children }) => {
           body: JSON.stringify(updatePayload),
         });
 
+        console.log(
+          "🔄 [DEBUG] Update leave response status:",
+          response.status
+        );
+
         if (response.ok) {
           const updatedLeave = await response.json();
-          console.log("Leave updated successfully in database:", updatedLeave);
+          console.log(
+            "✅ [DEBUG] Leave updated successfully in database:",
+            updatedLeave
+          );
 
           // Update local state
           setLeaveRequests((prev) =>
@@ -438,13 +815,17 @@ export const AppProvider = ({ children }) => {
           return updatedLeave;
         } else {
           console.error(
-            "Failed to update leave in backend, status:",
+            "❌ [DEBUG] Failed to update leave in backend, status:",
             response.status
           );
           throw new Error("Failed to update leave request in backend");
         }
       } catch (error) {
-        console.error("Error updating leave in backend:", error);
+        console.error(
+          "❌ [DEBUG] Error updating leave in backend:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         // Fallback to local storage
         const updatedLeave = { ...updatedData };
         setLeaveRequests((prev) =>
@@ -453,47 +834,66 @@ export const AppProvider = ({ children }) => {
           )
         );
 
-        console.log("Updated leave in local storage as fallback");
+        console.log("ℹ️ [DEBUG] Updated leave in local storage as fallback");
         return updatedLeave;
       }
     },
 
     remove: async (id) => {
       try {
-        console.log("Deleting leave:", id);
+        console.log("🔄 [DEBUG] Deleting leave:", id);
         const response = await fetch(`${API_BASE_URL}/leaves/${id}`, {
           method: "DELETE",
         });
 
+        console.log(
+          "🔄 [DEBUG] Delete leave response status:",
+          response.status
+        );
+
         if (response.ok) {
-          console.log("Leave deleted successfully from database");
+          console.log("✅ [DEBUG] Leave deleted successfully from database");
           setLeaveRequests((prev) =>
             prev.filter((leave) => leave._id !== id && leave.id !== id)
           );
           logAction("Delete Leave Request", { id });
         } else {
           console.error(
-            "Failed to delete leave from backend, status:",
+            "❌ [DEBUG] Failed to delete leave from backend, status:",
             response.status
           );
           throw new Error("Failed to delete leave request from backend");
         }
       } catch (error) {
-        console.error("Error deleting leave from backend:", error);
+        console.error(
+          "❌ [DEBUG] Error deleting leave from backend:",
+          error.message
+        );
+        console.error("❌ [DEBUG] Full error:", error);
         // Fallback to local storage
         setLeaveRequests((prev) => prev.filter((leave) => leave.id !== id));
-        console.log("Deleted leave from local storage as fallback");
+        console.log("ℹ️ [DEBUG] Deleted leave from local storage as fallback");
       }
     },
   };
 
   const crudOperations = (items, setItems, itemName) => ({
-    getAll: () => items,
-    getById: (id) => items.find((item) => item.id === id),
+    getAll: () => {
+      console.log(`📊 [DEBUG] Getting all ${itemName}:`, items.length, "items");
+      return items;
+    },
+    getById: (id) => {
+      console.log(`📊 [DEBUG] Getting ${itemName} by ID:`, id);
+      const item = items.find((item) => item.id === id);
+      console.log(`📊 [DEBUG] Found ${itemName}:`, item);
+      return item;
+    },
     add: (newItemData) => {
+      console.log(`➕ [DEBUG] Adding new ${itemName}:`, newItemData);
       const newItem = { ...newItemData, id: newItemData.id || uuidv4() };
       const newItems = [...items, newItem];
       setItems(newItems);
+      console.log(`✅ [DEBUG] ${itemName} added successfully:`, newItem);
       logAction(
         `Create ${itemName}`,
         { name: newItem.name || newItem.title },
@@ -503,6 +903,7 @@ export const AppProvider = ({ children }) => {
       return newItem;
     },
     update: (id, updatedData) => {
+      console.log(`✏️ [DEBUG] Updating ${itemName}:`, id, updatedData);
       let oldItem = null;
       const newItems = items.map((item) => {
         if (item.id === id) {
@@ -513,6 +914,7 @@ export const AppProvider = ({ children }) => {
       });
       setItems(newItems);
       const updatedItem = newItems.find((item) => item.id === id);
+      console.log(`✅ [DEBUG] ${itemName} updated successfully:`, updatedItem);
       logAction(
         `Update ${itemName}`,
         { id, name: updatedItem.name || updatedItem.title },
@@ -522,9 +924,11 @@ export const AppProvider = ({ children }) => {
       return updatedItem;
     },
     remove: (id) => {
+      console.log(`🗑️ [DEBUG] Deleting ${itemName}:`, id);
       const itemToRemove = items.find((item) => item.id === id);
       const newItems = items.filter((item) => item.id !== id);
       setItems(newItems);
+      console.log(`✅ [DEBUG] ${itemName} deleted successfully`);
       logAction(
         `Delete ${itemName}`,
         { id, name: itemToRemove.name || itemToRemove.title },
@@ -564,22 +968,42 @@ export const AppProvider = ({ children }) => {
     policies: crudOperations(policies, setPolicies, "Company Policy"),
     hrRequests: crudOperations(hrRequests, setHrRequests, "HR Request"),
     companyHolidays: {
-      getAll: () => companyHolidays,
+      getAll: () => {
+        console.log(
+          "📊 [DEBUG] Getting company holidays:",
+          companyHolidays.length,
+          "holidays"
+        );
+        return companyHolidays;
+      },
     },
     companySettings: {
-      get: () => companySettings,
+      get: () => {
+        console.log("📊 [DEBUG] Getting company settings:", companySettings);
+        return companySettings;
+      },
       update: (newSettings) => {
+        console.log("✏️ [DEBUG] Updating company settings:", newSettings);
         const oldSettings = { ...companySettings };
         setCompanySettings((prev) => ({ ...prev, ...newSettings }));
+        console.log("✅ [DEBUG] Company settings updated successfully");
         logAction("Update Company Settings", {}, oldSettings, {
           ...companySettings,
           ...newSettings,
         });
       },
     },
-    // Real notification API
+    // ✅ ENHANCED: Real notification API with proper logging and onboarding support
     notifications: notificationApi,
   };
+
+  console.log("🚀 [DEBUG] AppContext initialized with user:", user?.email);
+  console.log("🚀 [DEBUG] AppContext value:", {
+    hasUser: !!user,
+    employeeCount: employees.length,
+    notificationApi: !!notificationApi,
+    leaveApi: !!leaveApi,
+  });
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

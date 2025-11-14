@@ -83,6 +83,10 @@ const announcementSchema = new mongoose.Schema(
       default: "Admin",
       trim: true,
     },
+    authorId: {
+      type: String,
+      required: false, // NEW: Store author ID for notifications
+    },
     category: {
       type: String,
       required: true,

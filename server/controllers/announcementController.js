@@ -1,5 +1,7 @@
 const Announcement = require("../models/Announcements");
 const Employee = require("../models/Employee"); // Add Employee model import
+const User = require("../models/User"); // Add User model import for admin users
+const { createNotification } = require("./notificationController");
 
 // @desc    Get all announcements with filtering
 // @route   GET /api/announcements
@@ -175,6 +177,17 @@ const createAnnouncement = async (req, res) => {
       createdAnnouncement._id
     );
 
+    // ✅ ADDED: Create notifications for all employees when announcement is published
+    if (status === "published") {
+      try {
+        await createNotificationsForAnnouncement(createdAnnouncement);
+        console.log("✅ Notifications created for all employees");
+      } catch (notificationError) {
+        console.error("❌ Error creating notifications:", notificationError);
+        // Don't fail the announcement creation if notifications fail
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Announcement created successfully",
@@ -216,6 +229,8 @@ const updateAnnouncement = async (req, res) => {
       });
     }
 
+    const oldStatus = announcement.status;
+
     // Update fields only if they are provided
     if (title !== undefined) announcement.title = title.trim();
     if (content !== undefined) announcement.content = content.trim();
@@ -227,6 +242,18 @@ const updateAnnouncement = async (req, res) => {
     const updatedAnnouncement = await announcement.save();
 
     console.log("Announcement updated successfully");
+
+    // ✅ ADDED: Create notifications if status changed to published
+    if (oldStatus !== "published" && status === "published") {
+      try {
+        await createNotificationsForAnnouncement(updatedAnnouncement);
+        console.log(
+          "✅ Notifications created for all employees after status change"
+        );
+      } catch (notificationError) {
+        console.error("❌ Error creating notifications:", notificationError);
+      }
+    }
 
     res.json({
       success: true,
@@ -308,6 +335,21 @@ const toggleLike = async (req, res) => {
         announcement._id
       }`
     );
+
+    // ✅ FIXED: Create notification for admin when employee likes announcement
+    if (isLiked && isEmployeeUser(userId)) {
+      try {
+        console.log(`🔄 Creating like notification for employee: ${userId}`);
+        await createLikeNotificationForAdmin(announcement, userId);
+        console.log("✅ Like notification created for admin");
+      } catch (notificationError) {
+        console.error(
+          "❌ Error creating like notification:",
+          notificationError
+        );
+        // Don't fail the like operation if notification fails
+      }
+    }
 
     res.json({
       success: true,
@@ -393,8 +435,9 @@ const addComment = async (req, res) => {
 
     // FIXED: Proper employee lookup - use employeeId field instead of MongoDB _id
     let employeeName = author;
+    let employee = null;
     if (authorId) {
-      const employee = await Employee.findOne({ employeeId: authorId });
+      employee = await Employee.findOne({ employeeId: authorId });
       if (employee) {
         employeeName = employee.name;
       }
@@ -416,6 +459,26 @@ const addComment = async (req, res) => {
     console.log(
       `New comment added to announcement ${announcement._id} by ${comment.author}`
     );
+
+    // ✅ FIXED: Create notification for admin when employee comments
+    if (authorId && isEmployeeUser(authorId)) {
+      try {
+        console.log(
+          `🔄 Creating comment notification for employee: ${authorId}`
+        );
+        await createCommentNotificationForAdmin(
+          announcement,
+          employee || { employeeId: authorId, name: employeeName }
+        );
+        console.log("✅ Comment notification created for admin");
+      } catch (notificationError) {
+        console.error(
+          "❌ Error creating comment notification:",
+          notificationError
+        );
+        // Don't fail the comment operation if notification fails
+      }
+    }
 
     res.json({
       success: true,
@@ -669,6 +732,325 @@ const getAnnouncementStats = async (req, res) => {
       message: "Server error while fetching statistics",
       error: error.message,
     });
+  }
+};
+
+// ✅ ADDED: Helper function to check if user is an employee (not admin)
+const isEmployeeUser = (userId) => {
+  if (
+    !userId ||
+    userId === "admin" ||
+    userId === "anonymous-user" ||
+    userId.includes("admin")
+  ) {
+    return false;
+  }
+
+  // Check if it's a MongoDB ObjectId (admin users from User collection)
+  if (userId.match(/^[0-9a-fA-F]{24}$/)) {
+    return false;
+  }
+
+  // Check if it starts with EMP (employee IDs)
+  if (userId.startsWith("EMP")) {
+    return true;
+  }
+
+  // Default to employee for other cases
+  return true;
+};
+
+// ✅ ADDED: Helper function to create notifications for all employees
+const createNotificationsForAnnouncement = async (announcement) => {
+  try {
+    console.log(
+      "🔄 Creating notifications for announcement:",
+      announcement._id
+    );
+
+    // Get all active employees
+    const employees = await Employee.find({ status: "active" });
+    console.log(`📊 Found ${employees.length} active employees to notify`);
+
+    const notificationPromises = employees.map(async (employee) => {
+      const notificationData = {
+        recipientId: employee.employeeId,
+        recipientEmail: employee.email,
+        senderId: "system", // or admin user ID
+        senderName: announcement.author || "Admin",
+        type: "announcement",
+        title: "New Announcement",
+        message: `New announcement: ${announcement.title}`,
+        module: "announcement",
+        moduleId: announcement._id,
+        relatedEmployeeId: employee.employeeId,
+        relatedEmployeeName: employee.name,
+        priority: announcement.priority === "urgent" ? "high" : "medium",
+        actionUrl: `/feeds`,
+        tenantId: "TENANT01",
+      };
+
+      try {
+        await createNotification(notificationData);
+        return { success: true, employeeId: employee.employeeId };
+      } catch (error) {
+        console.error(
+          `❌ Failed to create notification for ${employee.employeeId}:`,
+          error
+        );
+        return {
+          success: false,
+          employeeId: employee.employeeId,
+          error: error.message,
+        };
+      }
+    });
+
+    const results = await Promise.allSettled(notificationPromises);
+
+    const successful = results.filter(
+      (result) => result.status === "fulfilled" && result.value.success
+    ).length;
+
+    const failed = results.filter(
+      (result) => result.status === "rejected" || !result.value.success
+    ).length;
+
+    console.log(
+      `✅ Notifications created: ${successful} successful, ${failed} failed`
+    );
+    return { successful, failed };
+  } catch (error) {
+    console.error("❌ Error in createNotificationsForAnnouncement:", error);
+    throw error;
+  }
+};
+
+// ✅ FIXED: Helper function to create notification for admin when employee likes
+const createLikeNotificationForAdmin = async (announcement, employeeId) => {
+  try {
+    console.log(
+      "🔄 Creating like notification for admin from employee:",
+      employeeId
+    );
+
+    // Get employee details
+    const employee = await Employee.findOne({ employeeId: employeeId });
+    const employeeName = employee ? employee.name : `Employee ${employeeId}`;
+
+    // ✅ FIXED: Find admin users from both Employee and User collections
+    let adminUsers = [];
+
+    // Look for admin users in Employee collection
+    const employeeAdmins = await Employee.find({
+      $or: [
+        { role: "admin" },
+        { role: "employer" },
+        { role: "hr" },
+        { role: "manager" },
+      ],
+      status: "active",
+    });
+
+    // Look for admin users in User collection (for users like admin@company.com)
+    const userAdmins = await User.find({
+      $or: [
+        { role: "admin" },
+        { role: "employer" },
+        { role: "hr" },
+        { role: "manager" },
+      ],
+    });
+
+    // Combine both collections
+    adminUsers = [...employeeAdmins];
+
+    // Add User collection admins with proper ID mapping
+    userAdmins.forEach((user) => {
+      adminUsers.push({
+        employeeId: user._id.toString(), // Use MongoDB _id as employeeId for User collection
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      });
+    });
+
+    console.log(
+      `📊 Found ${adminUsers.length} admin users to notify about like`
+    );
+
+    if (adminUsers.length === 0) {
+      console.log("⚠️ No admin users found to notify");
+      return { successful: 0, failed: 0 };
+    }
+
+    const notificationPromises = adminUsers.map(async (admin) => {
+      const notificationData = {
+        recipientId: admin.employeeId,
+        recipientEmail: admin.email,
+        senderId: employeeId,
+        senderName: employeeName,
+        type: "announcement_like",
+        title: "New Like on Announcement",
+        message: `${employeeName} (${employeeId}) liked your announcement: "${announcement.title}"`,
+        module: "announcement",
+        moduleId: announcement._id,
+        relatedEmployeeId: employeeId,
+        relatedEmployeeName: employeeName,
+        priority: "medium",
+        actionUrl: `/feeds`,
+        tenantId: "TENANT01",
+      };
+
+      try {
+        await createNotification(notificationData);
+        console.log(
+          `✅ Like notification sent to admin: ${admin.name} (${admin.employeeId})`
+        );
+        return { success: true, adminId: admin.employeeId };
+      } catch (error) {
+        console.error(
+          `❌ Failed to create like notification for admin ${admin.employeeId}:`,
+          error
+        );
+        return {
+          success: false,
+          adminId: admin.employeeId,
+          error: error.message,
+        };
+      }
+    });
+
+    const results = await Promise.allSettled(notificationPromises);
+
+    const successful = results.filter(
+      (result) => result.status === "fulfilled" && result.value.success
+    ).length;
+
+    const failed = results.filter(
+      (result) => result.status === "rejected" || !result.value.success
+    ).length;
+
+    console.log(
+      `✅ Like notifications created for admins: ${successful} successful, ${failed} failed`
+    );
+    return { successful, failed };
+  } catch (error) {
+    console.error("❌ Error in createLikeNotificationForAdmin:", error);
+    // Don't throw error, just log it
+    return { successful: 0, failed: 1 };
+  }
+};
+
+// ✅ FIXED: Helper function to create notification for admin when employee comments
+const createCommentNotificationForAdmin = async (announcement, employee) => {
+  try {
+    console.log(
+      "🔄 Creating comment notification for admin from employee:",
+      employee.employeeId
+    );
+
+    // ✅ FIXED: Find admin users from both Employee and User collections
+    let adminUsers = [];
+
+    // Look for admin users in Employee collection
+    const employeeAdmins = await Employee.find({
+      $or: [
+        { role: "admin" },
+        { role: "employer" },
+        { role: "hr" },
+        { role: "manager" },
+      ],
+      status: "active",
+    });
+
+    // Look for admin users in User collection (for users like admin@company.com)
+    const userAdmins = await User.find({
+      $or: [
+        { role: "admin" },
+        { role: "employer" },
+        { role: "hr" },
+        { role: "manager" },
+      ],
+    });
+
+    // Combine both collections
+    adminUsers = [...employeeAdmins];
+
+    // Add User collection admins with proper ID mapping
+    userAdmins.forEach((user) => {
+      adminUsers.push({
+        employeeId: user._id.toString(), // Use MongoDB _id as employeeId for User collection
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      });
+    });
+
+    console.log(
+      `📊 Found ${adminUsers.length} admin users to notify about comment`
+    );
+
+    if (adminUsers.length === 0) {
+      console.log("⚠️ No admin users found to notify");
+      return { successful: 0, failed: 0 };
+    }
+
+    const notificationPromises = adminUsers.map(async (admin) => {
+      const notificationData = {
+        recipientId: admin.employeeId,
+        recipientEmail: admin.email,
+        senderId: employee.employeeId,
+        senderName: employee.name,
+        type: "announcement_comment",
+        title: "New Comment on Announcement",
+        message: `${employee.name} (${employee.employeeId}) commented on your announcement: "${announcement.title}"`,
+        module: "announcement",
+        moduleId: announcement._id,
+        relatedEmployeeId: employee.employeeId,
+        relatedEmployeeName: employee.name,
+        priority: "medium",
+        actionUrl: `/feeds`,
+        tenantId: "TENANT01",
+      };
+
+      try {
+        await createNotification(notificationData);
+        console.log(
+          `✅ Comment notification sent to admin: ${admin.name} (${admin.employeeId})`
+        );
+        return { success: true, adminId: admin.employeeId };
+      } catch (error) {
+        console.error(
+          `❌ Failed to create comment notification for admin ${admin.employeeId}:`,
+          error
+        );
+        return {
+          success: false,
+          adminId: admin.employeeId,
+          error: error.message,
+        };
+      }
+    });
+
+    const results = await Promise.allSettled(notificationPromises);
+
+    const successful = results.filter(
+      (result) => result.status === "fulfilled" && result.value.success
+    ).length;
+
+    const failed = results.filter(
+      (result) => result.status === "rejected" || !result.value.success
+    ).length;
+
+    console.log(
+      `✅ Comment notifications created for admins: ${successful} successful, ${failed} failed`
+    );
+    return { successful, failed };
+  } catch (error) {
+    console.error("❌ Error in createCommentNotificationForAdmin:", error);
+    // Don't throw error, just log it
+    return { successful: 0, failed: 1 };
   }
 };
 
