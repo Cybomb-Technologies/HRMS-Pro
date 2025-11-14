@@ -9,9 +9,13 @@ const {
   createAnnouncementNotification,
   createCommentNotification,
   createDocumentSubmissionNotification, // ✅ NEW
+  createOffboardingReminderNotification, // ✅ NEW: Offboarding reminder function
+  createOffboardingCompletionNotification, // ✅ NEW: Offboarding completion function
   createOnboardingReminder,
   createOnboardingStepCompletion,
   createOnboardingCompletion,
+  createTeamMemberAddedNotification, // ✅ NEW: Team member added function
+  createTeamMemberRemovedNotification, // ✅ NEW: Team member removed function
   testDocumentSubmissionNotification, // ✅ NEW: Test function
 } = require("../controllers/notificationController");
 
@@ -28,6 +32,14 @@ router.post("/comment", createCommentNotification);
 
 // ✅ NEW ROUTE for document submission notifications
 router.post("/documents/submitted", createDocumentSubmissionNotification);
+
+// ✅ NEW ROUTES for offboarding notifications
+router.post("/offboarding/reminder", createOffboardingReminderNotification);
+router.post("/offboarding/completion", createOffboardingCompletionNotification);
+
+// ✅ NEW ROUTES for team notifications
+router.post("/team/member-added", createTeamMemberAddedNotification);
+router.post("/team/member-removed", createTeamMemberRemovedNotification);
 
 // ✅ NEW: Test route for document submission notifications
 router.post("/test/document-submission", testDocumentSubmissionNotification);

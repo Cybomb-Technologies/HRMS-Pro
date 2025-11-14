@@ -337,7 +337,6 @@ const createDocumentSubmissionNotification = async (submissionData) => {
       type: "onboarding_documents_submitted",
       title: "Documents Submitted for Review",
       message: `Employee ${employeeId} ${employeeName} has submitted all required documents and is pending for review.`,
-      // message: ` ${employeeId} has submitted all required documents and is pending for review.`,
       module: "onboarding",
       moduleId: onboardingId,
       relatedEmployeeId: employeeId,
@@ -358,6 +357,133 @@ const createDocumentSubmissionNotification = async (submissionData) => {
     );
     console.error("❌ [DEBUG] Full error:", error);
     throw error;
+  }
+};
+
+// ✅ FIXED: Create offboarding reminder notification (HTTP handler)
+const createOffboardingReminderNotification = async (req, res) => {
+  try {
+    const { employeeId, employeeName, employeeEmail, currentStep } = req.body;
+
+    console.log("🔔 [DEBUG] Creating offboarding reminder notification:", {
+      employeeId,
+      employeeName,
+      employeeEmail,
+      currentStep,
+    });
+
+    // Validate required fields
+    if (!employeeId || !employeeName || !employeeEmail) {
+      console.error(
+        "❌ [DEBUG] Missing required fields for offboarding reminder"
+      );
+      return res.status(400).json({
+        message:
+          "Missing required fields: employeeId, employeeName, employeeEmail are required",
+      });
+    }
+
+    const notification = new Notification({
+      recipientId: employeeId,
+      recipientEmail: employeeEmail,
+      senderId: "system",
+      senderName: "HR System",
+      type: "offboarding_reminder",
+      title: "Offboarding Process Started",
+      message: `Your offboarding process has been initiated. Please submit the required documents for the current step: ${
+        currentStep || "Not started"
+      }`,
+      module: "offboarding",
+      moduleId: employeeId,
+      relatedEmployeeId: employeeId,
+      relatedEmployeeName: employeeName,
+      priority: "high",
+      actionUrl: `/my-offboarding`,
+    });
+
+    await notification.save();
+    console.log(
+      "✅ [DEBUG] Offboarding reminder notification created successfully"
+    );
+
+    res.json({
+      success: true,
+      message: "Offboarding reminder sent successfully",
+      notification: notification,
+    });
+  } catch (error) {
+    console.error(
+      "❌ [DEBUG] Error creating offboarding reminder notification:",
+      error.message
+    );
+    console.error("❌ [DEBUG] Full error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create offboarding reminder notification",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ FIXED: Create offboarding completion notification (HTTP handler)
+const createOffboardingCompletionNotification = async (req, res) => {
+  try {
+    const { employeeId, employeeName, employeeEmail } = req.body;
+
+    console.log("🔔 [DEBUG] Creating offboarding completion notification:", {
+      employeeId,
+      employeeName,
+      employeeEmail,
+    });
+
+    // Validate required fields
+    if (!employeeId || !employeeName || !employeeEmail) {
+      console.error(
+        "❌ [DEBUG] Missing required fields for offboarding completion"
+      );
+      return res.status(400).json({
+        message:
+          "Missing required fields: employeeId, employeeName, employeeEmail are required",
+      });
+    }
+
+    const notification = new Notification({
+      recipientId: employeeId,
+      recipientEmail: employeeEmail,
+      senderId: "system",
+      senderName: "HR System",
+      type: "offboarding_completed",
+      title: "Offboarding Process Completed",
+      message: `Your offboarding process has been completed successfully. All formalities are now complete.`,
+      module: "offboarding",
+      moduleId: employeeId,
+      relatedEmployeeId: employeeId,
+      relatedEmployeeName: employeeName,
+      priority: "high",
+      actionUrl: `/my-offboarding`,
+    });
+
+    await notification.save();
+    console.log(
+      "✅ [DEBUG] Offboarding completion notification created successfully"
+    );
+
+    res.json({
+      success: true,
+      message: "Offboarding completion notification sent successfully",
+      notification: notification,
+    });
+  } catch (error) {
+    console.error(
+      "❌ [DEBUG] Error creating offboarding completion notification:",
+      error.message
+    );
+    console.error("❌ [DEBUG] Full error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create offboarding completion notification",
+      error: error.message,
+    });
   }
 };
 
@@ -636,6 +762,152 @@ const createOnboardingCompletion = async (req, res) => {
   }
 };
 
+// ✅ NEW: Create team member added notification
+const createTeamMemberAddedNotification = async (req, res) => {
+  try {
+    const {
+      employeeId,
+      employeeName,
+      employeeEmail,
+      teamName,
+      teamId,
+      addedBy,
+    } = req.body;
+
+    console.log("🔔 [DEBUG] Creating team member added notification:", {
+      employeeId,
+      employeeName,
+      employeeEmail,
+      teamName,
+      teamId,
+      addedBy,
+    });
+
+    // Validate required fields
+    if (!employeeId || !employeeName || !employeeEmail || !teamName) {
+      console.error(
+        "❌ [DEBUG] Missing required fields for team member added notification"
+      );
+      return res.status(400).json({
+        message:
+          "Missing required fields: employeeId, employeeName, employeeEmail, teamName are required",
+      });
+    }
+
+    const notification = new Notification({
+      recipientId: employeeId,
+      recipientEmail: employeeEmail,
+      senderId: addedBy?.id || "system",
+      senderName: addedBy?.name || "HR System",
+      type: "team_member_added",
+      title: "Team Assignment",
+      message: `You have been added to the team: ${teamName}`,
+      module: "team",
+      moduleId: teamId,
+      relatedEmployeeId: employeeId,
+      relatedEmployeeName: employeeName,
+      priority: "medium",
+      actionUrl: `/teams`,
+    });
+
+    await notification.save();
+    console.log(
+      "✅ [DEBUG] Team member added notification created successfully:",
+      notification._id
+    );
+
+    res.json({
+      success: true,
+      message: "Team member added notification sent successfully",
+      notification: notification,
+    });
+  } catch (error) {
+    console.error(
+      "❌ [DEBUG] Error creating team member added notification:",
+      error.message
+    );
+    console.error("❌ [DEBUG] Full error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create team member added notification",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ NEW: Create team member removed notification
+const createTeamMemberRemovedNotification = async (req, res) => {
+  try {
+    const {
+      employeeId,
+      employeeName,
+      employeeEmail,
+      teamName,
+      teamId,
+      removedBy,
+    } = req.body;
+
+    console.log("🔔 [DEBUG] Creating team member removed notification:", {
+      employeeId,
+      employeeName,
+      employeeEmail,
+      teamName,
+      teamId,
+      removedBy,
+    });
+
+    // Validate required fields
+    if (!employeeId || !employeeName || !employeeEmail || !teamName) {
+      console.error(
+        "❌ [DEBUG] Missing required fields for team member removed notification"
+      );
+      return res.status(400).json({
+        message:
+          "Missing required fields: employeeId, employeeName, employeeEmail, teamName are required",
+      });
+    }
+
+    const notification = new Notification({
+      recipientId: employeeId,
+      recipientEmail: employeeEmail,
+      senderId: removedBy?.id || "system",
+      senderName: removedBy?.name || "HR System",
+      type: "team_member_removed",
+      title: "Team Removal",
+      message: `You have been removed from the team: ${teamName}`,
+      module: "team",
+      moduleId: teamId,
+      relatedEmployeeId: employeeId,
+      relatedEmployeeName: employeeName,
+      priority: "medium",
+      actionUrl: `/teams`,
+    });
+
+    await notification.save();
+    console.log(
+      "✅ [DEBUG] Team member removed notification created successfully:",
+      notification._id
+    );
+
+    res.json({
+      success: true,
+      message: "Team member removed notification sent successfully",
+      notification: notification,
+    });
+  } catch (error) {
+    console.error(
+      "❌ [DEBUG] Error creating team member removed notification:",
+      error.message
+    );
+    console.error("❌ [DEBUG] Full error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create team member removed notification",
+      error: error.message,
+    });
+  }
+};
+
 // ✅ TEMPORARY: Test endpoint for document submission notifications
 const testDocumentSubmissionNotification = async (req, res) => {
   try {
@@ -673,9 +945,13 @@ module.exports = {
   deleteNotification,
   createAnnouncementNotification,
   createCommentNotification,
-  createDocumentSubmissionNotification, // ✅ NEW: Export the new function
+  createDocumentSubmissionNotification,
+  createOffboardingReminderNotification,
+  createOffboardingCompletionNotification,
   createOnboardingReminder,
   createOnboardingStepCompletion,
   createOnboardingCompletion,
-  testDocumentSubmissionNotification, // ✅ NEW: Export test function
+  createTeamMemberAddedNotification, // ✅ NEW: Export team member added function
+  createTeamMemberRemovedNotification, // ✅ NEW: Export team member removed function
+  testDocumentSubmissionNotification,
 };

@@ -47,7 +47,9 @@ import {
   MessageSquare,
   UserPlus,
   ClipboardCheck,
-  FileText, // ✅ NEW: Import for document submission icon
+  FileText,
+  UserMinus,
+  Users2, // ✅ NEW: Import for team notifications
 } from "lucide-react";
 
 const Header = ({ onMenuClick }) => {
@@ -267,7 +269,7 @@ const Header = ({ onMenuClick }) => {
     }
   };
 
-  // ✅ ENHANCED: Notification icon with all types support including onboarding and document submission
+  // ✅ ENHANCED: Notification icon with all types support including team notifications
   const getNotificationIcon = (type) => {
     switch (type) {
       case "leave_application":
@@ -284,14 +286,22 @@ const Header = ({ onMenuClick }) => {
         return <Heart className="h-4 w-4 text-pink-500" />;
       case "announcement_comment":
         return <MessageSquare className="h-4 w-4 text-blue-500" />;
-      case "onboarding_reminder": // ✅ ADDED: Onboarding reminder icon
+      case "onboarding_reminder":
         return <UserPlus className="h-4 w-4 text-orange-500" />;
-      case "onboarding_step_completed": // ✅ ADDED: Onboarding step completion icon
+      case "onboarding_step_completed":
         return <ClipboardCheck className="h-4 w-4 text-green-500" />;
-      case "onboarding_completed": // ✅ ADDED: Onboarding completion icon
+      case "onboarding_completed":
         return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "onboarding_documents_submitted": // ✅ NEW: Document submission icon
+      case "onboarding_documents_submitted":
         return <FileText className="h-4 w-4 text-blue-500" />;
+      case "offboarding_reminder":
+        return <UserMinus className="h-4 w-4 text-orange-500" />;
+      case "offboarding_completed":
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case "team_member_added": // ✅ NEW: Team member added icon
+        return <Users2 className="h-4 w-4 text-green-500" />;
+      case "team_member_removed": // ✅ NEW: Team member removed icon
+        return <Users2 className="h-4 w-4 text-red-500" />;
       default:
         return <Bell className="h-4 w-4 text-gray-500" />;
     }
@@ -318,20 +328,33 @@ const Header = ({ onMenuClick }) => {
       case "onboarding_reminder":
       case "onboarding_step_completed":
       case "onboarding_completed":
-      case "onboarding_documents_submitted": // ✅ NEW: Navigate to onboarding for document submissions
+      case "onboarding_documents_submitted":
         console.log("🔄 [DEBUG] Navigating to onboarding page");
         if (["admin", "hr", "employer"].includes(user?.role)) {
-          navigate("/onboarding"); // Navigate to admin onboarding page
+          navigate("/onboarding");
         } else {
-          navigate("/my-onboarding"); // Navigate to employee onboarding page
+          navigate("/my-onboarding");
         }
+        break;
+      case "offboarding_reminder":
+      case "offboarding_completed":
+        console.log("🔄 [DEBUG] Navigating to offboarding page");
+        if (["admin", "hr", "employer"].includes(user?.role)) {
+          navigate("/offboarding");
+        } else {
+          navigate("/my-offboarding");
+        }
+        break;
+      case "team_member_added": // ✅ NEW: Navigate to teams for team notifications
+      case "team_member_removed": // ✅ NEW: Navigate to teams for team notifications
+        console.log("🔄 [DEBUG] Navigating to teams page");
+        navigate("/teams");
         break;
       default:
         console.log(
           "ℹ️ [DEBUG] No specific navigation for notification type:",
           notification.type
         );
-        // Default navigation
         break;
     }
   };

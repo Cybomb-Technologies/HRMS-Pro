@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Helmet } from 'react-helmet';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { toast } from '@/components/ui/use-toast';
+import React, { useState, useEffect, useMemo } from "react";
+import { motion } from "framer-motion";
+import { Helmet } from "react-helmet";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/components/ui/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,20 +25,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Users,
   Plus,
@@ -61,53 +61,60 @@ import {
   Building,
   MapPinned,
   Wallet,
-  Activity
-} from 'lucide-react';
+  Activity,
+} from "lucide-react";
 
-const TeamForm = ({ team, onSave, onCancel, employees, departments, locations }) => {
+const TeamForm = ({
+  team,
+  onSave,
+  onCancel,
+  employees,
+  departments,
+  locations,
+}) => {
   // Safe array accessors with fallbacks and validation
   const safeEmployees = useMemo(() => {
-    return Array.isArray(employees) 
-      ? employees.filter(emp => emp && emp.employeeId && emp.name)
+    return Array.isArray(employees)
+      ? employees.filter((emp) => emp && emp.employeeId && emp.name)
       : [];
   }, [employees]);
 
-const safeDepartments = useMemo(() => {
-  return Array.isArray(departments) 
-    ? departments.filter(dept => dept && (dept._id || dept.name))
-    : [];
-}, [departments]);
+  const safeDepartments = useMemo(() => {
+    return Array.isArray(departments)
+      ? departments.filter((dept) => dept && (dept._id || dept.name))
+      : [];
+  }, [departments]);
 
-const safeLocations = useMemo(() => {
-  return Array.isArray(locations) 
-    ? locations.filter(loc => loc && (loc._id || loc.name))
-    : [];
-}, [locations]);
+  const safeLocations = useMemo(() => {
+    return Array.isArray(locations)
+      ? locations.filter((loc) => loc && (loc._id || loc.name))
+      : [];
+  }, [locations]);
 
   const [formData, setFormData] = useState(
-    team || { 
-      name: '', 
-      lead: '', 
-      department: '', 
-      location: '', 
-      status: 'active'
+    team || {
+      name: "",
+      lead: "",
+      department: "",
+      location: "",
+      status: "active",
     }
   );
 
   const handleChange = (e) => {
     try {
       const { name, value } = e.target;
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     } catch (error) {
-      console.error('Error handling form change:', error);
+      console.error("Error handling form change:", error);
     }
   };
 
   const handleSelectChange = (name, value) => {
     try {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     } catch (error) {
-      console.error('Error handling select change:', error);
+      console.error("Error handling select change:", error);
     }
   };
 
@@ -116,30 +123,33 @@ const safeLocations = useMemo(() => {
     try {
       await onSave(formData);
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error("Error submitting form:", error);
     }
   };
 
   // Safely get selected lead details
   const selectedLead = useMemo(() => {
     if (!formData.lead) return null;
-    return safeEmployees.find(emp => emp && emp.employeeId === formData.lead) || null;
+    return (
+      safeEmployees.find((emp) => emp && emp.employeeId === formData.lead) ||
+      null
+    );
   }, [formData.lead, safeEmployees]);
 
   // Generate safe values for dropdowns
   const getEmployeeValue = (employee) => {
-    if (!employee || !employee.employeeId) return '';
-    return employee.employeeId.trim() || '';
+    if (!employee || !employee.employeeId) return "";
+    return employee.employeeId.trim() || "";
   };
 
   const getDepartmentValue = (department) => {
-    if (!department) return '';
-    return (department.name || '').trim() || '';
+    if (!department) return "";
+    return (department.name || "").trim() || "";
   };
 
   const getLocationValue = (location) => {
-    if (!location) return '';
-    return (location.name || '').trim() || '';
+    if (!location) return "";
+    return (location.name || "").trim() || "";
   };
 
   return (
@@ -150,53 +160,59 @@ const safeLocations = useMemo(() => {
           <Target className="w-4 h-4 text-blue-600" />
           Team Name *
         </Label>
-        <Input 
-          id="name" 
-          name="name" 
-          value={formData.name || ''} 
-          onChange={handleChange} 
-          required 
+        <Input
+          id="name"
+          name="name"
+          value={formData.name || ""}
+          onChange={handleChange}
+          required
           placeholder="Enter team name"
           className="pl-10"
         />
         <Target className="absolute left-3 top-9 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
       </div>
-      
+
       {/* Team Lead Field */}
       <div>
         <Label htmlFor="lead" className="flex items-center gap-2">
           <UserCheck className="w-4 h-4 text-green-600" />
           Team Lead *
         </Label>
-        <Select 
-          value={formData.lead || ''} 
-          onValueChange={(value) => handleSelectChange('lead', value)}
+        <Select
+          value={formData.lead || ""}
+          onValueChange={(value) => handleSelectChange("lead", value)}
           required
         >
           <SelectTrigger>
             <SelectValue placeholder="Select team lead">
-              {selectedLead ? `${selectedLead.name || 'Unknown'} - ${selectedLead.designation || 'No Designation'}` : 'Select team lead'}
+              {selectedLead
+                ? `${selectedLead.name || "Unknown"} - ${
+                    selectedLead.designation || "No Designation"
+                  }`
+                : "Select team lead"}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {safeEmployees.map((employee) => {
               const employeeValue = getEmployeeValue(employee);
               if (!employeeValue) return null;
-              
+
               return (
-                <SelectItem 
-                  key={employeeValue} 
-                  value={employeeValue}
-                >
+                <SelectItem key={employeeValue} value={employeeValue}>
                   <div className="flex items-center gap-2">
                     <UserCheck className="w-4 h-4 text-green-500" />
-                    {employee.name || 'Unknown'} - {employee.designation || 'No Designation'} ({employee.department || 'No Department'}) - {employee.employeeId || 'No ID'}
+                    {employee.name || "Unknown"} -{" "}
+                    {employee.designation || "No Designation"} (
+                    {employee.department || "No Department"}) -{" "}
+                    {employee.employeeId || "No ID"}
                   </div>
                 </SelectItem>
               );
             })}
             {safeEmployees.length === 0 && (
-              <SelectItem value="no-employees" disabled>No employees available</SelectItem>
+              <SelectItem value="no-employees" disabled>
+                No employees available
+              </SelectItem>
             )}
           </SelectContent>
         </Select>
@@ -204,85 +220,91 @@ const safeLocations = useMemo(() => {
           <div className="mt-2 p-2 bg-blue-50 rounded-md text-sm text-blue-700 flex items-start gap-2">
             <UserCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <div>
-              <strong>Selected:</strong> {selectedLead.name || 'Unknown'} - {selectedLead.designation || 'No Designation'} | {selectedLead.department || 'No Department'} | {selectedLead.email || 'No Email'}
+              <strong>Selected:</strong> {selectedLead.name || "Unknown"} -{" "}
+              {selectedLead.designation || "No Designation"} |{" "}
+              {selectedLead.department || "No Department"} |{" "}
+              {selectedLead.email || "No Email"}
             </div>
           </div>
         )}
       </div>
 
+      <div>
+        <Label htmlFor="department" className="flex items-center gap-2">
+          <Building className="w-4 h-4 text-purple-600" />
+          Department *
+        </Label>
+        <Select
+          value={formData.department || ""}
+          onValueChange={(value) => handleSelectChange("department", value)}
+          required
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select department">
+              {formData.department || "Select department"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {safeDepartments.map((dept) => {
+              const deptName = dept?.name || "";
+              if (!deptName) return null;
 
-<div>
-  <Label htmlFor="department" className="flex items-center gap-2">
-    <Building className="w-4 h-4 text-purple-600" />
-    Department *
-  </Label>
-  <Select 
-    value={formData.department || ''} 
-    onValueChange={(value) => handleSelectChange('department', value)}
-    required
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Select department">
-        {formData.department || 'Select department'}
-      </SelectValue>
-    </SelectTrigger>
-    <SelectContent>
-      {safeDepartments.map((dept) => {
-        const deptName = dept?.name || '';
-        if (!deptName) return null;
-        
-        return (
-          <SelectItem key={dept._id || deptName} value={deptName}>
-            <div className="flex items-center gap-2">
-              <Building className="w-4 h-4 text-purple-500" />
-              {deptName}
-            </div>
-          </SelectItem>
-        );
-      })}
-      {safeDepartments.length === 0 && (
-        <SelectItem value="no-departments" disabled>No departments available</SelectItem>
-      )}
-    </SelectContent>
-  </Select>
-</div>
+              return (
+                <SelectItem key={dept._id || deptName} value={deptName}>
+                  <div className="flex items-center gap-2">
+                    <Building className="w-4 h-4 text-purple-500" />
+                    {deptName}
+                  </div>
+                </SelectItem>
+              );
+            })}
+            {safeDepartments.length === 0 && (
+              <SelectItem value="no-departments" disabled>
+                No departments available
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
 
-<div>
-  <Label htmlFor="location" className="flex items-center gap-2">
-    <MapPinned className="w-4 h-4 text-orange-600" />
-    Location *
-  </Label>
-  <Select 
-    value={formData.location || ''} 
-    onValueChange={(value) => handleSelectChange('location', value)}
-    required
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Select location">
-        {formData.location || 'Select location'}
-      </SelectValue>
-    </SelectTrigger>
-    <SelectContent>
-      {safeLocations.map((loc) => {
-        const locName = loc?.name || '';
-        if (!locName) return null;
-        
-        return (
-          <SelectItem key={loc._id || locName} value={locName}>
-            <div className="flex items-center gap-2">
-              <MapPinned className="w-4 h-4 text-orange-500" />
-              {locName}
-            </div>
-          </SelectItem>
-        );
-      })}
-      {safeLocations.length === 0 && (
-        <SelectItem value="no-locations" disabled>No locations available</SelectItem>
-      )}
-    </SelectContent>
-  </Select>
-</div>
-      
+      <div>
+        <Label htmlFor="location" className="flex items-center gap-2">
+          <MapPinned className="w-4 h-4 text-orange-600" />
+          Location *
+        </Label>
+        <Select
+          value={formData.location || ""}
+          onValueChange={(value) => handleSelectChange("location", value)}
+          required
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select location">
+              {formData.location || "Select location"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {safeLocations.map((loc) => {
+              const locName = loc?.name || "";
+              if (!locName) return null;
+
+              return (
+                <SelectItem key={loc._id || locName} value={locName}>
+                  <div className="flex items-center gap-2">
+                    <MapPinned className="w-4 h-4 text-orange-500" />
+                    {locName}
+                  </div>
+                </SelectItem>
+              );
+            })}
+            {safeLocations.length === 0 && (
+              <SelectItem value="no-locations" disabled>
+                No locations available
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Status Field */}
       <div>
         <Label htmlFor="status" className="flex items-center gap-2">
@@ -290,10 +312,10 @@ const safeLocations = useMemo(() => {
           Status
         </Label>
         <div className="relative">
-          <select 
-            id="status" 
-            name="status" 
-            value={formData.status || 'active'} 
+          <select
+            id="status"
+            name="status"
+            value={formData.status || "active"}
             onChange={handleChange}
             className="w-full px-10 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
@@ -303,7 +325,7 @@ const safeLocations = useMemo(() => {
           <Activity className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
         </div>
       </div>
-      
+
       <DialogFooter className="pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
@@ -326,28 +348,176 @@ const safeLocations = useMemo(() => {
   );
 };
 
-const TeamMembersModal = ({ team, members, allEmployees, onAddMember, onRemoveMember, onClose }) => {
-  const [selectedEmployee, setSelectedEmployee] = useState('');
+const TeamMembersModal = ({
+  team,
+  members,
+  allEmployees,
+  onAddMember,
+  onRemoveMember,
+  onClose,
+  currentUser,
+}) => {
+  const [selectedEmployee, setSelectedEmployee] = useState("");
 
   // Filter out employees who are already in the team with proper validation
   const availableEmployees = useMemo(() => {
     if (!team || !team.members || !Array.isArray(allEmployees)) return [];
-    
-    return allEmployees.filter(emp => 
-      emp && emp.employeeId && !team.members.includes(emp.employeeId)
+
+    return allEmployees.filter(
+      (emp) => emp && emp.employeeId && !team.members.includes(emp.employeeId)
     );
   }, [team, allEmployees]);
 
-  const handleAdd = async () => {
-    if (selectedEmployee) {
-      await onAddMember(team._id, selectedEmployee);
-      setSelectedEmployee('');
+  // ✅ NEW: Send team member added notification
+  const sendTeamMemberAddedNotification = async (
+    employeeId,
+    employeeName,
+    employeeEmail
+  ) => {
+    try {
+      console.log("🔔 [DEBUG] Sending team member added notification:", {
+        employeeId,
+        employeeName,
+        employeeEmail,
+        teamName: team.name,
+        teamId: team._id,
+        addedBy: {
+          id: currentUser?.id || "system",
+          name: currentUser?.name || "Admin",
+        },
+      });
+
+      const response = await fetch(
+        "http://localhost:5000/api/notifications/team/member-added",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId,
+            employeeName,
+            employeeEmail,
+            teamName: team.name,
+            teamId: team._id,
+            addedBy: {
+              id: currentUser?.id || "system",
+              name: currentUser?.name || "Admin",
+            },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        console.log(
+          "✅ [DEBUG] Team member added notification sent successfully"
+        );
+      } else {
+        console.error(
+          "❌ [DEBUG] Failed to send team member added notification"
+        );
+      }
+    } catch (error) {
+      console.error(
+        "❌ [DEBUG] Error sending team member added notification:",
+        error
+      );
     }
   };
 
+  // ✅ NEW: Send team member removed notification
+  const sendTeamMemberRemovedNotification = async (
+    employeeId,
+    employeeName,
+    employeeEmail
+  ) => {
+    try {
+      console.log("🔔 [DEBUG] Sending team member removed notification:", {
+        employeeId,
+        employeeName,
+        employeeEmail,
+        teamName: team.name,
+        teamId: team._id,
+        removedBy: {
+          id: currentUser?.id || "system",
+          name: currentUser?.name || "Admin",
+        },
+      });
+
+      const response = await fetch(
+        "http://localhost:5000/api/notifications/team/member-removed",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            employeeId,
+            employeeName,
+            employeeEmail,
+            teamName: team.name,
+            teamId: team._id,
+            removedBy: {
+              id: currentUser?.id || "system",
+              name: currentUser?.name || "Admin",
+            },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        console.log(
+          "✅ [DEBUG] Team member removed notification sent successfully"
+        );
+      } else {
+        console.error(
+          "❌ [DEBUG] Failed to send team member removed notification"
+        );
+      }
+    } catch (error) {
+      console.error(
+        "❌ [DEBUG] Error sending team member removed notification:",
+        error
+      );
+    }
+  };
+
+  const handleAdd = async () => {
+    if (selectedEmployee) {
+      const employeeToAdd = availableEmployees.find(
+        (emp) => emp.employeeId === selectedEmployee
+      );
+      if (employeeToAdd) {
+        // First add the member
+        await onAddMember(team._id, selectedEmployee);
+
+        // Then send notification
+        await sendTeamMemberAddedNotification(
+          employeeToAdd.employeeId,
+          employeeToAdd.name,
+          employeeToAdd.email
+        );
+
+        setSelectedEmployee("");
+      }
+    }
+  };
+
+  const handleRemove = async (employeeId, employeeName, employeeEmail) => {
+    // First remove the member
+    await onRemoveMember(team._id, employeeId);
+
+    // Then send notification
+    await sendTeamMemberRemovedNotification(
+      employeeId,
+      employeeName,
+      employeeEmail
+    );
+  };
+
   const getEmployeeValue = (employee) => {
-    if (!employee || !employee.employeeId) return '';
-    return employee.employeeId.trim() || '';
+    if (!employee || !employee.employeeId) return "";
+    return employee.employeeId.trim() || "";
   };
 
   return (
@@ -355,7 +525,7 @@ const TeamMembersModal = ({ team, members, allEmployees, onAddMember, onRemoveMe
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <Users2 className="w-5 h-5 text-blue-600" />
-          Members of {team?.name || 'Team'}
+          Members of {team?.name || "Team"}
         </DialogTitle>
         <DialogDescription>View and manage team members.</DialogDescription>
       </DialogHeader>
@@ -366,59 +536,82 @@ const TeamMembersModal = ({ team, members, allEmployees, onAddMember, onRemoveMe
               <SelectValue placeholder="Select employee to add" />
             </SelectTrigger>
             <SelectContent>
-              {availableEmployees.map(emp => {
+              {availableEmployees.map((emp) => {
                 const empValue = getEmployeeValue(emp);
                 if (!empValue) return null;
-                
+
                 return (
                   <SelectItem key={empValue} value={empValue}>
                     <div className="flex items-center gap-2">
                       <UserCheck className="w-4 h-4 text-green-500" />
-                      {emp.name} - {emp.designation} ({emp.department}) - {emp.employeeId}
+                      {emp.name} - {emp.designation} ({emp.department}) -{" "}
+                      {emp.employeeId}
                     </div>
                   </SelectItem>
                 );
               })}
               {availableEmployees.length === 0 && (
-                <SelectItem value="no-available" disabled>No employees available to add</SelectItem>
+                <SelectItem value="no-available" disabled>
+                  No employees available to add
+                </SelectItem>
               )}
             </SelectContent>
           </Select>
-          <Button onClick={handleAdd} disabled={!selectedEmployee} className="flex items-center gap-2">
-            <UserPlus className="w-4 h-4" /> 
+          <Button
+            onClick={handleAdd}
+            disabled={!selectedEmployee}
+            className="flex items-center gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
             Add
           </Button>
         </div>
-        
+
         <div className="space-y-2 max-h-64 overflow-y-auto">
           <h4 className="font-medium text-sm text-gray-700 flex items-center gap-2">
             <Users className="w-4 h-4 text-blue-600" />
             Current Members ({members?.length || 0})
           </h4>
-          {members && members.map(member => (
-            member && (
-              <div key={member.employeeId} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-full">
-                    <UserCheck className="w-4 h-4 text-blue-600" />
+          {members &&
+            members.map(
+              (member) =>
+                member && (
+                  <div
+                    key={member.employeeId}
+                    className="flex items-center justify-between p-3 border rounded-lg bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-full">
+                        <UserCheck className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <span className="font-medium">{member.name}</span>
+                        <span className="text-sm text-gray-600 ml-2">
+                          ({member.designation})
+                        </span>
+                        <div className="text-xs text-gray-500">
+                          {member.department} • {member.email} • ID:{" "}
+                          {member.employeeId}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        handleRemove(
+                          member.employeeId,
+                          member.name,
+                          member.email
+                        )
+                      }
+                      className="hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div>
-                    <span className="font-medium">{member.name}</span>
-                    <span className="text-sm text-gray-600 ml-2">({member.designation})</span>
-                    <div className="text-xs text-gray-500">{member.department} • {member.email} • ID: {member.employeeId}</div>
-                  </div>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => onRemoveMember(team._id, member.employeeId)} 
-                  className="hover:bg-red-50 hover:text-red-600"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            )
-          ))}
+                )
+            )}
           {(!members || members.length === 0) && (
             <div className="text-center text-gray-500 py-8">
               <Users className="w-12 h-12 text-gray-300 mx-auto mb-2" />
@@ -434,35 +627,58 @@ const TeamMembersModal = ({ team, members, allEmployees, onAddMember, onRemoveMe
   );
 };
 
-const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employees, departments, locations }) => {
+const FilterModal = ({
+  filters,
+  onFiltersChange,
+  onClose,
+  onClear,
+  teams,
+  employees,
+  departments,
+  locations,
+}) => {
   // Safe array accessors with validation
-  const safeTeams = useMemo(() => Array.isArray(teams) ? teams : [], [teams]);
-  const safeEmployees = useMemo(() => Array.isArray(employees) ? employees : [], [employees]);
-  const safeDepartments = useMemo(() => Array.isArray(departments) ? departments : [], [departments]);
-  const safeLocations = useMemo(() => Array.isArray(locations) ? locations : [], [locations]);
+  const safeTeams = useMemo(() => (Array.isArray(teams) ? teams : []), [teams]);
+  const safeEmployees = useMemo(
+    () => (Array.isArray(employees) ? employees : []),
+    [employees]
+  );
+  const safeDepartments = useMemo(
+    () => (Array.isArray(departments) ? departments : []),
+    [departments]
+  );
+  const safeLocations = useMemo(
+    () => (Array.isArray(locations) ? locations : []),
+    [locations]
+  );
 
   // Safely get team leads with proper error handling
   const teamLeads = useMemo(() => {
     try {
       const leads = safeTeams
-        .filter(team => team && typeof team === 'object' && team.lead)
-        .map(t => t.lead)
-        .filter(leadId => leadId && typeof leadId === 'string' && leadId.trim() !== '');
-      
-      return ['all', ...new Set(leads)];
+        .filter((team) => team && typeof team === "object" && team.lead)
+        .map((t) => t.lead)
+        .filter(
+          (leadId) =>
+            leadId && typeof leadId === "string" && leadId.trim() !== ""
+        );
+
+      return ["all", ...new Set(leads)];
     } catch (error) {
-      console.error('Error processing team leads:', error);
-      return ['all'];
+      console.error("Error processing team leads:", error);
+      return ["all"];
     }
   }, [safeTeams]);
 
   // Safely find employee for a lead ID
   const getLeadEmployee = (leadId) => {
     try {
-      if (!leadId || leadId === 'all') return null;
-      return safeEmployees.find(emp => emp && emp.employeeId === leadId) || null;
+      if (!leadId || leadId === "all") return null;
+      return (
+        safeEmployees.find((emp) => emp && emp.employeeId === leadId) || null
+      );
     } catch (error) {
-      console.error('Error finding lead employee:', error);
+      console.error("Error finding lead employee:", error);
       return null;
     }
   };
@@ -471,7 +687,7 @@ const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employ
     try {
       onFiltersChange({ ...filters, [key]: value });
     } catch (error) {
-      console.error('Error updating filters:', error);
+      console.error("Error updating filters:", error);
     }
   };
 
@@ -479,19 +695,19 @@ const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employ
     try {
       onClear();
     } catch (error) {
-      console.error('Error clearing filters:', error);
+      console.error("Error clearing filters:", error);
     }
   };
 
   // Safe value getters
   const getDepartmentValue = (department) => {
-    if (!department) return '';
-    return (department.name || '').trim() || '';
+    if (!department) return "";
+    return (department.name || "").trim() || "";
   };
 
   const getLocationValue = (location) => {
-    if (!location) return '';
-    return (location.name || '').trim() || '';
+    if (!location) return "";
+    return (location.name || "").trim() || "";
   };
 
   return (
@@ -501,90 +717,96 @@ const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employ
           <Filter className="w-5 h-5 text-blue-600" />
           Filter Teams
         </DialogTitle>
-        <DialogDescription>Apply filters to narrow down the team list.</DialogDescription>
+        <DialogDescription>
+          Apply filters to narrow down the team list.
+        </DialogDescription>
       </DialogHeader>
       <div className="space-y-4 py-4">
+        <div>
+          <Label className="flex items-center gap-2">
+            <Building className="w-4 h-4 text-purple-600" />
+            Department
+          </Label>
+          <Select
+            value={filters?.department || "all"}
+            onValueChange={(value) => handleFilterChange("department", value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Departments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {safeDepartments.map((dept) => {
+                const deptName = dept?.name || "";
+                if (!deptName) return null;
 
-<div>
-  <Label className="flex items-center gap-2">
-    <Building className="w-4 h-4 text-purple-600" />
-    Department
-  </Label>
-  <Select 
-    value={filters?.department || 'all'} 
-    onValueChange={(value) => handleFilterChange('department', value)}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="All Departments" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="all">All Departments</SelectItem>
-      {safeDepartments.map(dept => {
-        const deptName = dept?.name || '';
-        if (!deptName) return null;
-        
-        return (
-          <SelectItem key={deptName} value={deptName}>
-            {deptName}
-          </SelectItem>
-        );
-      })}
-    </SelectContent>
-  </Select>
-</div>
+                return (
+                  <SelectItem key={deptName} value={deptName}>
+                    {deptName}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
 
+        <div>
+          <Label className="flex items-center gap-2">
+            <MapPinned className="w-4 h-4 text-orange-600" />
+            Location
+          </Label>
+          <Select
+            value={filters?.location || "all"}
+            onValueChange={(value) => handleFilterChange("location", value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Locations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              {safeLocations.map((location) => {
+                const locName = location?.name || "";
+                if (!locName) return null;
 
-<div>
-  <Label className="flex items-center gap-2">
-    <MapPinned className="w-4 h-4 text-orange-600" />
-    Location
-  </Label>
-  <Select 
-    value={filters?.location || 'all'} 
-    onValueChange={(value) => handleFilterChange('location', value)}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="All Locations" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="all">All Locations</SelectItem>
-      {safeLocations.map(location => {
-        const locName = location?.name || '';
-        if (!locName) return null;
-        
-        return (
-          <SelectItem key={locName} value={locName}>
-            {locName}
-          </SelectItem>
-        );
-      })}
-    </SelectContent>
-  </Select>
-</div>
+                return (
+                  <SelectItem key={locName} value={locName}>
+                    {locName}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
         {/* Team Lead Filter */}
         <div>
           <Label className="flex items-center gap-2">
             <UserCheck className="w-4 h-4 text-green-600" />
             Team Lead
           </Label>
-          <Select 
-            value={filters?.lead || 'all'} 
-            onValueChange={(value) => handleFilterChange('lead', value)}
+          <Select
+            value={filters?.lead || "all"}
+            onValueChange={(value) => handleFilterChange("lead", value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="All Team Leads" />
             </SelectTrigger>
             <SelectContent>
-              {teamLeads.map(leadId => {
-                if (leadId === 'all') {
-                  return <SelectItem key="all" value="all">All Team Leads</SelectItem>;
+              {teamLeads.map((leadId) => {
+                if (leadId === "all") {
+                  return (
+                    <SelectItem key="all" value="all">
+                      All Team Leads
+                    </SelectItem>
+                  );
                 }
-                
+
                 const leadEmployee = getLeadEmployee(leadId);
-                const displayText = leadEmployee 
-                  ? `${leadEmployee.name || 'Unknown'} - ${leadEmployee.designation || 'No Designation'}`
+                const displayText = leadEmployee
+                  ? `${leadEmployee.name || "Unknown"} - ${
+                      leadEmployee.designation || "No Designation"
+                    }`
                   : leadId;
-                
+
                 return (
                   <SelectItem key={leadId} value={leadId}>
                     {displayText}
@@ -594,17 +816,16 @@ const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employ
             </SelectContent>
           </Select>
         </div>
-       
-        
+
         {/* Status Filter */}
         <div>
           <Label className="flex items-center gap-2">
             <Activity className="w-4 h-4 text-blue-600" />
             Status
           </Label>
-          <Select 
-            value={filters?.status || 'all'} 
-            onValueChange={(value) => handleFilterChange('status', value)}
+          <Select
+            value={filters?.status || "all"}
+            onValueChange={(value) => handleFilterChange("status", value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="All Status" />
@@ -618,7 +839,11 @@ const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employ
         </div>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={handleClear} className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={handleClear}
+          className="flex items-center gap-2"
+        >
           <X className="w-4 h-4" />
           Clear Filters
         </Button>
@@ -632,18 +857,18 @@ const FilterModal = ({ filters, onFiltersChange, onClose, onClear, teams, employ
 };
 
 const TeamSection = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
-    department: 'all',
-    lead: 'all',
-    location: 'all',
-    status: 'all'
+    department: "all",
+    lead: "all",
+    location: "all",
+    status: "all",
   });
 
   // Calculate active filters count
   const activeFiltersCount = useMemo(() => {
-    return Object.values(filters).filter(value => 
-      value !== 'all' && value !== ''
+    return Object.values(filters).filter(
+      (value) => value !== "all" && value !== ""
     ).length;
   }, [filters]);
 
@@ -656,17 +881,32 @@ const TeamSection = () => {
   const [departments, setDepartments] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // ✅ NEW: Get current user info for notifications
+  useEffect(() => {
+    // Get current user from localStorage or context
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        setCurrentUser(user);
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
 
   const fetchTeams = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:5000/api/teams');
-      if (!res.ok) throw new Error('Failed to fetch teams');
+      const res = await fetch("http://localhost:5000/api/teams");
+      if (!res.ok) throw new Error("Failed to fetch teams");
       const data = await res.json();
       setTeams(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Error fetching teams:', err);
-      toast({ title: 'Error', description: 'Failed to fetch teams' });
+      console.error("Error fetching teams:", err);
+      toast({ title: "Error", description: "Failed to fetch teams" });
       setTeams([]);
     } finally {
       setLoading(false);
@@ -675,58 +915,70 @@ const TeamSection = () => {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/employees');
-      if (!res.ok) throw new Error('Failed to fetch employees');
+      const res = await fetch("http://localhost:5000/api/employees");
+      if (!res.ok) throw new Error("Failed to fetch employees");
       const data = await res.json();
       setEmployees(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Error fetching employees:', err);
-      toast({ title: 'Error', description: 'Failed to fetch employees' });
+      console.error("Error fetching employees:", err);
+      toast({ title: "Error", description: "Failed to fetch employees" });
       setEmployees([]);
     }
   };
 
-const fetchDepartments = async () => {
-  try {
-    const res = await fetch('http://localhost:5000/api/organization/departments');
-    if (!res.ok) throw new Error('Failed to fetch departments');
-    const data = await res.json();
-    console.log('Departments data:', data);
-    
-    // Handle nested data structure
-    const departmentsArray = Array.isArray(data.data) ? data.data : 
-                           Array.isArray(data) ? data : 
-                           Array.isArray(data.departments) ? data.departments : [];
-    
-    setDepartments(departmentsArray);
-  } catch (err) {
-    console.error('Error fetching departments:', err);
-    toast({ title: 'Error', description: 'Failed to fetch departments' });
-    setDepartments([]);
-  }
-};
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch(
+        "http://localhost:5000/api/organization/departments"
+      );
+      if (!res.ok) throw new Error("Failed to fetch departments");
+      const data = await res.json();
+      console.log("Departments data:", data);
 
-const fetchLocations = async () => {
-  try {
-    const res = await fetch('http://localhost:5000/api/organization/locations');
-    if (!res.ok) throw new Error('Failed to fetch locations');
-    const data = await res.json();
-    console.log('Locations data:', data);
-    
-    // Handle nested data structure
-    const locationsArray = Array.isArray(data.data) ? data.data : 
-                          Array.isArray(data) ? data : 
-                          Array.isArray(data.locations) ? data.locations : [];
-    
-    setLocations(locationsArray);
-  } catch (err) {
-    console.error('Error fetching locations:', err);
-    toast({ title: 'Error', description: 'Failed to fetch locations' });
-    setLocations([]);
-  }
-};
+      // Handle nested data structure
+      const departmentsArray = Array.isArray(data.data)
+        ? data.data
+        : Array.isArray(data)
+        ? data
+        : Array.isArray(data.departments)
+        ? data.departments
+        : [];
 
-  useEffect(() => { 
+      setDepartments(departmentsArray);
+    } catch (err) {
+      console.error("Error fetching departments:", err);
+      toast({ title: "Error", description: "Failed to fetch departments" });
+      setDepartments([]);
+    }
+  };
+
+  const fetchLocations = async () => {
+    try {
+      const res = await fetch(
+        "http://localhost:5000/api/organization/locations"
+      );
+      if (!res.ok) throw new Error("Failed to fetch locations");
+      const data = await res.json();
+      console.log("Locations data:", data);
+
+      // Handle nested data structure
+      const locationsArray = Array.isArray(data.data)
+        ? data.data
+        : Array.isArray(data)
+        ? data
+        : Array.isArray(data.locations)
+        ? data.locations
+        : [];
+
+      setLocations(locationsArray);
+    } catch (err) {
+      console.error("Error fetching locations:", err);
+      toast({ title: "Error", description: "Failed to fetch locations" });
+      setLocations([]);
+    }
+  };
+
+  useEffect(() => {
     fetchTeams();
     fetchEmployees();
     fetchDepartments();
@@ -735,189 +987,222 @@ const fetchLocations = async () => {
 
   const handleCreateTeam = async (teamData) => {
     try {
-      const res = await fetch('http://localhost:5000/api/teams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teamData)
+      const res = await fetch("http://localhost:5000/api/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(teamData),
       });
-      
+
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to create team');
+        throw new Error(error.error || "Failed to create team");
       }
 
       const result = await res.json();
-      toast({ 
-        title: 'Team Created', 
-        description: result.message 
+      toast({
+        title: "Team Created",
+        description: result.message,
       });
       setCreateModalOpen(false);
       fetchTeams(); // Refresh the list
     } catch (err) {
-      toast({ title: 'Error', description: err.message });
+      toast({ title: "Error", description: err.message });
     }
   };
 
   const handleUpdateTeam = async (teamData) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/teams/${editingTeam._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teamData)
-      });
-      
+      const res = await fetch(
+        `http://localhost:5000/api/teams/${editingTeam._id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(teamData),
+        }
+      );
+
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to update team');
+        throw new Error(error.error || "Failed to update team");
       }
 
       const result = await res.json();
-      toast({ 
-        title: 'Team Updated', 
-        description: result.message 
+      toast({
+        title: "Team Updated",
+        description: result.message,
       });
       setEditingTeam(null);
       fetchTeams(); // Refresh the list
     } catch (err) {
-      toast({ title: 'Error', description: err.message });
+      toast({ title: "Error", description: err.message });
     }
   };
 
   const handleDeleteTeam = async (teamId) => {
     try {
       const res = await fetch(`http://localhost:5000/api/teams/${teamId}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
-      
+
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to delete team');
+        throw new Error(error.error || "Failed to delete team");
       }
 
       const result = await res.json();
-      toast({ 
-        title: 'Team Deleted', 
-        description: result.message 
+      toast({
+        title: "Team Deleted",
+        description: result.message,
       });
       fetchTeams(); // Refresh the list
     } catch (err) {
-      toast({ title: 'Error', description: err.message });
+      toast({ title: "Error", description: err.message });
     }
   };
 
   const handleAddMember = async (teamId, employeeId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/teams/${teamId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId })
-      });
-      
+      const res = await fetch(
+        `http://localhost:5000/api/teams/${teamId}/members`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeId }),
+        }
+      );
+
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to add member');
+        throw new Error(error.error || "Failed to add member");
       }
 
       const result = await res.json();
-      toast({ 
-        title: 'Member Added', 
-        description: result.message 
+      toast({
+        title: "Member Added",
+        description: result.message,
       });
-      
+
       // Refresh the current team data
-      const updatedTeamRes = await fetch(`http://localhost:5000/api/teams/${teamId}`);
+      const updatedTeamRes = await fetch(
+        `http://localhost:5000/api/teams/${teamId}`
+      );
       if (updatedTeamRes.ok) {
         const updatedTeam = await updatedTeamRes.json();
         setViewingMembersTeam(updatedTeam);
       }
-      
+
       fetchTeams(); // Refresh the main list
     } catch (err) {
-      toast({ title: 'Error', description: err.message });
+      toast({ title: "Error", description: err.message });
     }
   };
 
   const handleRemoveMember = async (teamId, employeeId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/teams/${teamId}/members`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId })
-      });
-      
+      const res = await fetch(
+        `http://localhost:5000/api/teams/${teamId}/members`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeId }),
+        }
+      );
+
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to remove member');
+        throw new Error(error.error || "Failed to remove member");
       }
 
       const result = await res.json();
-      toast({ 
-        title: 'Member Removed', 
-        description: result.message 
+      toast({
+        title: "Member Removed",
+        description: result.message,
       });
-      
+
       // Refresh the current team data
-      const updatedTeamRes = await fetch(`http://localhost:5000/api/teams/${teamId}`);
+      const updatedTeamRes = await fetch(
+        `http://localhost:5000/api/teams/${teamId}`
+      );
       if (updatedTeamRes.ok) {
         const updatedTeam = await updatedTeamRes.json();
         setViewingMembersTeam(updatedTeam);
       }
-      
+
       fetchTeams(); // Refresh the main list
     } catch (err) {
-      toast({ title: 'Error', description: err.message });
+      toast({ title: "Error", description: err.message });
     }
   };
 
   const handleClearFilters = () => {
-    setFilters({ department: 'all', lead: 'all', location: 'all', status: 'all' });
-    toast({ title: 'Filters Cleared', description: 'All filters have been reset.' });
+    setFilters({
+      department: "all",
+      lead: "all",
+      location: "all",
+      status: "all",
+    });
+    toast({
+      title: "Filters Cleared",
+      description: "All filters have been reset.",
+    });
   };
 
   // Update getLeadName with safety checks
   const getLeadName = (leadId) => {
-    if (!leadId || !Array.isArray(employees)) return '';
-    const leadEmployee = employees.find(emp => emp && emp.employeeId === leadId);
+    if (!leadId || !Array.isArray(employees)) return "";
+    const leadEmployee = employees.find(
+      (emp) => emp && emp.employeeId === leadId
+    );
     return leadEmployee ? leadEmployee.name : leadId;
   };
 
   // Helper function to get lead details
   const getLeadDetails = (leadId) => {
-    return employees.find(emp => emp.employeeId === leadId);
+    return employees.find((emp) => emp.employeeId === leadId);
   };
 
   // Get team members details for the modal
   const getTeamMembersDetails = (team) => {
     if (!team || !team.members) return [];
-    return team.members.map(memberId => 
-      employees.find(emp => emp.employeeId === memberId)
-    ).filter(Boolean);
+    return team.members
+      .map((memberId) => employees.find((emp) => emp.employeeId === memberId))
+      .filter(Boolean);
   };
 
   const filteredTeams = useMemo(() => {
     if (!Array.isArray(teams)) return [];
-    
-    return teams.filter(team => {
-      if (!team || typeof team !== 'object') return false;
-      
-      const searchLower = searchTerm.toLowerCase();
-      const teamName = team.name || '';
-      const teamDepartment = team.department || '';
-      const teamLead = team.lead || '';
-      const teamLocation = team.location || '';
-      const teamStatus = team.status || 'active';
-      
-      const matchesSearch = 
-        teamName.toLowerCase().includes(searchLower) ||
-        (teamLead && getLeadName(teamLead)?.toLowerCase().includes(searchLower)) ||
-        teamDepartment.toLowerCase().includes(searchLower);
-      
-      const matchesDepartment = filters.department === 'all' || teamDepartment === filters.department;
-      const matchesLead = filters.lead === 'all' || teamLead === filters.lead;
-      const matchesLocation = filters.location === 'all' || teamLocation === filters.location;
-      const matchesStatus = filters.status === 'all' || teamStatus === filters.status;
 
-      return matchesSearch && matchesDepartment && matchesLead && matchesLocation && matchesStatus;
+    return teams.filter((team) => {
+      if (!team || typeof team !== "object") return false;
+
+      const searchLower = searchTerm.toLowerCase();
+      const teamName = team.name || "";
+      const teamDepartment = team.department || "";
+      const teamLead = team.lead || "";
+      const teamLocation = team.location || "";
+      const teamStatus = team.status || "active";
+
+      const matchesSearch =
+        teamName.toLowerCase().includes(searchLower) ||
+        (teamLead &&
+          getLeadName(teamLead)?.toLowerCase().includes(searchLower)) ||
+        teamDepartment.toLowerCase().includes(searchLower);
+
+      const matchesDepartment =
+        filters.department === "all" || teamDepartment === filters.department;
+      const matchesLead = filters.lead === "all" || teamLead === filters.lead;
+      const matchesLocation =
+        filters.location === "all" || teamLocation === filters.location;
+      const matchesStatus =
+        filters.status === "all" || teamStatus === filters.status;
+
+      return (
+        matchesSearch &&
+        matchesDepartment &&
+        matchesLead &&
+        matchesLocation &&
+        matchesStatus
+      );
     });
   }, [teams, searchTerm, filters, employees]);
 
@@ -936,7 +1221,10 @@ const fetchLocations = async () => {
     <>
       <Helmet>
         <title>Teams - HRMS Pro</title>
-        <meta name="description" content="Manage teams, assign leads, track budgets and organize your workforce effectively with HRMS Pro" />
+        <meta
+          name="description"
+          content="Manage teams, assign leads, track budgets and organize your workforce effectively with HRMS Pro"
+        />
       </Helmet>
 
       {/* Create Team Dialog */}
@@ -947,10 +1235,12 @@ const fetchLocations = async () => {
               <Plus className="w-5 h-5 text-green-600" />
               Create New Team
             </DialogTitle>
-            <DialogDescription>Fill in the details to create a new team.</DialogDescription>
+            <DialogDescription>
+              Fill in the details to create a new team.
+            </DialogDescription>
           </DialogHeader>
-          <TeamForm 
-            onSave={handleCreateTeam} 
+          <TeamForm
+            onSave={handleCreateTeam}
             onCancel={() => setCreateModalOpen(false)}
             employees={employees}
             departments={departments}
@@ -967,11 +1257,13 @@ const fetchLocations = async () => {
               <Edit className="w-5 h-5 text-blue-600" />
               Edit Team
             </DialogTitle>
-            <DialogDescription>Update the details for the team.</DialogDescription>
+            <DialogDescription>
+              Update the details for the team.
+            </DialogDescription>
           </DialogHeader>
-          <TeamForm 
-            team={editingTeam} 
-            onSave={handleUpdateTeam} 
+          <TeamForm
+            team={editingTeam}
+            onSave={handleUpdateTeam}
             onCancel={() => setEditingTeam(null)}
             employees={employees}
             departments={departments}
@@ -981,7 +1273,10 @@ const fetchLocations = async () => {
       </Dialog>
 
       {/* Team Members Dialog */}
-      <Dialog open={!!viewingMembersTeam} onOpenChange={() => setViewingMembersTeam(null)}>
+      <Dialog
+        open={!!viewingMembersTeam}
+        onOpenChange={() => setViewingMembersTeam(null)}
+      >
         {viewingMembersTeam && (
           <TeamMembersModal
             team={viewingMembersTeam}
@@ -990,6 +1285,7 @@ const fetchLocations = async () => {
             onAddMember={handleAddMember}
             onRemoveMember={handleRemoveMember}
             onClose={() => setViewingMembersTeam(null)}
+            currentUser={currentUser}
           />
         )}
       </Dialog>
@@ -1021,7 +1317,9 @@ const fetchLocations = async () => {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Teams</h1>
-              <p className="text-gray-600 mt-2">Manage teams, assign leads, and track performance</p>
+              <p className="text-gray-600 mt-2">
+                Manage teams, assign leads, and track performance
+              </p>
             </div>
           </div>
           <Button
@@ -1056,7 +1354,10 @@ const fetchLocations = async () => {
             <Filter className="w-4 h-4" />
             Filter
             {activeFiltersCount > 0 && (
-              <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 hover:bg-blue-200">
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-blue-100 text-blue-800 hover:bg-blue-200"
+              >
                 {activeFiltersCount}
               </Badge>
             )}
@@ -1083,12 +1384,20 @@ const fetchLocations = async () => {
                       <Users2 className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-lg text-gray-900">{team.name}</h3>
-                      <Badge 
-                        variant={team.status === 'active' ? 'default' : 'secondary'} 
-                        className={`mt-1 ${team.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
+                      <h3 className="font-semibold text-lg text-gray-900">
+                        {team.name}
+                      </h3>
+                      <Badge
+                        variant={
+                          team.status === "active" ? "default" : "secondary"
+                        }
+                        className={`mt-1 ${
+                          team.status === "active"
+                            ? "bg-green-100 text-green-800 hover:bg-green-200"
+                            : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                        }`}
                       >
-                        {team.status === 'active' ? 'Active' : 'Inactive'}
+                        {team.status === "active" ? "Active" : "Inactive"}
                       </Badge>
                     </div>
                   </div>
@@ -1103,13 +1412,17 @@ const fetchLocations = async () => {
                         <Edit className="w-4 h-4 mr-2" />
                         Edit Team
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setViewingMembersTeam(team)}>
+                      <DropdownMenuItem
+                        onClick={() => setViewingMembersTeam(team)}
+                      >
                         <Users className="w-4 h-4 mr-2" />
                         View Members
                       </DropdownMenuItem>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()}
+                          >
                             <Trash2 className="w-4 h-4 mr-2" />
                             Delete Team
                           </DropdownMenuItem>
@@ -1118,7 +1431,9 @@ const fetchLocations = async () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete the team and remove all associated data.
+                              This action cannot be undone. This will
+                              permanently delete the team and remove all
+                              associated data.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -1188,11 +1503,13 @@ const fetchLocations = async () => {
             className="text-center py-12"
           >
             <Users2 className="w-24 h-24 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No teams found</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              No teams found
+            </h3>
             <p className="text-gray-600 mb-6">
-              {searchTerm || activeFiltersCount > 0 
-                ? 'Try adjusting your search or filters to find what you are looking for.'
-                : 'Get started by creating your first team.'}
+              {searchTerm || activeFiltersCount > 0
+                ? "Try adjusting your search or filters to find what you are looking for."
+                : "Get started by creating your first team."}
             </p>
             {!searchTerm && activeFiltersCount === 0 && (
               <Button
