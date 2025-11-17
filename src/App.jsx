@@ -11,6 +11,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { AppProvider } from "@/contexts/AppContext";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
+import { AdminAttendanceProvider } from "@/contexts/AdminAttendanceContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import LoginPage from "@/pages/LoginPage";
 import Dashboard from "@/pages/Dashboard";
 import TeamSection from "@/pages/TeamSection";
@@ -31,19 +33,19 @@ import SearchResultsPage from "@/pages/SearchResultsPage";
 import CompanyPolicyPage from "@/pages/CompanyPolicyPage";
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { AdminAttendanceProvider } from "@/contexts/AdminAttendanceContext";
 import FeedsSection from "@/pages/FeedsSection";
 import EmployeeLeavePage from "./pages/EmployeeLeavePage";
 import AttendanceTab from "./components/Dashboard/EmployeeTabs/AttendanceTab";
 import EmployeePayslipsPage from "./pages/EmployeePayslipsPage";
-import PolicyEmployee from "./pages/EmployeePolicy"
-import EmployeeDashboard from "./components/Dashboard/EmployeeDashboard"
-import EmpOnboarding from "./pages/emponboarding"
-import EmpOffboarding from "./pages/empoffboarding"
+import PolicyEmployee from "./pages/EmployeePolicy";
+import EmployeeDashboard from "./components/Dashboard/EmployeeDashboard";
+import EmpOnboarding from "./pages/emponboarding";
+import EmpOffboarding from "./pages/empoffboarding";
+
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
-  const ishr = user?.role === "hr"
+  const ishr = user?.role === "hr";
 
   return (
     <Routes>
@@ -62,9 +64,7 @@ const AppRoutes = () => {
         path="/profile"
         element={
           <ProtectedRoute>
-            <Layout>
-              {ishr &&  <EmployeeDashboard />}
-            </Layout>
+            <Layout>{ishr && <EmployeeDashboard />}</Layout>
           </ProtectedRoute>
         }
       />
@@ -136,22 +136,25 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      <Route path="/employee-onboarding" 
-      element = {
-      <ProtectedRoute>
-        <Layout>
-          <EmpOnboarding/>
-        </Layout>
-        </ProtectedRoute> 
-      }
+      <Route
+        path="/employee-onboarding"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <EmpOnboarding />
+            </Layout>
+          </ProtectedRoute>
+        }
       />
-      <Route path="/employee-offboarding"element = {
-      <ProtectedRoute>
-        <Layout>
-          <EmpOffboarding/>
-        </Layout>
-        </ProtectedRoute> 
-      }
+      <Route
+        path="/employee-offboarding"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <EmpOffboarding />
+            </Layout>
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/leave"
@@ -168,7 +171,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-           <AttendanceSection />
+              <AttendanceSection />
             </Layout>
           </ProtectedRoute>
         }
@@ -273,7 +276,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-               {isEmployee ? <PolicyEmployee/> : < CompanyPolicyPage/>}
+              {isEmployee ? <PolicyEmployee /> : <CompanyPolicyPage />}
             </Layout>
           </ProtectedRoute>
         }
@@ -305,20 +308,22 @@ function App() {
       </Helmet>
 
       <ThemeProvider defaultTheme="light" storageKey="hrms-ui-theme">
-        <AuthProvider>
-          <AdminAttendanceProvider>
-            <TenantProvider>
-              <AppProvider>
-                <Router>
-                  <div className="min-h-screen bg-background text-foreground">
-                    <AppRoutes />
-                    <Toaster />
-                  </div>
-                </Router>
-              </AppProvider>
-            </TenantProvider>
-          </AdminAttendanceProvider>
-        </AuthProvider>
+        <CurrencyProvider>
+          <AuthProvider>
+            <AdminAttendanceProvider>
+              <TenantProvider>
+                <AppProvider>
+                  <Router>
+                    <div className="min-h-screen bg-background text-foreground">
+                      <AppRoutes />
+                      <Toaster />
+                    </div>
+                  </Router>
+                </AppProvider>
+              </TenantProvider>
+            </AdminAttendanceProvider>
+          </AuthProvider>
+        </CurrencyProvider>
       </ThemeProvider>
     </>
   );

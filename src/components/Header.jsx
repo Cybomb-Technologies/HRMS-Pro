@@ -68,6 +68,62 @@ const Header = ({ onMenuClick }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
+  const [companyInfo, setCompanyInfo] = useState({
+    timezone: "Asia/Calcutta",
+    currency: "AED (AED)",
+    companyName: "cybomb",
+  });
+
+  // FIXED: Get token from localStorage directly to ensure it's available
+  const getAuthToken = () => {
+    return localStorage.getItem("hrms_token");
+  };
+
+  // FIXED: Fetch company timezone and info from database with proper token handling
+  const fetchCompanyInfo = async () => {
+    const token = getAuthToken();
+
+    if (!token) {
+      console.warn("No authentication token found");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/settings/company/timezone",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Include cookies if needed
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setCompanyInfo({
+            timezone: data.data.timezone,
+            currency: data.data.currency,
+            companyName: data.data.companyName,
+          });
+        }
+      } else if (response.status === 401) {
+        console.error("Authentication failed - token may be expired");
+        // Don't logout here, just use fallback values
+      }
+    } catch (error) {
+      console.error("Error fetching company info:", error);
+      // Fallback to default values if fetch fails
+      setCompanyInfo({
+        timezone: "Asia/Calcutta",
+        currency: "AED (AED)",
+        companyName: "cybomb",
+      });
+    }
+  };
+
   // FIXED: Get profile picture URL function
   const getProfilePictureUrl = (profilePicture) => {
     if (!profilePicture) return null;

@@ -1,6 +1,7 @@
 const Employee = require("../models/Employee");
 const EmployeeSalary = require("../models/EmployeeSalary");
 const Payroll = require("../models/Payroll");
+const CompanySettings = require("../models/Settings").CompanySettings;
 
 // Helper function to check if a payroll period is the current month
 const isCurrentMonthPayroll = (month, year) => {
@@ -18,6 +19,78 @@ const getCurrentMonthYear = () => {
     month: currentDate.toLocaleString("en-US", { month: "long" }),
     year: currentDate.getFullYear(),
   };
+};
+
+// NEW: Get current company currency settings
+const getCurrentCurrency = async () => {
+  try {
+    const companySettings = await CompanySettings.findOne({});
+    if (companySettings && companySettings.defaultCurrency) {
+      return companySettings.defaultCurrency;
+    }
+    // Default currency if none set
+    return {
+      code: "INR",
+      symbol: "₹",
+      display: "INR (₹)",
+      exchangeRate: 1,
+    };
+  } catch (error) {
+    console.error("Error getting current currency:", error);
+    return {
+      code: "INR",
+      symbol: "₹",
+      display: "INR (₹)",
+      exchangeRate: 1,
+    };
+  }
+};
+
+// NEW: Get current company details
+const getCurrentCompanyDetails = async () => {
+  try {
+    const companySettings = await CompanySettings.findOne({});
+    if (companySettings) {
+      return {
+        name: companySettings.name || "Cybomb Technologies Pvt Ltd",
+        logo: companySettings.logo || "",
+        address: {
+          street:
+            companySettings.address?.street ||
+            "Prime Plaza No.54/1, 1st street, Sripuram colony",
+          city: companySettings.address?.city || "Chennai",
+          state: companySettings.address?.state || "Tamil Nadu",
+          zipCode: companySettings.address?.zipCode || "600 016",
+          country: companySettings.address?.country || "India",
+        },
+      };
+    }
+    // Default company details
+    return {
+      name: "Cybomb Technologies Pvt Ltd",
+      logo: "",
+      address: {
+        street: "Prime Plaza No.54/1, 1st street, Sripuram colony",
+        city: "Chennai",
+        state: "Tamil Nadu",
+        zipCode: "600 016",
+        country: "India",
+      },
+    };
+  } catch (error) {
+    console.error("Error getting current company details:", error);
+    return {
+      name: "Cybomb Technologies Pvt Ltd",
+      logo: "",
+      address: {
+        street: "Prime Plaza No.54/1, 1st street, Sripuram colony",
+        city: "Chennai",
+        state: "Tamil Nadu",
+        zipCode: "600 016",
+        country: "India",
+      },
+    };
+  }
 };
 
 // NEW: Sync current month payroll when salary is updated
@@ -206,6 +279,11 @@ const runPayroll = async (req, res) => {
         .json({ message: "No employees found to process payroll" });
     }
 
+    // NEW: Get current currency at time of payroll processing
+    const currentCurrency = await getCurrentCurrency();
+    // NEW: Get current company details at time of payroll processing
+    const currentCompanyDetails = await getCurrentCompanyDetails();
+
     const payrollResults = [];
     let updatedCount = 0;
     let createdCount = 0;
@@ -227,11 +305,15 @@ const runPayroll = async (req, res) => {
         });
 
         if (!existingPayroll) {
-          // Create new payroll record
+          // Create new payroll record with current currency AND company details
           const payroll = new Payroll({
             employeeId: employee.employeeId,
             month,
             year,
+            // NEW: Store currency at time of processing
+            currency: currentCurrency,
+            // NEW: Store company details at time of processing
+            companyDetails: currentCompanyDetails,
             // CTC
             ctc: salaryInfo.ctc || 0,
             // Earnings
@@ -265,7 +347,9 @@ const runPayroll = async (req, res) => {
           // FIXED: Only update salary data if it's the current month
           // For past months, only update status and metadata, preserve original salary amounts
           if (isCurrentMonth) {
-            // Current month: Update with latest salary data
+            // Current month: Update with latest salary data AND current currency AND company details
+            existingPayroll.currency = currentCurrency;
+            existingPayroll.companyDetails = currentCompanyDetails;
             existingPayroll.ctc = salaryInfo.ctc || 0;
             existingPayroll.basicSalary = salaryInfo.basicSalary || 0;
             existingPayroll.hra = salaryInfo.hra || 0;
@@ -311,6 +395,8 @@ const runPayroll = async (req, res) => {
       updatedCount,
       skippedCount,
       isCurrentMonth,
+      currency: currentCurrency, // Return currency used for this payroll run
+      companyDetails: currentCompanyDetails, // Return company details used for this payroll run
       processedEmployeeIds: payrollResults.map((p) => p.employeeId),
     });
   } catch (error) {
@@ -351,6 +437,11 @@ const runIndividualPayroll = async (req, res) => {
       });
     }
 
+    // NEW: Get current currency at time of payroll processing
+    const currentCurrency = await getCurrentCurrency();
+    // NEW: Get current company details at time of payroll processing
+    const currentCompanyDetails = await getCurrentCompanyDetails();
+
     // Check if this is current month payroll
     const isCurrentMonth = isCurrentMonthPayroll(month, year);
 
@@ -364,11 +455,15 @@ const runIndividualPayroll = async (req, res) => {
     let action = "";
 
     if (!existingPayroll) {
-      // Create new payroll record
+      // Create new payroll record with current currency AND company details
       payroll = new Payroll({
         employeeId: employee.employeeId,
         month,
         year,
+        // NEW: Store currency at time of processing
+        currency: currentCurrency,
+        // NEW: Store company details at time of processing
+        companyDetails: currentCompanyDetails,
         // CTC
         ctc: salaryInfo.ctc || 0,
         // Earnings
@@ -399,7 +494,9 @@ const runIndividualPayroll = async (req, res) => {
     } else {
       // Update existing payroll
       if (isCurrentMonth) {
-        // Current month: Update with latest salary data
+        // Current month: Update with latest salary data AND current currency AND company details
+        existingPayroll.currency = currentCurrency;
+        existingPayroll.companyDetails = currentCompanyDetails;
         existingPayroll.ctc = salaryInfo.ctc || 0;
         existingPayroll.basicSalary = salaryInfo.basicSalary || 0;
         existingPayroll.hra = salaryInfo.hra || 0;
@@ -442,6 +539,8 @@ const runIndividualPayroll = async (req, res) => {
         designation: employee.designation,
       },
       isCurrentMonth,
+      currency: currentCurrency, // Return currency used for this payroll run
+      companyDetails: currentCompanyDetails, // Return company details used for this payroll run
       // ADDED: Return counts for consistent frontend handling
       totalEmployees: 1,
       processedEmployees: 1,
@@ -469,6 +568,10 @@ const getPayrollHistory = async (req, res) => {
           processedDate: { $max: "$createdAt" },
           lastUpdated: { $max: "$updatedAt" },
           isCurrentMonth: { $first: "$isCurrentMonth" },
+          // NEW: Include currency information
+          currency: { $first: "$currency" },
+          // NEW: Include company details
+          companyDetails: { $first: "$companyDetails" },
           status: {
             $push: {
               $cond: {
@@ -605,6 +708,10 @@ const getLastPayrollRun = async (req, res) => {
           processedDate: { $max: "$createdAt" },
           lastUpdated: { $max: "$updatedAt" },
           isCurrentMonth: { $first: "$isCurrentMonth" },
+          // NEW: Include currency information
+          currency: { $first: "$currency" },
+          // NEW: Include company details
+          companyDetails: { $first: "$companyDetails" },
         },
       },
       {
@@ -675,6 +782,10 @@ const getLastPayrollRun = async (req, res) => {
           },
           month: payroll.month,
           year: payroll.year,
+          // NEW: Include stored currency
+          currency: payroll.currency,
+          // NEW: Include stored company details
+          companyDetails: payroll.companyDetails,
           // CTC
           ctc: payroll.ctc,
           // Earnings
@@ -713,6 +824,10 @@ const getLastPayrollRun = async (req, res) => {
         totalGrossEarnings: lastRun.totalGrossEarnings,
         processedDate: lastRun.processedDate,
         isCurrentMonth: lastRun.isCurrentMonth,
+        // NEW: Include currency in summary
+        currency: lastRun.currency,
+        // NEW: Include company details in summary
+        companyDetails: lastRun.companyDetails,
       },
       payrolls: payrollsWithEmployeeDetails,
     });
@@ -753,6 +868,10 @@ const getPayrollByMonth = async (req, res) => {
           },
           month: payroll.month,
           year: payroll.year,
+          // NEW: Include stored currency
+          currency: payroll.currency,
+          // NEW: Include stored company details
+          companyDetails: payroll.companyDetails,
           // CTC
           ctc: payroll.ctc,
           // Earnings
@@ -828,6 +947,11 @@ const updatePayrollRecord = async (req, res) => {
           "Cannot edit payroll for previous months. Only current month payroll can be edited.",
       });
     }
+
+    // NEW: Get current currency for current month edits
+    const currentCurrency = await getCurrentCurrency();
+    // NEW: Get current company details for current month edits
+    const currentCompanyDetails = await getCurrentCompanyDetails();
 
     // Calculate gross earnings
     const grossEarnings =
@@ -911,7 +1035,9 @@ const updatePayrollRecord = async (req, res) => {
       await newSalary.save();
     }
 
-    // Update payroll record
+    // Update payroll record with current currency AND company details
+    payroll.currency = currentCurrency;
+    payroll.companyDetails = currentCompanyDetails;
     payroll.ctc = parseFloat(ctc);
     payroll.basicSalary = parseFloat(basicSalary);
     payroll.hra = parseFloat(hra);
@@ -954,6 +1080,8 @@ const updatePayrollRecord = async (req, res) => {
           department: employee?.department,
           designation: employee?.designation,
         },
+        currency: payroll.currency,
+        companyDetails: payroll.companyDetails,
         ctc: payroll.ctc,
         basicSalary: payroll.basicSalary,
         hra: payroll.hra,
@@ -988,6 +1116,11 @@ const updateMultiplePayrollRecords = async (req, res) => {
     if (!updates || !Array.isArray(updates)) {
       return res.status(400).json({ message: "Updates array is required" });
     }
+
+    // NEW: Get current currency for current month edits
+    const currentCurrency = await getCurrentCurrency();
+    // NEW: Get current company details for current month edits
+    const currentCompanyDetails = await getCurrentCompanyDetails();
 
     const updatedPayrolls = [];
     const errors = [];
@@ -1093,7 +1226,9 @@ const updateMultiplePayrollRecords = async (req, res) => {
           await newSalary.save();
         }
 
-        // Update payroll record
+        // Update payroll record with current currency AND company details
+        payroll.currency = currentCurrency;
+        payroll.companyDetails = currentCompanyDetails;
         payroll.ctc = parseFloat(update.ctc);
         payroll.basicSalary = parseFloat(update.basicSalary);
         payroll.hra = parseFloat(update.hra);
@@ -1134,6 +1269,8 @@ const updateMultiplePayrollRecords = async (req, res) => {
             department: employee?.department,
             designation: employee?.designation,
           },
+          currency: payroll.currency,
+          companyDetails: payroll.companyDetails,
           ctc: payroll.ctc,
           basicSalary: payroll.basicSalary,
           hra: payroll.hra,
@@ -1188,6 +1325,11 @@ const rerunPayroll = async (req, res) => {
       });
     }
 
+    // NEW: Get current currency for rerun
+    const currentCurrency = await getCurrentCurrency();
+    // NEW: Get current company details for rerun
+    const currentCompanyDetails = await getCurrentCompanyDetails();
+
     const employees = await Employee.find({ status: "active" });
     const payrollResults = [];
     let updatedCount = 0;
@@ -1206,7 +1348,9 @@ const rerunPayroll = async (req, res) => {
 
         if (existingPayroll) {
           // FIXED: Only update salary data for current month rerun
-          // Update existing payroll record with latest salary data
+          // Update existing payroll record with latest salary data AND current currency AND company details
+          existingPayroll.currency = currentCurrency;
+          existingPayroll.companyDetails = currentCompanyDetails;
           existingPayroll.ctc = salaryInfo.ctc || 0;
           existingPayroll.basicSalary = salaryInfo.basicSalary || 0;
           existingPayroll.hra = salaryInfo.hra || 0;
@@ -1245,6 +1389,8 @@ const rerunPayroll = async (req, res) => {
       totalEmployees: employees.length,
       updatedCount,
       isCurrentMonth: true,
+      currency: currentCurrency, // Return currency used for this rerun
+      companyDetails: currentCompanyDetails, // Return company details used for this rerun
     });
   } catch (error) {
     console.error("Error in rerunPayroll:", error);
@@ -1457,16 +1603,24 @@ const generatePayslip = async (req, res) => {
       { name: "Professional Tax", amount: payroll.professionalTax },
     ].filter((item) => item.amount > 0);
 
+    // Build address from stored company details
+    const companyDetails = payroll.companyDetails;
+    const companyAddress = `${companyDetails.address.street}, ${companyDetails.address.city}, ${companyDetails.address.state} - ${companyDetails.address.zipCode}, ${companyDetails.address.country}`;
+
     const payslipData = {
-      // Company Information
-      companyName: "Cybomb Technologies Pvt Ltd",
-      companyAddress:
-        "Prime Plaza No.54/1, 1st street, Sripuram colony, St. Thomas Mount, Chennai, Tamil Nadu - 600 016, India",
+      // Company Information - Use historical company details from payroll record
+      companyName: companyDetails.name,
+      companyAddress: companyAddress,
+      companyLogo: companyDetails.logo, // This will use the uploaded logo
+      companyDetails: companyDetails, // Pass entire object
 
       // Payroll Period Information
       payslipTitle: `Payslip for the month of ${payroll.month} ${payroll.year}`,
       month: payroll.month,
       year: payroll.year,
+
+      // NEW: Include stored currency for payslip
+      currency: payroll.currency,
 
       // Employee Information
       employeeName: employee.name,
@@ -1619,16 +1773,24 @@ const getEmployeePayslipByMonth = async (req, res) => {
       { name: "Professional Tax", amount: payroll.professionalTax },
     ].filter((item) => item.amount > 0);
 
+    // Build address from stored company details
+    const companyDetails = payroll.companyDetails;
+    const companyAddress = `${companyDetails.address.street}, ${companyDetails.address.city}, ${companyDetails.address.state} - ${companyDetails.address.zipCode}, ${companyDetails.address.country}`;
+
     const payslipData = {
-      // Company Information
-      companyName: "Cybomb Technologies Pvt Ltd",
-      companyAddress:
-        "Prime Plaza No.54/1, 1st street, Sripuram colony, St. Thomas Mount, Chennai, Tamil Nadu - 600 016, India",
+      // Company Information - Use historical company details
+      companyName: companyDetails.name,
+      companyAddress: companyAddress,
+      companyLogo: companyDetails.logo, // This will use the uploaded logo
+      companyDetails: companyDetails,
 
       // Payroll Period Information
       payslipTitle: `Payslip for the month of ${payroll.month} ${payroll.year}`,
       month: payroll.month,
       year: payroll.year,
+
+      // NEW: Include stored currency
+      currency: payroll.currency,
 
       // Employee Information
       employeeName: employee.name,
