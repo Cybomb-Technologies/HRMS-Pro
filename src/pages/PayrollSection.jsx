@@ -40,6 +40,7 @@ import {
   CalendarDays,
   UserCheck,
   UserX,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -75,8 +76,20 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Checkbox } from "../components/ui/checkbox";
+import { useCurrency } from "../contexts/CurrencyContext";
 
 const PayrollSection = () => {
+  const {
+    currency,
+    formatAmount,
+    formatAmountWithoutConversion,
+    formatHistoricalAmount,
+    convertAmount,
+    convertToINR,
+    loading: currencyLoading,
+    refreshCurrency,
+  } = useCurrency();
+
   const [employees, setEmployees] = useState([]);
   const [payrollHistory, setPayrollHistory] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState("");
@@ -137,6 +150,11 @@ const PayrollSection = () => {
   const [searchTermEmployees, setSearchTermEmployees] = useState("");
   const [searchTermPayroll, setSearchTermPayroll] = useState("");
 
+  // New state for payslip preview
+  const [previewPayslip, setPreviewPayslip] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState("");
+
   const months = [
     "January",
     "February",
@@ -157,6 +175,17 @@ const PayrollSection = () => {
   // API base URL
   const API_BASE =
     process.env.NODE_ENV === "production" ? "" : "http://localhost:5000";
+
+  // Debug currency changes
+  useEffect(() => {
+    console.log("💰 PayrollSection - Current Currency:", currency);
+    console.log("💰 PayrollSection - Currency Loading:", currencyLoading);
+  }, [currency, currencyLoading]);
+
+  // Refresh currency when component mounts
+  useEffect(() => {
+    refreshCurrency();
+  }, []);
 
   // Function to convert number to words
   const convertNumberToWords = (num) => {
@@ -242,18 +271,50 @@ const PayrollSection = () => {
   };
 
   // Function to format Net Pay display for employee cards and payroll history (amount only)
-  const formatNetPayAmountOnly = (amount) => {
+  const formatNetPayAmountOnly = (
+    amount,
+    payrollCurrency = null,
+    isCurrentMonth = false
+  ) => {
     const numericAmount =
       typeof amount === "number" ? amount : parseFloat(amount) || 0;
-    return `Rs. ${numericAmount.toFixed(2)}`;
+
+    if (isCurrentMonth) {
+      // Current month: show converted amount
+      return formatAmount(numericAmount);
+    } else {
+      // Historical data: ALWAYS use original currency symbol if available
+      if (payrollCurrency && payrollCurrency.symbol) {
+        return `${payrollCurrency.symbol} ${numericAmount.toFixed(2)}`;
+      } else {
+        // Fallback to current currency (shouldn't happen for historical data)
+        return formatAmountWithoutConversion(numericAmount);
+      }
+    }
   };
 
   // Function to format Net Pay display for payslip (with words)
-  const formatNetPayWithWords = (amount) => {
+  const formatNetPayWithWords = (
+    amount,
+    payrollCurrency = null,
+    isCurrentMonth = false
+  ) => {
     const numericAmount =
       typeof amount === "number" ? amount : parseFloat(amount) || 0;
     const words = convertNumberToWords(numericAmount);
-    return `Rs. ${numericAmount.toFixed(2)} (Indian Rupee ${words})`;
+
+    if (isCurrentMonth) {
+      const convertedAmount = convertAmount(numericAmount);
+      return `${currency.symbol} ${convertedAmount.toFixed(2)} (${
+        currency.code
+      } ${words})`;
+    } else {
+      // Historical data: use original currency
+      const displayCurrency = payrollCurrency || currency;
+      return `${displayCurrency.symbol} ${numericAmount.toFixed(2)} (${
+        displayCurrency.code
+      } ${words})`;
+    }
   };
 
   useEffect(() => {
@@ -558,6 +619,8 @@ const PayrollSection = () => {
         updatedCount: data.action === "updated" ? 1 : 0,
         skippedCount: 0,
         isCurrentMonth: data.isCurrentMonth,
+        currency: data.currency,
+        companyDetails: data.companyDetails,
         period: {
           month: selectedMonth,
           year: selectedYear,
@@ -1132,6 +1195,335 @@ const PayrollSection = () => {
     }
   };
 
+  // Generate PDF for preview (same as download but returns blob URL)
+  const generatePDFPreview = async (payslipData, employeeName) => {
+    return new Promise((resolve) => {
+      const doc = new jsPDF();
+
+      // Set margins and starting position
+      const leftMargin = 20;
+      const rightMargin = 190;
+      let yPosition = 20;
+
+      // Use the company details from payslip data (historical)
+      const companyDetails = payslipData.companyDetails;
+      const displayCurrency = payslipData.currency || currency;
+
+      // Company Header - Left Side (using historical company details)
+      doc.setFontSize(16);
+      doc.setFont(undefined, "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(companyDetails.name, leftMargin, yPosition);
+      yPosition += 7;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, "normal");
+
+      // Build address from stored company details
+      const addressLine1 = companyDetails.address.street;
+      const addressLine2 = `${companyDetails.address.city}, ${companyDetails.address.state} - ${companyDetails.address.zipCode}, ${companyDetails.address.country}`;
+
+      doc.text(addressLine1, leftMargin, yPosition);
+      yPosition += 5;
+      doc.text(addressLine2, leftMargin, yPosition);
+      yPosition += 5;
+
+      // Logo Section - Right Side (using uploaded logo from company settings)
+      const logoX = 150;
+      const logoY = 16;
+      const logoSize = 22;
+
+      if (companyDetails.logo) {
+        // If logo URL exists, add the image to the PDF
+        try {
+          // Create an image element to get dimensions
+          const img = new Image();
+          img.src = companyDetails.logo;
+
+          // Set a timeout to handle image loading
+          setTimeout(() => {
+            try {
+              // Calculate dimensions to fit in the logo area while maintaining aspect ratio
+              const maxWidth = logoSize;
+              const maxHeight = logoSize;
+
+              // Use natural dimensions if available, otherwise use default
+              const imgWidth = img.naturalWidth || 100;
+              const imgHeight = img.naturalHeight || 100;
+
+              // Calculate aspect ratio
+              const aspectRatio = imgWidth / imgHeight;
+
+              let width, height;
+
+              if (imgWidth > imgHeight) {
+                // Landscape image
+                width = Math.min(maxWidth, imgWidth);
+                height = width / aspectRatio;
+                if (height > maxHeight) {
+                  height = maxHeight;
+                  width = height * aspectRatio;
+                }
+              } else {
+                // Portrait or square image
+                height = Math.min(maxHeight, imgHeight);
+                width = height * aspectRatio;
+                if (width > maxWidth) {
+                  width = maxWidth;
+                  height = width / aspectRatio;
+                }
+              }
+
+              // Center the logo in the logo area
+              const centerX = logoX + (logoSize - width) / 2;
+              const centerY = logoY + (logoSize - height) / 2;
+
+              // Add the image to the PDF
+              doc.addImage(
+                companyDetails.logo,
+                "JPEG",
+                centerX,
+                centerY,
+                width,
+                height
+              );
+
+              // Continue with the rest of the PDF generation
+              continuePDFGeneration();
+            } catch (error) {
+              console.error("Error processing logo image:", error);
+              addFallbackLogo();
+            }
+          }, 100);
+        } catch (error) {
+          console.error("Error adding logo to PDF:", error);
+          addFallbackLogo();
+        }
+      } else {
+        addFallbackLogo();
+      }
+
+      function addFallbackLogo() {
+        // Fallback to black square with text if logo fails to load or doesn't exist
+        doc.setFillColor(0, 0, 0);
+        doc.rect(logoX, logoY, logoSize, logoSize, "F");
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(6);
+        doc.setFont(undefined, "bold");
+
+        const companyNameParts = companyDetails.name.split(" ");
+        const companyNameLine1 = companyNameParts[0] || "Company";
+        const companyNameLine2 = companyNameParts.slice(1).join(" ") || "Name";
+
+        const textWidth1 = doc.getTextWidth(companyNameLine1);
+        const textWidth2 = doc.getTextWidth(companyNameLine2);
+        const centerX1 = logoX + (logoSize - textWidth1) / 2;
+        const centerX2 = logoX + (logoSize - textWidth2) / 2;
+
+        doc.text(companyNameLine1, centerX1, logoY + 10);
+        doc.text(companyNameLine2, centerX2, logoY + 14);
+
+        // Reset text color
+        doc.setTextColor(0, 0, 0);
+        continuePDFGeneration();
+      }
+
+      function continuePDFGeneration() {
+        yPosition += 5;
+
+        // Add line separator
+        doc.setDrawColor(200, 200, 200);
+        doc.line(leftMargin, yPosition, rightMargin, yPosition);
+        yPosition += 6;
+
+        // Payslip Title
+        doc.setFontSize(14);
+        doc.setFont(undefined, "bold");
+        doc.text(payslipData.payslipTitle, leftMargin, yPosition);
+        yPosition += 10;
+
+        // Employee Details
+        doc.setFontSize(10);
+        doc.setFont(undefined, "normal");
+        doc.text(
+          `Employee Name: ${payslipData.employeeName}`,
+          leftMargin,
+          yPosition
+        );
+        yPosition += 7;
+        doc.text(
+          `Employee ID: ${payslipData.employeeId}`,
+          leftMargin,
+          yPosition
+        );
+        yPosition += 7;
+        doc.text(
+          `Designation: ${payslipData.designation}`,
+          leftMargin,
+          yPosition
+        );
+        yPosition += 7;
+        doc.text(
+          `Employment Type: ${payslipData.employmentType}`,
+          leftMargin,
+          yPosition
+        );
+        yPosition += 7;
+        doc.text(
+          `Date of Joining: ${payslipData.dateOfJoining}`,
+          leftMargin,
+          yPosition
+        );
+        yPosition += 7;
+        doc.text(`Location: ${payslipData.location}`, leftMargin, yPosition);
+        yPosition += 7;
+
+        // Add line separator
+        doc.line(leftMargin, yPosition, rightMargin, yPosition);
+        yPosition += 5;
+
+        // Earnings Section
+        if (payslipData.earningsBreakdown.length > 0) {
+          doc.setFillColor(240, 240, 240);
+          doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 8, "F");
+
+          doc.setFontSize(12);
+          doc.setFont(undefined, "bold");
+          doc.text("EARNINGS", leftMargin + 5, yPosition + 6);
+          yPosition += 12;
+
+          doc.setFontSize(10);
+          doc.setFont(undefined, "normal");
+
+          payslipData.earningsBreakdown.forEach((earning, index) => {
+            doc.text(`${earning.name}:`, leftMargin + 5, yPosition);
+            doc.text(
+              `${displayCurrency.symbol} ${earning.amount.toFixed(2)}`,
+              rightMargin - 10,
+              yPosition,
+              { align: "right" }
+            );
+            yPosition += 7;
+          });
+
+          doc.setDrawColor(200, 200, 200);
+          doc.line(leftMargin, yPosition, rightMargin, yPosition);
+          yPosition += 5;
+
+          doc.setFont(undefined, "bold");
+          doc.text(`Gross Earnings:`, leftMargin + 5, yPosition);
+          doc.text(
+            `${displayCurrency.symbol} ${payslipData.grossEarnings.toFixed(2)}`,
+            rightMargin - 10,
+            yPosition,
+            { align: "right" }
+          );
+          doc.setFont(undefined, "normal");
+          yPosition += 8;
+        }
+
+        // Deductions Section
+        if (payslipData.deductionsBreakdown.length > 0) {
+          doc.setFillColor(240, 240, 240);
+          doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 8, "F");
+
+          doc.setFont(undefined, "bold");
+          doc.text("DEDUCTIONS", leftMargin + 5, yPosition + 6);
+          doc.setFont(undefined, "normal");
+          yPosition += 12;
+
+          doc.setFontSize(10);
+          payslipData.deductionsBreakdown.forEach((deduction, index) => {
+            doc.text(`${deduction.name}:`, leftMargin + 5, yPosition);
+            doc.text(
+              `${displayCurrency.symbol} ${deduction.amount.toFixed(2)}`,
+              rightMargin - 10,
+              yPosition,
+              { align: "right" }
+            );
+            yPosition += 7;
+          });
+
+          doc.setDrawColor(200, 200, 200);
+          doc.line(leftMargin, yPosition, rightMargin, yPosition);
+          yPosition += 5;
+
+          doc.setFont(undefined, "bold");
+          doc.text(`Total Deductions:`, leftMargin + 5, yPosition);
+          doc.text(
+            `${displayCurrency.symbol} ${payslipData.totalDeductions.toFixed(
+              2
+            )}`,
+            rightMargin - 10,
+            yPosition,
+            { align: "right" }
+          );
+          doc.setFont(undefined, "normal");
+          yPosition += 15;
+        }
+
+        // Net Pay Section
+        doc.setFontSize(12);
+        doc.setFont(undefined, "bold");
+        doc.setTextColor(0, 100, 0);
+
+        doc.setFillColor(240, 255, 240);
+        doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 20, "F");
+
+        const netPayLabel = "Net Pay: ";
+        const netPayAmount = `${
+          displayCurrency.symbol
+        } ${payslipData.netPay.toFixed(2)}`;
+        const amountInWords = `(${displayCurrency.code} ${convertNumberToWords(
+          payslipData.netPay
+        )})`;
+
+        doc.setFontSize(10);
+
+        const labelWidth = doc.getTextWidth(netPayLabel);
+        const amountWidth = doc.getTextWidth(netPayAmount);
+        const wordsWidth = doc.getTextWidth(amountInWords);
+
+        const totalWidth = labelWidth + amountWidth + wordsWidth + 10;
+        const availableWidth = rightMargin - leftMargin - 10;
+
+        if (totalWidth <= availableWidth) {
+          doc.text(netPayLabel, leftMargin + 5, yPosition + 8);
+          doc.text(netPayAmount, leftMargin + 5 + labelWidth, yPosition + 8);
+          doc.text(
+            amountInWords,
+            leftMargin + 5 + labelWidth + amountWidth + 5,
+            yPosition + 8
+          );
+        } else {
+          doc.text(netPayLabel, leftMargin + 5, yPosition + 8);
+          doc.text(netPayAmount, leftMargin + 5 + labelWidth, yPosition + 8);
+          doc.setFontSize(8);
+          doc.text(amountInWords, leftMargin + 5, yPosition + 16);
+        }
+
+        doc.setTextColor(0, 0, 0);
+        yPosition += 25;
+
+        // Footer
+        const pageHeight = doc.internal.pageSize.height;
+        const footerY = pageHeight - 20;
+
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("This is a computer generated payslip", 105, footerY - 5, {
+          align: "center",
+        });
+
+        // Get PDF as blob and create URL
+        const pdfBlob = doc.output("blob");
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        resolve(pdfUrl);
+      }
+    });
+  };
+
   const handleGeneratePayslip = async (payrollId, employeeName) => {
     try {
       setGeneratingPayslip(payrollId);
@@ -1160,6 +1552,46 @@ const PayrollSection = () => {
     }
   };
 
+  // View payslip preview
+  const handleViewPayslipPreview = async (payrollId, employeeName) => {
+    try {
+      setGeneratingPayslip(payrollId);
+
+      const response = await fetch(
+        `${API_BASE}/api/payroll/payslip/${payrollId}`
+      );
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+
+      const payslipData = await response.json();
+      setPreviewPayslip(payslipData);
+
+      // Generate PDF preview and get URL
+      const pdfPreviewUrl = await generatePDFPreview(payslipData, employeeName);
+      setPdfUrl(pdfPreviewUrl);
+      setShowPreview(true);
+    } catch (error) {
+      console.error("Error fetching payslip for preview:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch payslip details",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingPayslip(null);
+    }
+  };
+
+  // Close preview and cleanup
+  const handleClosePreview = () => {
+    setShowPreview(false);
+    setPreviewPayslip(null);
+    if (pdfUrl) {
+      URL.revokeObjectURL(pdfUrl);
+      setPdfUrl("");
+    }
+  };
+
   const generatePDF = (payslipData, employeeName) => {
     const doc = new jsPDF();
 
@@ -1168,250 +1600,330 @@ const PayrollSection = () => {
     const rightMargin = 190;
     let yPosition = 20;
 
-    // Company Header - Left Side
+    // Use the company details from payslip data (historical)
+    const companyDetails = payslipData.companyDetails;
+    const displayCurrency = payslipData.currency || currency;
+
+    // Company Header - Left Side (using historical company details)
     doc.setFontSize(16);
     doc.setFont(undefined, "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text("Cybomb Technologies Pvt Ltd", leftMargin, yPosition);
+    doc.text(companyDetails.name, leftMargin, yPosition);
     yPosition += 7;
 
     doc.setFontSize(10);
     doc.setFont(undefined, "normal");
-    doc.text(
-      "Prime Plaza No.54/1, 1st street, Sripuram colony,",
-      leftMargin,
-      yPosition
-    );
+
+    // Build address from stored company details
+    const addressLine1 = companyDetails.address.street;
+    const addressLine2 = `${companyDetails.address.city}, ${companyDetails.address.state} - ${companyDetails.address.zipCode}, ${companyDetails.address.country}`;
+
+    doc.text(addressLine1, leftMargin, yPosition);
     yPosition += 5;
-    doc.text(
-      "St. Thomas Mount, Chennai, Tamil Nadu - 600 016, India",
-      leftMargin,
-      yPosition
-    );
+    doc.text(addressLine2, leftMargin, yPosition);
     yPosition += 5;
 
-    // Logo Section - Right Side
+    // Logo Section - Right Side (using uploaded logo from company settings)
     const logoX = 150;
     const logoY = 16;
     const logoSize = 22;
 
-    // Black square background
-    doc.setFillColor(0, 0, 0);
-    doc.rect(logoX, logoY, logoSize, logoSize, "F");
+    if (companyDetails.logo) {
+      // If logo URL exists, add the image to the PDF
+      try {
+        // Create an image element to get dimensions
+        const img = new Image();
+        img.src = companyDetails.logo;
 
-    // White text inside logo
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(6);
-    doc.setFont(undefined, "bold");
+        // Set a timeout to handle image loading
+        setTimeout(() => {
+          try {
+            // Calculate dimensions to fit in the logo area while maintaining aspect ratio
+            const maxWidth = logoSize;
+            const maxHeight = logoSize;
 
-    // Split company name into two lines for better fit
-    const companyNameLine1 = "Cybomb";
-    const companyNameLine2 = "Technologies";
+            // Use natural dimensions if available, otherwise use default
+            const imgWidth = img.naturalWidth || 100;
+            const imgHeight = img.naturalHeight || 100;
 
-    // Calculate center positions
-    const textWidth1 = doc.getTextWidth(companyNameLine1);
-    const textWidth2 = doc.getTextWidth(companyNameLine2);
-    const centerX1 = logoX + (logoSize - textWidth1) / 2;
-    const centerX2 = logoX + (logoSize - textWidth2) / 2;
+            // Calculate aspect ratio
+            const aspectRatio = imgWidth / imgHeight;
 
-    // Position text vertically centered
-    doc.text(companyNameLine1, centerX1, logoY + 10);
-    doc.text(companyNameLine2, centerX2, logoY + 14);
+            let width, height;
 
-    // Reset text color
-    doc.setTextColor(0, 0, 0);
-    yPosition += 5;
+            if (imgWidth > imgHeight) {
+              // Landscape image
+              width = Math.min(maxWidth, imgWidth);
+              height = width / aspectRatio;
+              if (height > maxHeight) {
+                height = maxHeight;
+                width = height * aspectRatio;
+              }
+            } else {
+              // Portrait or square image
+              height = Math.min(maxHeight, imgHeight);
+              width = height * aspectRatio;
+              if (width > maxWidth) {
+                width = maxWidth;
+                height = width / aspectRatio;
+              }
+            }
 
-    // Add line separator
-    doc.setDrawColor(200, 200, 200);
-    doc.line(leftMargin, yPosition, rightMargin, yPosition);
-    yPosition += 6;
+            // Center the logo in the logo area
+            const centerX = logoX + (logoSize - width) / 2;
+            const centerY = logoY + (logoSize - height) / 2;
 
-    // Payslip Title
-    doc.setFontSize(14);
-    doc.setFont(undefined, "bold");
-    doc.text(payslipData.payslipTitle, leftMargin, yPosition);
-    yPosition += 10;
+            // Add the image to the PDF
+            doc.addImage(
+              companyDetails.logo,
+              "JPEG",
+              centerX,
+              centerY,
+              width,
+              height
+            );
 
-    // Employee Details
-    doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
-    doc.text(
-      `Employee Name: ${payslipData.employeeName}`,
-      leftMargin,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(`Employee ID: ${payslipData.employeeId}`, leftMargin, yPosition);
-    yPosition += 7;
-    doc.text(`Designation: ${payslipData.designation}`, leftMargin, yPosition);
-    yPosition += 7;
-    doc.text(
-      `Employment Type: ${payslipData.employmentType}`,
-      leftMargin,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(
-      `Date of Joining: ${payslipData.dateOfJoining}`,
-      leftMargin,
-      yPosition
-    );
-    yPosition += 7;
-    doc.text(`Location: ${payslipData.location}`, leftMargin, yPosition);
-    yPosition += 7;
+            // Continue with the rest of the PDF generation
+            continuePDFGeneration();
+          } catch (error) {
+            console.error("Error processing logo image:", error);
+            addFallbackLogo();
+          }
+        }, 100);
+      } catch (error) {
+        console.error("Error adding logo to PDF:", error);
+        addFallbackLogo();
+      }
+    } else {
+      addFallbackLogo();
+    }
 
-    // Add line separator
-    doc.line(leftMargin, yPosition, rightMargin, yPosition);
-    yPosition += 5;
+    function addFallbackLogo() {
+      // Fallback to black square with text if logo fails to load or doesn't exist
+      doc.setFillColor(0, 0, 0);
+      doc.rect(logoX, logoY, logoSize, logoSize, "F");
 
-    // Earnings Section
-    if (payslipData.earningsBreakdown.length > 0) {
-      // Earnings Header with gray background
-      doc.setFillColor(240, 240, 240);
-      doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(6);
+      doc.setFont(undefined, "bold");
 
+      const companyNameParts = companyDetails.name.split(" ");
+      const companyNameLine1 = companyNameParts[0] || "Company";
+      const companyNameLine2 = companyNameParts.slice(1).join(" ") || "Name";
+
+      const textWidth1 = doc.getTextWidth(companyNameLine1);
+      const textWidth2 = doc.getTextWidth(companyNameLine2);
+      const centerX1 = logoX + (logoSize - textWidth1) / 2;
+      const centerX2 = logoX + (logoSize - textWidth2) / 2;
+
+      doc.text(companyNameLine1, centerX1, logoY + 10);
+      doc.text(companyNameLine2, centerX2, logoY + 14);
+
+      // Reset text color
+      doc.setTextColor(0, 0, 0);
+      continuePDFGeneration();
+    }
+
+    function continuePDFGeneration() {
+      yPosition += 5;
+
+      // Add line separator
+      doc.setDrawColor(200, 200, 200);
+      doc.line(leftMargin, yPosition, rightMargin, yPosition);
+      yPosition += 6;
+
+      // Payslip Title
+      doc.setFontSize(14);
+      doc.setFont(undefined, "bold");
+      doc.text(payslipData.payslipTitle, leftMargin, yPosition);
+      yPosition += 10;
+
+      // Employee Details
+      doc.setFontSize(10);
+      doc.setFont(undefined, "normal");
+      doc.text(
+        `Employee Name: ${payslipData.employeeName}`,
+        leftMargin,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(`Employee ID: ${payslipData.employeeId}`, leftMargin, yPosition);
+      yPosition += 7;
+      doc.text(
+        `Designation: ${payslipData.designation}`,
+        leftMargin,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `Employment Type: ${payslipData.employmentType}`,
+        leftMargin,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(
+        `Date of Joining: ${payslipData.dateOfJoining}`,
+        leftMargin,
+        yPosition
+      );
+      yPosition += 7;
+      doc.text(`Location: ${payslipData.location}`, leftMargin, yPosition);
+      yPosition += 7;
+
+      // Add line separator
+      doc.line(leftMargin, yPosition, rightMargin, yPosition);
+      yPosition += 5;
+
+      // Earnings Section
+      if (payslipData.earningsBreakdown.length > 0) {
+        // Earnings Header with gray background
+        doc.setFillColor(240, 240, 240);
+        doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 8, "F");
+
+        doc.setFontSize(12);
+        doc.setFont(undefined, "bold");
+        doc.text("EARNINGS", leftMargin + 5, yPosition + 6);
+        yPosition += 12;
+
+        // Earnings table-like structure
+        doc.setFontSize(10);
+        doc.setFont(undefined, "normal");
+
+        payslipData.earningsBreakdown.forEach((earning, index) => {
+          doc.text(`${earning.name}:`, leftMargin + 5, yPosition);
+          doc.text(
+            `${displayCurrency.symbol} ${earning.amount.toFixed(2)}`,
+            rightMargin - 10,
+            yPosition,
+            { align: "right" }
+          );
+          yPosition += 7;
+        });
+
+        // Gross Earnings total with top border
+        doc.setDrawColor(200, 200, 200);
+        doc.line(leftMargin, yPosition, rightMargin, yPosition);
+        yPosition += 5;
+
+        doc.setFont(undefined, "bold");
+        doc.text(`Gross Earnings:`, leftMargin + 5, yPosition);
+        doc.text(
+          `${displayCurrency.symbol} ${payslipData.grossEarnings.toFixed(2)}`,
+          rightMargin - 10,
+          yPosition,
+          { align: "right" }
+        );
+        doc.setFont(undefined, "normal");
+        yPosition += 8;
+      }
+
+      // Deductions Section
+      if (payslipData.deductionsBreakdown.length > 0) {
+        // Deductions Header with gray background
+        doc.setFillColor(240, 240, 240);
+        doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 8, "F");
+
+        doc.setFont(undefined, "bold");
+        doc.text("DEDUCTIONS", leftMargin + 5, yPosition + 6);
+        doc.setFont(undefined, "normal");
+        yPosition += 12;
+
+        // Deductions table-like structure
+        doc.setFontSize(10);
+        payslipData.deductionsBreakdown.forEach((deduction, index) => {
+          doc.text(`${deduction.name}:`, leftMargin + 5, yPosition);
+          doc.text(
+            `${displayCurrency.symbol} ${deduction.amount.toFixed(2)}`,
+            rightMargin - 10,
+            yPosition,
+            { align: "right" }
+          );
+          yPosition += 7;
+        });
+
+        // Total Deductions with top border
+        doc.setDrawColor(200, 200, 200);
+        doc.line(leftMargin, yPosition, rightMargin, yPosition);
+        yPosition += 5;
+
+        doc.setFont(undefined, "bold");
+        doc.text(`Total Deductions:`, leftMargin + 5, yPosition);
+        doc.text(
+          `${displayCurrency.symbol} ${payslipData.totalDeductions.toFixed(2)}`,
+          rightMargin - 10,
+          yPosition,
+          { align: "right" }
+        );
+        doc.setFont(undefined, "normal");
+        yPosition += 15;
+      }
+
+      // Net Pay Section - FIXED: Properly formatted on same line without overlapping
       doc.setFontSize(12);
       doc.setFont(undefined, "bold");
-      doc.text("EARNINGS", leftMargin + 5, yPosition + 6);
-      yPosition += 12;
+      doc.setTextColor(0, 100, 0);
 
-      // Earnings table-like structure
+      // Net Pay background
+      doc.setFillColor(240, 255, 240);
+      doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 20, "F");
+
+      // Calculate text widths for proper spacing
+      const netPayLabel = "Net Pay: ";
+      const netPayAmount = `${
+        displayCurrency.symbol
+      } ${payslipData.netPay.toFixed(2)}`;
+      const amountInWords = `(${displayCurrency.code} ${convertNumberToWords(
+        payslipData.netPay
+      )})`;
+
+      // Set smaller font for amount in words to fit on same line
       doc.setFontSize(10);
-      doc.setFont(undefined, "normal");
 
-      payslipData.earningsBreakdown.forEach((earning, index) => {
-        doc.text(`${earning.name}:`, leftMargin + 5, yPosition);
+      // Calculate positions
+      const labelWidth = doc.getTextWidth(netPayLabel);
+      const amountWidth = doc.getTextWidth(netPayAmount);
+      const wordsWidth = doc.getTextWidth(amountInWords);
+
+      const totalWidth = labelWidth + amountWidth + wordsWidth + 10; // +10 for spacing
+
+      // Check if everything fits on one line
+      const availableWidth = rightMargin - leftMargin - 10; // -10 for padding
+
+      if (totalWidth <= availableWidth) {
+        // Everything fits on one line - perfect!
+        doc.text(netPayLabel, leftMargin + 5, yPosition + 8);
+        doc.text(netPayAmount, leftMargin + 5 + labelWidth, yPosition + 8);
         doc.text(
-          `Rs. ${earning.amount.toFixed(2)}`,
-          rightMargin - 10,
-          yPosition,
-          { align: "right" }
+          amountInWords,
+          leftMargin + 5 + labelWidth + amountWidth + 5,
+          yPosition + 8
         );
-        yPosition += 7;
-      });
+      } else {
+        // If words are too long, put them on the next line
+        doc.text(netPayLabel, leftMargin + 5, yPosition + 8);
+        doc.text(netPayAmount, leftMargin + 5 + labelWidth, yPosition + 8);
+        doc.setFontSize(8);
+        doc.text(amountInWords, leftMargin + 5, yPosition + 16);
+      }
 
-      // Gross Earnings total with top border
-      doc.setDrawColor(200, 200, 200);
-      doc.line(leftMargin, yPosition, rightMargin, yPosition);
-      yPosition += 5;
+      doc.setTextColor(0, 0, 0);
+      yPosition += 25;
 
-      doc.setFont(undefined, "bold");
-      doc.text(`Gross Earnings:`, leftMargin + 5, yPosition);
-      doc.text(
-        `Rs. ${payslipData.grossEarnings.toFixed(2)}`,
-        rightMargin - 10,
-        yPosition,
-        { align: "right" }
-      );
-      doc.setFont(undefined, "normal");
-      yPosition += 8;
-    }
+      // Footer at the bottom of the page
+      const pageHeight = doc.internal.pageSize.height;
+      const footerY = pageHeight - 20;
 
-    // Deductions Section
-    if (payslipData.deductionsBreakdown.length > 0) {
-      // Deductions Header with gray background
-      doc.setFillColor(240, 240, 240);
-      doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 8, "F");
-
-      doc.setFont(undefined, "bold");
-      doc.text("DEDUCTIONS", leftMargin + 5, yPosition + 6);
-      doc.setFont(undefined, "normal");
-      yPosition += 12;
-
-      // Deductions table-like structure
-      doc.setFontSize(10);
-      payslipData.deductionsBreakdown.forEach((deduction, index) => {
-        doc.text(`${deduction.name}:`, leftMargin + 5, yPosition);
-        doc.text(
-          `Rs. ${deduction.amount.toFixed(2)}`,
-          rightMargin - 10,
-          yPosition,
-          { align: "right" }
-        );
-        yPosition += 7;
-      });
-
-      // Total Deductions with top border
-      doc.setDrawColor(200, 200, 200);
-      doc.line(leftMargin, yPosition, rightMargin, yPosition);
-      yPosition += 5;
-
-      doc.setFont(undefined, "bold");
-      doc.text(`Total Deductions:`, leftMargin + 5, yPosition);
-      doc.text(
-        `Rs. ${payslipData.totalDeductions.toFixed(2)}`,
-        rightMargin - 10,
-        yPosition,
-        { align: "right" }
-      );
-      doc.setFont(undefined, "normal");
-      yPosition += 15;
-    }
-
-    // Net Pay Section - FIXED: Properly formatted on same line without overlapping
-    doc.setFontSize(12);
-    doc.setFont(undefined, "bold");
-    doc.setTextColor(0, 100, 0);
-
-    // Net Pay background
-    doc.setFillColor(240, 255, 240);
-    doc.rect(leftMargin, yPosition, rightMargin - leftMargin, 20, "F");
-
-    // Calculate text widths for proper spacing
-    const netPayLabel = "Net Pay: ";
-    const netPayAmount = `Rs. ${payslipData.netPay.toFixed(2)}`;
-    const amountInWords = `(Indian Rupee ${convertNumberToWords(
-      payslipData.netPay
-    )})`;
-
-    // Set smaller font for amount in words to fit on same line
-    doc.setFontSize(10);
-
-    // Calculate positions
-    const labelWidth = doc.getTextWidth(netPayLabel);
-    const amountWidth = doc.getTextWidth(netPayAmount);
-    const wordsWidth = doc.getTextWidth(amountInWords);
-
-    const totalWidth = labelWidth + amountWidth + wordsWidth + 10; // +10 for spacing
-
-    // Check if everything fits on one line
-    const availableWidth = rightMargin - leftMargin - 10; // -10 for padding
-
-    if (totalWidth <= availableWidth) {
-      // Everything fits on one line - perfect!
-      doc.text(netPayLabel, leftMargin + 5, yPosition + 8);
-      doc.text(netPayAmount, leftMargin + 5 + labelWidth, yPosition + 8);
-      doc.text(
-        amountInWords,
-        leftMargin + 5 + labelWidth + amountWidth + 5,
-        yPosition + 8
-      );
-    } else {
-      // If words are too long, put them on the next line
-      doc.text(netPayLabel, leftMargin + 5, yPosition + 8);
-      doc.text(netPayAmount, leftMargin + 5 + labelWidth, yPosition + 8);
       doc.setFontSize(8);
-      doc.text(amountInWords, leftMargin + 5, yPosition + 16);
+      doc.setTextColor(100, 100, 100);
+      doc.text("This is a computer generated payslip", 105, footerY - 5, {
+        align: "center",
+      });
+
+      // Save the PDF
+      doc.save(
+        `payslip-${employeeName}-${payslipData.month}-${payslipData.year}.pdf`
+      );
     }
-
-    doc.setTextColor(0, 0, 0);
-    yPosition += 25;
-
-    // Footer at the bottom of the page
-    const pageHeight = doc.internal.pageSize.height;
-    const footerY = pageHeight - 20;
-
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text("This is a computer generated payslip", 105, footerY - 5, {
-      align: "center",
-    });
-
-    // Save the PDF
-    doc.save(
-      `payslip-${employeeName}-${payslipData.month}-${payslipData.year}.pdf`
-    );
   };
 
   const handleRunNewPayroll = () => {
@@ -1489,6 +2001,36 @@ const PayrollSection = () => {
 
   const derivedValues = calculateDerivedValues(editFormData);
 
+  // Currency information display
+  const CurrencyInfo = () => (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="font-semibold text-blue-800 text-sm">
+            Current Currency: {currency.display}
+          </h4>
+          <p className="text-xs text-blue-600">
+            Exchange Rate: 1 INR = {currency.exchangeRate} {currency.code}
+          </p>
+        </div>
+        <Badge variant="outline" className="bg-blue-100 text-blue-700">
+          {isCurrentMonth(selectedMonth, selectedYear)
+            ? "Current Month"
+            : "Historical Data"}
+        </Badge>
+      </div>
+    </div>
+  );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [pdfUrl]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -1496,7 +2038,7 @@ const PayrollSection = () => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <IndianRupee className="w-8 h-8 text-blue-600" />
+              {/* <IndianRupee className="w-8 h-8 text-blue-600" /> */}
               Payroll Management
             </h1>
             <p className="text-gray-600 mt-2">
@@ -1531,6 +2073,9 @@ const PayrollSection = () => {
             </Button>
           </div>
         </div>
+
+        {/* Currency Info Banner */}
+        {!currencyLoading && <CurrencyInfo />}
 
         {activeTab === "employees" && (
           <Card className="p-6 bg-white/80 backdrop-blur-sm border-0 shadow-sm">
@@ -1651,7 +2196,7 @@ const PayrollSection = () => {
                             CTC (Annual):
                           </span>
                           <span className="text-sm font-semibold">
-                            Rs. {(employee.ctc || 0).toLocaleString()}
+                            {formatAmount(employee.ctc || 0, 0)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -1659,7 +2204,7 @@ const PayrollSection = () => {
                             Gross Earnings:
                           </span>
                           <span className="text-sm font-semibold">
-                            Rs. {(employee.grossEarnings || 0).toFixed(2)}
+                            {formatAmount(employee.grossEarnings || 0)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -1667,7 +2212,7 @@ const PayrollSection = () => {
                             Deductions:
                           </span>
                           <span className="text-sm font-semibold">
-                            Rs. {(employee.totalDeductions || 0).toFixed(2)}
+                            {formatAmount(employee.totalDeductions || 0)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t">
@@ -1676,7 +2221,11 @@ const PayrollSection = () => {
                           </span>
                           {/* FIXED: Only show amount, no words */}
                           <span className="text-sm font-bold text-green-600">
-                            {formatNetPayAmountOnly(employee.netPay || 0)}
+                            {formatNetPayAmountOnly(
+                              employee.netPay || 0,
+                              null,
+                              true
+                            )}
                           </span>
                         </div>
                       </div>
@@ -1760,7 +2309,7 @@ const PayrollSection = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="ctc" className="text-sm font-medium">
-                        CTC (Annual) Rs.
+                        CTC (Annual) {currency.symbol}
                       </Label>
                       <div className="flex gap-2 mt-1">
                         <Input
@@ -1788,7 +2337,7 @@ const PayrollSection = () => {
                     <div>
                       <Label className="text-sm font-medium">Monthly CTC</Label>
                       <div className="text-lg font-semibold text-gray-900 mt-1">
-                        Rs. {derivedValues.monthlyCTC.toFixed(2)}
+                        {formatAmount(derivedValues.monthlyCTC)}
                       </div>
                     </div>
                   </div>
@@ -1805,7 +2354,7 @@ const PayrollSection = () => {
                         htmlFor="basicSalary"
                         className="text-sm font-medium"
                       >
-                        Basic Salary Rs.
+                        Basic Salary {currency.symbol}
                       </Label>
                       <Input
                         id="basicSalary"
@@ -1819,7 +2368,7 @@ const PayrollSection = () => {
                     </div>
                     <div>
                       <Label htmlFor="hra" className="text-sm font-medium">
-                        House Rent Allowance Rs.
+                        House Rent Allowance {currency.symbol}
                       </Label>
                       <Input
                         id="hra"
@@ -1836,7 +2385,7 @@ const PayrollSection = () => {
                         htmlFor="fixedAllowance"
                         className="text-sm font-medium"
                       >
-                        Fixed Allowance Rs.
+                        Fixed Allowance {currency.symbol}
                       </Label>
                       <Input
                         id="fixedAllowance"
@@ -1853,7 +2402,7 @@ const PayrollSection = () => {
                         htmlFor="conveyanceAllowance"
                         className="text-sm font-medium"
                       >
-                        Conveyance Allowance Rs.
+                        Conveyance Allowance {currency.symbol}
                       </Label>
                       <Input
                         id="conveyanceAllowance"
@@ -1873,7 +2422,7 @@ const PayrollSection = () => {
                         htmlFor="childrenEducationAllowance"
                         className="text-sm font-medium"
                       >
-                        Children Education Rs.
+                        Children Education {currency.symbol}
                       </Label>
                       <Input
                         id="childrenEducationAllowance"
@@ -1893,7 +2442,7 @@ const PayrollSection = () => {
                         htmlFor="medicalAllowance"
                         className="text-sm font-medium"
                       >
-                        Medical Allowance Rs.
+                        Medical Allowance {currency.symbol}
                       </Label>
                       <Input
                         id="medicalAllowance"
@@ -1913,7 +2462,7 @@ const PayrollSection = () => {
                         htmlFor="shiftAllowance"
                         className="text-sm font-medium"
                       >
-                        Shift Allowance Rs.
+                        Shift Allowance {currency.symbol}
                       </Label>
                       <Input
                         id="shiftAllowance"
@@ -1930,7 +2479,7 @@ const PayrollSection = () => {
                         htmlFor="mobileInternetAllowance"
                         className="text-sm font-medium"
                       >
-                        Mobile/Internet Rs.
+                        Mobile/Internet {currency.symbol}
                       </Label>
                       <Input
                         id="mobileInternetAllowance"
@@ -1959,7 +2508,7 @@ const PayrollSection = () => {
                         htmlFor="employeeEPF"
                         className="text-sm font-medium"
                       >
-                        Employee EPF Rs.
+                        Employee EPF {currency.symbol}
                       </Label>
                       <Input
                         id="employeeEPF"
@@ -1976,7 +2525,7 @@ const PayrollSection = () => {
                         htmlFor="employeeESI"
                         className="text-sm font-medium"
                       >
-                        Employee ESI Rs.
+                        Employee ESI {currency.symbol}
                       </Label>
                       <Input
                         id="employeeESI"
@@ -1993,7 +2542,7 @@ const PayrollSection = () => {
                         htmlFor="professionalTax"
                         className="text-sm font-medium"
                       >
-                        Professional Tax Rs.
+                        Professional Tax {currency.symbol}
                       </Label>
                       <Input
                         id="professionalTax"
@@ -2021,13 +2570,13 @@ const PayrollSection = () => {
                       <div className="flex justify-between">
                         <span>Gross Earnings:</span>
                         <span className="font-semibold">
-                          Rs. {derivedValues.grossEarnings.toFixed(2)}
+                          {formatAmount(derivedValues.grossEarnings)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Total Deductions:</span>
                         <span className="font-semibold">
-                          Rs. {derivedValues.totalDeductions.toFixed(2)}
+                          {formatAmount(derivedValues.totalDeductions)}
                         </span>
                       </div>
                     </div>
@@ -2036,7 +2585,7 @@ const PayrollSection = () => {
                         <span className="font-bold">Net Pay:</span>
                         {/* FIXED: Only show amount in dialog summary too */}
                         <span className="font-bold text-green-600">
-                          {formatNetPayAmountOnly(derivedValues.netPay)}
+                          {formatAmount(derivedValues.netPay)}
                         </span>
                       </div>
                     </div>
@@ -2333,12 +2882,16 @@ const PayrollSection = () => {
                               • Payroll records will be created or updated for
                               the selected period
                             </li>
+                            <li>
+                              • Currency: {currency.display} (Exchange rate: 1
+                              INR = {currency.exchangeRate} {currency.code})
+                            </li>
                             {selectedMonth &&
                               selectedYear &&
                               isCurrentMonth(selectedMonth, selectedYear) && (
                                 <li className="text-green-700 font-semibold">
-                                  • This is current month payroll - edit and
-                                  rerun features will be available
+                                  • This is current month payroll - will use{" "}
+                                  {currency.code} amounts
                                 </li>
                               )}
                           </ul>
@@ -2421,9 +2974,11 @@ const PayrollSection = () => {
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-green-600">
-                            Rs.{" "}
-                            {lastPayrollRun.summary.totalNetPay?.toFixed(2) ||
-                              "0.00"}
+                            {formatHistoricalAmount(
+                              lastPayrollRun.summary.totalNetPay || 0,
+                              lastPayrollRun.summary.currency,
+                              lastPayrollRun.summary.isCurrentMonth
+                            )}
                           </div>
                           <div className="text-sm text-gray-600">
                             Total Net Pay
@@ -2431,9 +2986,11 @@ const PayrollSection = () => {
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-purple-600">
-                            Rs.{" "}
-                            {lastPayrollRun.summary.totalCTC?.toFixed(2) ||
-                              "0.00"}
+                            {formatHistoricalAmount(
+                              lastPayrollRun.summary.totalCTC || 0,
+                              lastPayrollRun.summary.currency,
+                              lastPayrollRun.summary.isCurrentMonth
+                            )}
                           </div>
                           <div className="text-sm text-gray-600">Total CTC</div>
                         </div>
@@ -2456,8 +3013,18 @@ const PayrollSection = () => {
                           <p className="text-sm text-gray-700">
                             <strong>Status:</strong>{" "}
                             {lastPayrollRun.summary.isCurrentMonth
-                              ? "Current Month (Editable)"
+                              ? `Current Month (${currency.code} - Editable)`
                               : "Previous Month (Read Only)"}
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            <strong>Original Currency:</strong>{" "}
+                            {lastPayrollRun.summary.currency?.display ||
+                              currency.display}
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            <strong>Company:</strong>{" "}
+                            {lastPayrollRun.summary.companyDetails?.name ||
+                              "Cybomb Technologies Pvt Ltd"}
                           </p>
                         </div>
                         <Button
@@ -2569,11 +3136,20 @@ const PayrollSection = () => {
                       <p className="text-sm text-gray-700 mt-1">
                         <strong>Status:</strong>{" "}
                         {payrollResults.isCurrentMonth
-                          ? "Current Month (Editable)"
+                          ? `Current Month (${currency.code} - Editable)`
                           : "Previous Month (Read Only)"}
                       </p>
                       <p className="text-sm text-gray-700 mt-1">
                         <strong>Message:</strong> {payrollResults.message}
+                      </p>
+                      <p className="text-sm text-blue-700 mt-1">
+                        <strong>Currency:</strong>{" "}
+                        {payrollResults.currency?.display || currency.display}
+                      </p>
+                      <p className="text-sm text-blue-700 mt-1">
+                        <strong>Company:</strong>{" "}
+                        {payrollResults.companyDetails?.name ||
+                          "Cybomb Technologies Pvt Ltd"}
                       </p>
                       {payrollResults.skippedCount > 0 && (
                         <p className="text-sm text-orange-700 mt-1">
@@ -2697,7 +3273,7 @@ const PayrollSection = () => {
                                         variant="success"
                                         className="text-xs mb-1"
                                       >
-                                        Editable
+                                        {currency.code}
                                       </Badge>
                                     )}
                                     <Badge
@@ -2714,13 +3290,38 @@ const PayrollSection = () => {
                                   </div>
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                  Total Net Pay: Rs.{" "}
-                                  {period.totalNetPay?.toFixed(2) || "0.00"}
+                                  Total Net Pay:{" "}
+                                  {formatHistoricalAmount(
+                                    period.totalNetPay || 0,
+                                    period.currency,
+                                    isCurrentMonth(
+                                      period._id.month,
+                                      period._id.year
+                                    )
+                                  )}
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                  Total CTC: Rs.{" "}
-                                  {period.totalCTC?.toFixed(2) || "0.00"}
+                                  Total CTC:{" "}
+                                  {formatHistoricalAmount(
+                                    period.totalCTC || 0,
+                                    period.currency,
+                                    isCurrentMonth(
+                                      period._id.month,
+                                      period._id.year
+                                    )
+                                  )}
                                 </div>
+                                {period.currency &&
+                                  period.currency.code !== currency.code && (
+                                    <div className="text-xs text-blue-600 mt-1">
+                                      Original: {period.currency.display}
+                                    </div>
+                                  )}
+                                {period.companyDetails && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {period.companyDetails.name}
+                                  </div>
+                                )}
                               </CardContent>
                             </Card>
                           ))}
@@ -2747,7 +3348,7 @@ const PayrollSection = () => {
                                     selectedYearHistory
                                   ) && (
                                     <Badge variant="success" className="ml-2">
-                                      Editable
+                                      {currency.code} - Editable
                                     </Badge>
                                   )}
                                 </h3>
@@ -2896,6 +3497,11 @@ const PayrollSection = () => {
                                         );
                                         const isExpanded =
                                           expandedRows[payroll._id];
+                                        const isCurrentMonthPayroll =
+                                          isCurrentMonth(
+                                            selectedMonthHistory,
+                                            selectedYearHistory
+                                          );
 
                                         return (
                                           <React.Fragment key={payroll._id}>
@@ -2954,32 +3560,42 @@ const PayrollSection = () => {
                                                     className="w-32 text-right"
                                                   />
                                                 ) : (
-                                                  `Rs. ${(
-                                                    payroll.ctc || 0
-                                                  ).toLocaleString()}`
+                                                  formatHistoricalAmount(
+                                                    payroll.ctc || 0,
+                                                    payroll.currency,
+                                                    isCurrentMonthPayroll
+                                                  )
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-right">
-                                                Rs.{" "}
-                                                {payroll.grossEarnings.toFixed(
-                                                  2
+                                                {formatHistoricalAmount(
+                                                  payroll.grossEarnings,
+                                                  payroll.currency,
+                                                  isCurrentMonthPayroll
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-right">
-                                                Rs.{" "}
-                                                {payroll.totalDeductions.toFixed(
-                                                  2
+                                                {formatHistoricalAmount(
+                                                  payroll.totalDeductions,
+                                                  payroll.currency,
+                                                  isCurrentMonthPayroll
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-right font-semibold">
-                                                {/* FIXED: Only show amount in payroll history table */}
-                                                {formatNetPayAmountOnly(netPay)}
+                                                {/* FIXED: Pass payroll currency to preserve original symbol */}
+                                                {formatNetPayAmountOnly(
+                                                  netPay,
+                                                  payroll.currency,
+                                                  isCurrentMonthPayroll
+                                                )}
                                                 {isEdited &&
                                                   netPay !== payroll.netPay && (
                                                     <div className="text-xs text-green-600">
-                                                      (Originally: Rs.{" "}
-                                                      {payroll.netPay.toFixed(
-                                                        2
+                                                      (Originally:{" "}
+                                                      {formatHistoricalAmount(
+                                                        payroll.netPay,
+                                                        payroll.currency,
+                                                        isCurrentMonthPayroll
                                                       )}
                                                       )
                                                     </div>
@@ -3001,6 +3617,29 @@ const PayrollSection = () => {
                                               </TableCell>
                                               <TableCell>
                                                 <div className="flex gap-2">
+                                                  {/* ADDED: Preview button */}
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                      handleViewPayslipPreview(
+                                                        payroll._id,
+                                                        payroll.employeeDetails
+                                                          ?.name
+                                                      )
+                                                    }
+                                                    disabled={
+                                                      generatingPayslip ===
+                                                      payroll._id
+                                                    }
+                                                  >
+                                                    {generatingPayslip ===
+                                                    payroll._id ? (
+                                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                                    ) : (
+                                                      <Eye className="w-4 h-4" />
+                                                    )}
+                                                  </Button>
                                                   <Button
                                                     variant="outline"
                                                     size="sm"
@@ -3047,7 +3686,10 @@ const PayrollSection = () => {
                                                     {/* Earnings Breakdown */}
                                                     <div>
                                                       <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                        <IndianRupee className="w-4 h-4 text-green-600" />
+                                                        <span className="text-green-600 font-bold text-lg">
+                                                          {payroll.currency
+                                                            ?.symbol || "₹"}
+                                                        </span>
                                                         Earnings Breakdown
                                                       </h4>
                                                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -3074,9 +3716,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.basicSalary.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.basicSalary,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3104,9 +3747,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.hra.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.hra,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3134,9 +3778,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.fixedAllowance.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.fixedAllowance,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3164,9 +3809,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.conveyanceAllowance.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.conveyanceAllowance,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3194,9 +3840,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.childrenEducationAllowance.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.childrenEducationAllowance,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3224,9 +3871,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.medicalAllowance.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.medicalAllowance,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3254,9 +3902,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.shiftAllowance.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.shiftAllowance,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3284,9 +3933,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.mobileInternetAllowance.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.mobileInternetAllowance,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3324,9 +3974,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.employeeEPF.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.employeeEPF,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3354,9 +4005,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.employeeESI.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.employeeESI,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3384,9 +4036,10 @@ const PayrollSection = () => {
                                                             />
                                                           ) : (
                                                             <div className="text-lg font-semibold mt-1">
-                                                              Rs.{" "}
-                                                              {payroll.professionalTax.toFixed(
-                                                                2
+                                                              {formatHistoricalAmount(
+                                                                payroll.professionalTax,
+                                                                payroll.currency,
+                                                                isCurrentMonthPayroll
                                                               )}
                                                             </div>
                                                           )}
@@ -3438,6 +4091,62 @@ const PayrollSection = () => {
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* PDF Preview Modal */}
+        {showPreview && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Payslip Preview - {previewPayslip?.employeeName} -{" "}
+                  {previewPayslip?.month} {previewPayslip?.year}
+                </h2>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() =>
+                      handleGeneratePayslip(
+                        previewPayslip?._id,
+                        previewPayslip?.employeeName
+                      )
+                    }
+                    disabled={generatingPayslip === previewPayslip?._id}
+                  >
+                    {generatingPayslip === previewPayslip?._id ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download PDF
+                      </>
+                    )}
+                  </Button>
+                  <Button variant="outline" onClick={handleClosePreview}>
+                    <X className="w-4 h-4 mr-2" />
+                    Close
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-4 h-full">
+                {pdfUrl ? (
+                  <iframe
+                    src={pdfUrl}
+                    className="w-full h-[70vh] border rounded"
+                    title="Payslip Preview"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-2">Loading PDF preview...</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

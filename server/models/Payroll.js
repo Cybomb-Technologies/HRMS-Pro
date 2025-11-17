@@ -29,6 +29,63 @@ const payrollSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // NEW: Store currency at time of payroll processing
+    currency: {
+      code: {
+        type: String,
+        required: true,
+        default: "INR",
+      },
+      symbol: {
+        type: String,
+        required: true,
+        default: "₹",
+      },
+      display: {
+        type: String,
+        required: true,
+        default: "INR (₹)",
+      },
+      exchangeRate: {
+        type: Number,
+        required: true,
+        default: 1,
+      },
+    },
+    // NEW: Store company details at time of payroll processing
+    companyDetails: {
+      name: {
+        type: String,
+        required: true,
+        default: "Cybomb Technologies Pvt Ltd",
+      },
+      logo: {
+        type: String,
+        default: "",
+      },
+      address: {
+        street: {
+          type: String,
+          default: "Prime Plaza No.54/1, 1st street, Sripuram colony",
+        },
+        city: {
+          type: String,
+          default: "Chennai",
+        },
+        state: {
+          type: String,
+          default: "Tamil Nadu",
+        },
+        zipCode: {
+          type: String,
+          default: "600 016",
+        },
+        country: {
+          type: String,
+          default: "India",
+        },
+      },
+    },
     // Earnings
     basicSalary: {
       type: Number,
