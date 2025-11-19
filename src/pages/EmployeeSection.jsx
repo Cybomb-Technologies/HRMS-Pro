@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/use-toast';
-import { GraduationCap, FileText, Download, Trash2, Upload } from 'lucide-react';
+import { GraduationCap, FileText, Download, Trash2, Upload, Shield } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +58,7 @@ import {
 } from 'lucide-react';
 
 // ================== Employee Form ==================
-const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => {
+const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole, hasCreatePermission, hasUpdatePermission }) => {
   const [formData, setFormData] = useState(
     employee || { 
       employeeId: suggestedId || '', 
@@ -94,8 +94,13 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => 
   const [generatePassword, setGeneratePassword] = useState(!employee);
   const [passwordCopied, setPasswordCopied] = useState(false);
 
-  // Get allowed roles based on current user's role
+  // Get allowed roles based on current user's role and permissions
   const getAllowedRoles = () => {
+    // If user doesn't have create/update permission, restrict to employee only
+    if (!hasCreatePermission && !hasUpdatePermission) {
+      return ['employee'];
+    }
+
     switch (userRole) {
       case 'admin':
         return ['employee', 'hr', 'admin', 'employer'];
@@ -223,6 +228,25 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Check permission before submitting
+    if (employee && !hasUpdatePermission) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to update employees',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!employee && !hasCreatePermission) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to create employees',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     // Role validation based on current user's permissions
     if (!allowedRoles.includes(formData.role)) {
       toast({
@@ -414,7 +438,7 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => 
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
-            disabled={userRole === 'hr'} // HR can only create employees
+            disabled={userRole === 'hr' || !hasCreatePermission} // HR can only create employees
           >
             {allowedRoles.map(role => (
               <option key={role} value={role}>
@@ -505,7 +529,7 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => 
           </select>
           {dropdownData.locations.length === 0 && (
             <p className="text-xs text-red-500 mt-1">No locations found. Please add locations first.</p>
-          )}
+            )}
         </div>
 
         <div>
@@ -632,7 +656,7 @@ const EmployeeForm = ({ employee, onSave, onCancel, suggestedId, userRole }) => 
 };
 
 // ================== Documents Section ==================
-const DocumentsSection = ({ employee }) => {
+const DocumentsSection = ({ employee, hasDeletePermission }) => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewingDocument, setViewingDocument] = useState(null);
@@ -866,30 +890,32 @@ const DocumentsSection = ({ employee }) => {
                     <Download className="w-4 h-4" />
                     Download
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently delete the document "{doc.name}". This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => deleteDocument(doc._id)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  {hasDeletePermission && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete the document "{doc.name}". This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => deleteDocument(doc._id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </div>
             ))}
@@ -985,7 +1011,7 @@ const DocumentsSection = ({ employee }) => {
 };
 
 // ================== Employee View Dialog ==================
-const EmployeeViewDialog = ({ employee, isOpen, onClose }) => {
+const EmployeeViewDialog = ({ employee, isOpen, onClose, hasDeletePermission }) => {
   const [employeeData, setEmployeeData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1075,7 +1101,7 @@ const EmployeeViewDialog = ({ employee, isOpen, onClose }) => {
   }
 
   return (
- <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
@@ -1170,7 +1196,7 @@ const EmployeeViewDialog = ({ employee, isOpen, onClose }) => {
           )}
 
           {/* Documents Section */}
-          <DocumentsSection employee={safeEmployee} />
+          <DocumentsSection employee={safeEmployee} hasDeletePermission={hasDeletePermission} />
 
           {/* Detailed Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1505,19 +1531,161 @@ const EmployeeSection = () => {
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [userRole, setUserRole] = useState('employee'); // Default role
-   const getProfilePictureUrl = (profilePicture) => {
+  
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            setUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+            setUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+          setUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+        setUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const employeePermission = userRoleData.permissions.find(p => p.module === 'Employee-Management');
+          console.log("👥 Employee-Management permission:", employeePermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions([]);
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Employee-Management', accessLevel: 'crud' }],
+      hr: [{ module: 'Employee-Management', accessLevel: 'crud' }],
+      employee: [{ module: 'Employee-Management', accessLevel: 'read' }],
+      employer: [{ module: 'Employee-Management', accessLevel: 'crud' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Employee-Management module permission
+    const employeePermission = userPermissions.find(p => p.module === 'Employee-Management');
+    if (!employeePermission) {
+      console.log("❌ No Employee-Management permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = employeePermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'view_documents':
+        // View documents access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'delete_documents':
+        // Delete documents access for: crud only
+        return accessLevel === 'crud';
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view employee data" 
+      });
+      setEmployees([]);
+      setFilteredEmployees([]);
+    }
+  }, [currentUserRole, userPermissions]);
+
+  const getProfilePictureUrl = (profilePicture) => {
     if (!profilePicture) return null;
     if (profilePicture.startsWith('http')) return profilePicture;
     return `http://localhost:5000${profilePicture}`;
   };
-  // FIXED: Get current user's role from hrms_user instead of currentUser
-  useEffect(() => {
-    const currentUser = JSON.parse(localStorage.getItem('hrms_user') || '{}');
-    console.log('Current user from localStorage:', currentUser); // Debug log
-    setUserRole(currentUser.role || 'employee');
-  }, []);
 
   const fetchEmployees = async () => {
+    // Check read permission before fetching
+    if (!hasPermission('read')) {
+      setEmployees([]);
+      setFilteredEmployees([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await fetch('http://localhost:5000/api/employees');
@@ -1542,7 +1710,7 @@ const EmployeeSection = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [currentUserRole, userPermissions]);
 
   useEffect(() => {
     const filtered = employees.filter(employee =>
@@ -1568,6 +1736,25 @@ const EmployeeSection = () => {
   };
 
   const handleSaveEmployee = async (employeeData) => {
+    // Check permission before saving
+    if (editingEmployee && !hasPermission('update')) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to update employees',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!editingEmployee && !hasPermission('create')) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to create employees',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     try {
       const url = editingEmployee 
         ? `http://localhost:5000/api/employees/${editingEmployee.employeeId}`
@@ -1606,6 +1793,16 @@ const EmployeeSection = () => {
   };
 
   const handleDeleteEmployee = async (employeeId) => {
+    // Check delete permission
+    if (!hasPermission('delete')) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to delete employees',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     try {
       const response = await fetch(`http://localhost:5000/api/employees/${employeeId}`, {
         method: 'DELETE',
@@ -1631,11 +1828,29 @@ const EmployeeSection = () => {
   };
 
   const handleEditEmployee = (employee) => {
+    // Check update permission
+    if (!hasPermission('update')) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to edit employees',
+        variant: 'destructive'
+      });
+      return;
+    }
     setEditingEmployee(employee);
     setShowForm(true);
   };
 
   const handleViewEmployee = (employee) => {
+    // Check read permission
+    if (!hasPermission('read')) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You do not have permission to view employee details',
+        variant: 'destructive'
+      });
+      return;
+    }
     setViewingEmployee(employee);
     setIsViewDialogOpen(true);
   };
@@ -1665,8 +1880,12 @@ const EmployeeSection = () => {
     }
   };
 
-  // Check if current user can add employees
-  const canAddEmployee = ['admin', 'hr', 'employer'].includes(userRole);
+  // Check if current user can add employees based on permissions
+  const canAddEmployee = hasPermission('create');
+  const canEditEmployee = hasPermission('update');
+  const canDeleteEmployee = hasPermission('delete');
+  const canViewEmployee = hasPermission('read');
+  const canDeleteDocuments = hasPermission('delete_documents');
 
   return (
     <>
@@ -1695,6 +1914,7 @@ const EmployeeSection = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 pr-4 py-2 w-full sm:w-64"
+                  disabled={!canViewEmployee}
                 />
               </div>
               {canAddEmployee && (
@@ -1708,169 +1928,185 @@ const EmployeeSection = () => {
               )}
             </div>
           </div>
+
           {/* Main Content */}
-<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-  {/* Employee List */}
-  <div className="lg:col-span-3">
-    <Card className="p-6 bg-white/80 backdrop-blur-sm border-0 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">All Employees</h2>
-        <Badge variant="secondary" className="bg-blue-50 text-blue-700">
-          {filteredEmployees.length} employees
-        </Badge>
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Employee List */}
+            <div className="lg:col-span-3">
+              <Card className="p-6 bg-white/80 backdrop-blur-sm border-0 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">All Employees</h2>
+                  <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                    {filteredEmployees.length} employees
+                  </Badge>
+                </div>
 
-      {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Loading employees...</span>
-        </div>
-      ) : filteredEmployees.length === 0 ? (
-        <div className="text-center py-12">
-          <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No employees found' : 'No employees yet'}
-          </h3>
-          <p className="text-gray-500 mb-4">
-            {searchTerm
-              ? 'Try adjusting your search terms'
-              : 'Get started by adding your first employee'}
-          </p>
-          {canAddEmployee && !searchTerm && (
-            <Button
-              onClick={() => setShowForm(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Employee
-            </Button>
-          )}
-        </div>
-      ) : (
-        // 🔹 Updated layout to 3-column grid
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-  {filteredEmployees.map((employee) => (
-    <motion.div
-      key={employee.employeeId}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200 flex flex-col"
-    >
-      {/* Header with dropdown in top right */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-4 flex-1">
-          <div className="relative">
-            {employee.profilePicture || employee.profilePhoto ? (
-              <img
-                src={getProfilePictureUrl(employee.profilePicture || employee.profilePhoto)}
-                alt={employee.name}
-                className="w-12 h-12 rounded-xl object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
-                }}
-              />
-            ) : null}
-            <div
-              className={`w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center ${
-                (employee.profilePicture || employee.profilePhoto) ? 'hidden' : 'flex'
-              }`}
-            >
-              <span className="text-white font-bold text-sm">
-  {employee.name ? employee.name.split(' ').map((n) => n?.[0] || '').join('') : 'US'}
-</span>
+                {!canViewEmployee ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="text-center">
+                      <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Access Denied</h3>
+                      <p className="text-gray-600">
+                        You don't have permission to view employee data.
+                      </p>
+                    </div>
+                  </div>
+                ) : loading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-2">Loading employees...</span>
+                  </div>
+                ) : filteredEmployees.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Users className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      {searchTerm ? 'No employees found' : 'No employees yet'}
+                    </h3>
+                    <p className="text-gray-500 mb-4">
+                      {searchTerm
+                        ? 'Try adjusting your search terms'
+                        : 'Get started by adding your first employee'}
+                    </p>
+                    {canAddEmployee && !searchTerm && (
+                      <Button
+                        onClick={() => setShowForm(true)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Employee
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  // 🔹 Updated layout to 3-column grid
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredEmployees.map((employee) => (
+                      <motion.div
+                        key={employee.employeeId}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200 flex flex-col"
+                      >
+                        {/* Header with dropdown in top right */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="relative">
+                              {employee.profilePicture || employee.profilePhoto ? (
+                                <img
+                                  src={getProfilePictureUrl(employee.profilePicture || employee.profilePhoto)}
+                                  alt={employee.name}
+                                  className="w-12 h-12 rounded-xl object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className={`w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center ${
+                                  (employee.profilePicture || employee.profilePhoto) ? 'hidden' : 'flex'
+                                }`}
+                              >
+                                <span className="text-white font-bold text-sm">
+                                  {employee.name ? employee.name.split(' ').map((n) => n?.[0] || '').join('') : 'US'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-gray-900 truncate">
+                                {employee.name}
+                              </h3>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                <Badge variant="outline" className={getStatusColor(employee.status)}>
+                                  {employee.status?.replace('-', ' ')}
+                                </Badge>
+                                <Badge variant="outline" className={getRoleColor(employee.role)}>
+                                  {employee.role}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Dropdown menu in top right */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="ml-2 flex-shrink-0">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => handleViewEmployee(employee)}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              {canEditEmployee && (
+                                <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {canDeleteEmployee && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem
+                                      className="text-red-600 focus:text-red-700"
+                                      onSelect={(e) => e.preventDefault()}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This will permanently delete {employee.name}'s record. This action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteEmployee(employee.employeeId)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                              {!canEditEmployee && !canDeleteEmployee && (
+                                <DropdownMenuItem disabled>
+                                  <Shield className="w-4 h-4 mr-2" />
+                                  No Actions Available
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        {/* Employee details */}
+                        <div className="flex flex-col gap-1 text-sm text-gray-500 mb-3">
+                          <span className="flex items-center gap-1">
+                            <Briefcase className="w-3 h-3" />
+                            {employee.designation}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Building className="w-3 h-3" />
+                            {employee.department}
+                          </span>
+                          <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit">
+                            {employee.employeeId}
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </Card>
             </div>
           </div>
-
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 truncate">
-              {employee.name}
-            </h3>
-            <div className="flex flex-wrap gap-1 mt-1">
-              <Badge variant="outline" className={getStatusColor(employee.status)}>
-                {employee.status?.replace('-', ' ')}
-              </Badge>
-              <Badge variant="outline" className={getRoleColor(employee.role)}>
-                {employee.role}
-              </Badge>
-            </div>
-          </div>
-        </div>
-
-        {/* Dropdown menu in top right */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="ml-2 flex-shrink-0">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => handleViewEmployee(employee)}>
-              <Eye className="w-4 h-4 mr-2" />
-              View Details
-            </DropdownMenuItem>
-            {canAddEmployee && (
-              <DropdownMenuItem onClick={() => handleEditEmployee(employee)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </DropdownMenuItem>
-            )}
-            {canAddEmployee && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem
-                    className="text-red-600 focus:text-red-700"
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete {employee.name}'s record. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDeleteEmployee(employee.employeeId)}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Employee details */}
-      <div className="flex flex-col gap-1 text-sm text-gray-500 mb-3">
-        <span className="flex items-center gap-1">
-          <Briefcase className="w-3 h-3" />
-          {employee.designation}
-        </span>
-        <span className="flex items-center gap-1">
-          <Building className="w-3 h-3" />
-          {employee.department}
-        </span>
-        <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit">
-          {employee.employeeId}
-        </span>
-      </div>
-    </motion.div>
-  ))}
-</div>
-      )}
-    </Card>
-  </div>
-</div>
-
         </div>
       </div>
 
@@ -1895,6 +2131,8 @@ const EmployeeSection = () => {
             onCancel={handleCancelForm}
             suggestedId={generateEmployeeId()}
             userRole={userRole}
+            hasCreatePermission={hasPermission('create')}
+            hasUpdatePermission={hasPermission('update')}
           />
         </DialogContent>
       </Dialog>
@@ -1907,7 +2145,25 @@ const EmployeeSection = () => {
           setIsViewDialogOpen(false);
           setViewingEmployee(null);
         }}
+        hasDeletePermission={canDeleteDocuments}
       />
+
+      {/* ✅ Debug Panel - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+          <div className="font-bold mb-2">🔐 Permission Debug</div>
+          <div>Role: {currentUserRole}</div>
+          <div>Employee Access: {userPermissions.find(p => p.module === 'Employee-Management')?.accessLevel || 'none'}</div>
+          <div className="mt-1">
+            <div>Read: {hasPermission('read').toString()}</div>
+            <div>Create: {hasPermission('create').toString()}</div>
+            <div>Edit: {hasPermission('update').toString()}</div>
+            <div>Delete: {hasPermission('delete').toString()}</div>
+            <div>View Docs: {hasPermission('view_documents').toString()}</div>
+            <div>Delete Docs: {hasPermission('delete_documents').toString()}</div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -8,46 +8,101 @@ import { Shield, Save, RefreshCw, Users, CheckCircle, XCircle } from "lucide-rea
 const PermissionsManager = () => {
   // Default modules data
   const defaultModules = [
-    {
-      module: "dashboard",
-      label: "Dashboard",
-      description: "Access to main dashboard and analytics"
-    },
-    {
-      module: "EmployeesProfile",
-      label: "EmployeesProfile",
-      description: "Manage employee profiles and personal information" // ✅ FIX DESCRIPTION"
-    },
-    {
-      module: "employees",
-      label: "Employees",
-      description: "Manage employee records"
-    },
+    // {
+    //   module: "dashboard",
+    //   label: "Dashboard",
+    //   description: "Access to main dashboard and analytics"
+    // },
+    // {
+    //   module: "EmployeesProfile",
+    //   label: "EmployeesProfile",
+    //   description: "Manage employee profiles and personal information" // ✅ FIX DESCRIPTION"
+    // },
+    // {
+    //   module: "employees",
+    //   label: "Employees",
+    //   description: "Manage employee records"
+    // },
      {
       module: "Teams",
       label: "Teams",
       description: "Manage Teams records and profiles"
-    },
-    {
-      module: "attendance",
+      }, {
+      module: "Announcements",
+      label: "Announcements",
+      description: "Manage Announcements records and profiles"
+      },{
+      module: "Organization",
+      label: "Organization",
+      description: "Manage Organization records and profiles"
+      },{
+      module: "Employee-Management",
+      label: "Employee-Management",
+      description: "Manage Employee-Management records and profiles"
+      },
+      {
+      module: "Employee-Onboarding",
+      label: "Employee-Onboarding",
+      description: "Manage Employee-Onboarding records and profiles"
+      },
+      {
+      module: "Employee-Offboarding",
+      label: "Employee-Offboarding",
+      description: "Manage Employee Offboarding records and profiles"
+      },
+       {
+      module: "Leave-Management",
+      label: "Leave-Management",
+      description: "Manage Leave Management records and profiles"
+      },
+      {
+      module: "Payroll-Management",
+      label: "Payroll-Management",
+      description: "Manage Payroll Management records and profiles"
+      },
+      {
+      module: "Timesheet-Reports",
+      label: "Timesheet-Reports",
+      description: "Manage Timesheet Reports records and profiles"
+      },
+      {
+      module: "Attendance",
       label: "Attendance",
-      description: "Track and manage attendance records"
-    },
-    {
-      module: "payroll",
-      label: "Payroll",
-      description: "Process and manage payroll data"
-    },
-    {
-      module: "reports",
-      label: "Reports",
-      description: "Generate and view system reports"
-    },
-    {
-      module: "settings",
-      label: "Settings",
-      description: "Configure system settings"
-    }
+      description: "Manage Attendance records and profiles"
+      },
+      {
+      module: "Leave-Approvals",
+      label: "Leave-Approvals",
+      description: "Manage Leave Approvals records and profiles"
+      },
+      {
+      module: "HR-Letters",
+      label: "HR-Letters",
+      description: "Manage HR Letters records and profiles"
+      },
+      
+  
+      
+    // {
+    //   module: "attendance",
+    //   label: "Attendance",
+    //   description: "Track and manage attendance records"
+    // },
+    // {
+    //   module: "payroll",
+    //   label: "Payroll",
+    //   description: "Process and manage payroll data"
+    // },
+    // {
+    //   module: "reports",
+    //   label: "Reports",
+    //   description: "Generate and view system reports"
+    // },
+    // {
+    //   module: "settings",
+    //   label: "Settings",
+    //   description: "Configure system settings"
+    // }
   ];
 
   // Default roles data (will be replaced with API data)

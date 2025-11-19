@@ -43,42 +43,75 @@ rolePermissionSchema.statics.initializeDefaultRoles = async function() {
       name: 'admin',
       description: 'Full system access with all permissions',
       permissions: [
-        { module: 'dashboard', accessLevel: 'crud' },
-        { module: 'EmployeesProfile', accessLevel: 'crud' },
-        { module: 'employees', accessLevel: 'crud' },
+        // { module: 'dashboard', accessLevel: 'crud' },
+        // { module: 'EmployeesProfile', accessLevel: 'crud' },
+        // { module: 'employees', accessLevel: 'crud' },
          { module: 'Teams', accessLevel: 'crud' },
-        { module: 'attendance', accessLevel: 'crud' },
-        { module: 'payroll', accessLevel: 'crud' },
-        { module: 'reports', accessLevel: 'crud' },
-        { module: 'settings', accessLevel: 'crud' }
+         { module: 'Announcements', accessLevel: 'crud' },
+         { module: 'Organization', accessLevel: 'crud' },
+         { module: 'Employee-Management', accessLevel: 'crud' },
+         { module: 'Employee-Onboarding', accessLevel: 'crud' },
+          { module: 'Employee-Offboarding', accessLevel: 'crud' },
+          { module: 'Leave-Management', accessLevel: 'crud' },
+          { module: 'Payroll-Management', accessLevel: 'crud' },
+          { module: 'Timesheet-Reports', accessLevel: 'crud' },
+           { module: 'Attendance', accessLevel: 'crud' },
+           { module: 'Leave-Approvals', accessLevel: 'crud' },
+           { module: 'HR-Letters', accessLevel: 'crud' }
+        // { module: 'attendance', accessLevel: 'crud' },
+        // { module: 'payroll', accessLevel: 'crud' },
+        // { module: 'reports', accessLevel: 'crud' },
+        // { module: 'settings', accessLevel: 'crud' }
       ]
     },
     {
       name: 'hr',
       description: 'Human Resources management access',
       permissions: [
-        { module: 'dashboard', accessLevel: 'crud' },
-        { module: 'EmployeesProfile', accessLevel: 'crud' },
-        { module: 'employees', accessLevel: 'crud' },
+        // { module: 'dashboard', accessLevel: 'crud' },
+        // { module: 'EmployeesProfile', accessLevel: 'crud' },
+        // { module: 'employees', accessLevel: 'crud' },
         { module: 'Teams', accessLevel: 'crud' },
-        { module: 'attendance', accessLevel: 'crud' },
-        { module: 'payroll', accessLevel: 'read' },
-        { module: 'reports', accessLevel: 'crud' },
-        { module: 'settings', accessLevel: 'read' }
+        { module: 'Announcements', accessLevel: 'crud' },
+        { module: 'Organization', accessLevel: 'crud' },
+         { module: 'Employee-Management', accessLevel: 'crud' },
+         { module: 'Employee-Onboarding', accessLevel: 'crud' },
+          { module: 'Employee-Offboarding', accessLevel: 'crud' },
+          { module: 'Leave-Management', accessLevel: 'crud' },
+          { module: 'Payroll-Management', accessLevel: 'crud' },
+          { module: 'Timesheet-Reports', accessLevel: 'crud' },
+           { module: 'Attendance', accessLevel: 'crud' },
+           { module: 'Leave-Approvals', accessLevel: 'crud' },
+           { module: 'HR-Letters', accessLevel: 'crud' }
+        // { module: 'attendance', accessLevel: 'crud' },
+        // { module: 'payroll', accessLevel: 'read' },
+        // { module: 'reports', accessLevel: 'crud' },
+        // { module: 'settings', accessLevel: 'read' }
       ]
     },
     {
       name: 'employee',
       description: 'Basic employee self-service access',
       permissions: [
-        { module: 'dashboard', accessLevel: 'read' },
-        { module: 'EmployeesProfile', accessLevel: 'read' },
-        { module: 'employees', accessLevel: 'read-self' },
+        // { module: 'dashboard', accessLevel: 'read' },
+        // { module: 'EmployeesProfile', accessLevel: 'read' },
+        // { module: 'employees', accessLevel: 'read-self' },
          { module: 'Teams', accessLevel: 'crud' },
-        { module: 'attendance', accessLevel: 'read-self' },
-        { module: 'payroll', accessLevel: 'read-self' },
-        { module: 'reports', accessLevel: 'none' },
-        { module: 'settings', accessLevel: 'none' }
+         { module: 'Announcements', accessLevel: 'crud' },
+         { module: 'Organization', accessLevel: 'crud' },
+         { module: 'Employee-Management', accessLevel: 'crud' },
+         { module: 'Employee-Onboarding', accessLevel: 'crud' },
+          { module: 'Employee-Offboarding', accessLevel: 'crud' },
+          { module: 'Leave-Management', accessLevel: 'crud' },
+          { module: 'Payroll-Management', accessLevel: 'crud' },
+          { module: 'Timesheet-Reports', accessLevel: 'crud' },
+          { module: 'Attendance', accessLevel: 'crud' },
+          { module: 'Leave-Approvals', accessLevel: 'crud' },
+          { module: 'HR-Letters', accessLevel: 'crud' }
+        // { module: 'attendance', accessLevel: 'read-self' },
+        // { module: 'payroll', accessLevel: 'read-self' },
+        // { module: 'reports', accessLevel: 'none' },
+        // { module: 'settings', accessLevel: 'none' }
       ]
     }
   ];

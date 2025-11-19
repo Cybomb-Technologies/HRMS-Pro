@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +54,138 @@ const LeaveSection = () => {
     personalLeaveLimit: 6,
   });
 
-  // Check if user can manage leaves
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const leavePermission = userRoleData.permissions.find(p => p.module === 'Leave-Management');
+          console.log("🚀 Leave-Management permission:", leavePermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions(getDefaultPermissions(role));
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Leave-Management', accessLevel: 'crud' }],
+      hr: [{ module: 'Leave-Management', accessLevel: 'crud' }],
+      employee: [{ module: 'Leave-Management', accessLevel: 'read' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Leave-Management module permission
+    const leavePermission = userPermissions.find(p => p.module === 'Leave-Management');
+    if (!leavePermission) {
+      console.log("❌ No Leave-Management permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = leavePermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'manage_settings':
+        // Manage settings access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view leave management" 
+      });
+      setLeaveRequests([]);
+      setFilteredRequests([]);
+    }
+  }, [currentUserRole, userPermissions]);
+
+  // Old permission check (keeping for compatibility)
   const canManageLeaves = () => {
     return (
       user?.role === "admin" || user?.role === "hr" || user?.role === "employer"
@@ -89,6 +220,15 @@ const LeaveSection = () => {
 
   // Update leave settings
   const handleUpdateLeaveSettings = async () => {
+    if (!hasPermission('manage_settings')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to update leave settings",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await leaveSettings.update(leaveSettingsData);
       setEditingSettings(false);
@@ -142,6 +282,15 @@ const LeaveSection = () => {
 
   // Handle leave status update
   const handleStatusUpdate = async (leaveId, newStatus) => {
+    if (!hasPermission('update')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to update leave requests",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await leaveApi.update(leaveId, {
         status: newStatus,
@@ -165,6 +314,15 @@ const LeaveSection = () => {
 
   // Export leave data to Excel
   const handleExportData = () => {
+    if (!hasPermission('read')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to export leave data",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       // Create CSV content
       const headers = [
@@ -263,15 +421,17 @@ const LeaveSection = () => {
   // Initial data loading
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([
-        fetchLeaveRequests(),
-        fetchAllEmployees(),
-        fetchLeaveBalances(),
-        loadLeaveSettings(),
-      ]);
+      if (hasPermission('read')) {
+        await Promise.all([
+          fetchLeaveRequests(),
+          fetchAllEmployees(),
+          fetchLeaveBalances(),
+          loadLeaveSettings(),
+        ]);
+      }
     };
     loadData();
-  }, []);
+  }, [hasPermission('read')]);
 
   // Get status badge
   const getStatusBadge = (status) => {
@@ -303,6 +463,15 @@ const LeaveSection = () => {
 
   // Reset all leave balances
   const handleResetAllBalances = async () => {
+    if (!hasPermission('update')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to reset leave balances",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (
       !confirm(
         "Are you sure you want to reset all leave balances to their maximum limits?"
@@ -359,11 +528,13 @@ const LeaveSection = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExportData}>
-            <Download className="h-4 w-4 mr-2" />
-            Export to Excel
-          </Button>
-          {canManageLeaves() && (
+          {hasPermission('read') && (
+            <Button variant="outline" onClick={handleExportData}>
+              <Download className="h-4 w-4 mr-2" />
+              Export to Excel
+            </Button>
+          )}
+          {hasPermission('update') && (
             <Button onClick={handleResetAllBalances}>
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset All Balances
@@ -386,18 +557,20 @@ const LeaveSection = () => {
             <FileText className="h-4 w-4 mr-2 inline" />
             Leave Requests ({stats.total})
           </button>
-          <button
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "balances"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("balances")}
-          >
-            <TrendingDown className="h-4 w-4 mr-2 inline" />
-            Leave Balances
-          </button>
-          {canManageLeaves() && (
+          {hasPermission('read') && (
+            <button
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "balances"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setActiveTab("balances")}
+            >
+              <TrendingDown className="h-4 w-4 mr-2 inline" />
+              Leave Balances
+            </button>
+          )}
+          {hasPermission('manage_settings') && (
             <button
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === "settings"
@@ -414,7 +587,7 @@ const LeaveSection = () => {
       </div>
 
       {/* Statistics Cards */}
-      {activeTab === "requests" && (
+      {activeTab === "requests" && hasPermission('read') && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="p-4">
             <div className="flex items-center justify-between">
@@ -470,7 +643,7 @@ const LeaveSection = () => {
       )}
 
       {/* Leave Requests Tab */}
-      {activeTab === "requests" && (
+      {activeTab === "requests" && hasPermission('read') && (
         <div className="space-y-4">
           {/* Filters */}
           <Card className="p-4">
@@ -543,7 +716,9 @@ const LeaveSection = () => {
                         <th className="text-left py-3 px-4">Reason</th>
                         <th className="text-left py-3 px-4">Status</th>
                         <th className="text-left py-3 px-4">Applied On</th>
-                        <th className="text-left py-3 px-4">Actions</th>
+                        {hasPermission('update') && (
+                          <th className="text-left py-3 px-4">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -592,9 +767,9 @@ const LeaveSection = () => {
                               request.appliedDate || request.createdAt
                             ).toLocaleDateString()}
                           </td>
-                          <td className="py-3 px-4">
-                            {canManageLeaves() &&
-                              request.status === "pending" && (
+                          {hasPermission('update') && (
+                            <td className="py-3 px-4">
+                              {request.status === "pending" && (
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
@@ -623,12 +798,13 @@ const LeaveSection = () => {
                                   </Button>
                                 </div>
                               )}
-                            {request.status !== "pending" && (
-                              <span className="text-sm text-muted-foreground">
-                                {request.status}
-                              </span>
-                            )}
-                          </td>
+                              {request.status !== "pending" && (
+                                <span className="text-sm text-muted-foreground">
+                                  {request.status}
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -641,7 +817,7 @@ const LeaveSection = () => {
       )}
 
       {/* Leave Balances Tab */}
-      {activeTab === "balances" && (
+      {activeTab === "balances" && hasPermission('read') && (
         <div className="space-y-4">
           <Card>
             <div className="p-6">
@@ -737,7 +913,7 @@ const LeaveSection = () => {
       )}
 
       {/* Settings Tab */}
-      {activeTab === "settings" && canManageLeaves() && (
+      {activeTab === "settings" && hasPermission('manage_settings') && (
         <div className="space-y-4">
           <Card>
             <div className="p-6">
@@ -875,6 +1051,22 @@ const LeaveSection = () => {
               )}
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* ✅ Debug Panel - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+          <div className="font-bold mb-2">🔐 Permission Debug</div>
+          <div>Role: {currentUserRole}</div>
+          <div>Leave Access: {userPermissions.find(p => p.module === 'Leave-Management')?.accessLevel || 'none'}</div>
+          <div className="mt-1">
+            <div>Read: {hasPermission('read').toString()}</div>
+            <div>Create: {hasPermission('create').toString()}</div>
+            <div>Edit: {hasPermission('update').toString()}</div>
+            <div>Delete: {hasPermission('delete').toString()}</div>
+            <div>Settings: {hasPermission('manage_settings').toString()}</div>
+          </div>
         </div>
       )}
     </div>
