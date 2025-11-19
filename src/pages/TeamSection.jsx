@@ -882,20 +882,137 @@ const TeamSection = () => {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
 
-  // ✅ NEW: Get current user info for notifications
-  useEffect(() => {
-    // Get current user from localStorage or context
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      try {
-        const user = JSON.parse(userData);
-        setCurrentUser(user);
-      } catch (error) {
-        console.error("Error parsing user data:", error);
-      }
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
     }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            setCurrentUser(decoded);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
   }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const teamsPermission = userRoleData.permissions.find(p => p.module === 'Teams');
+          console.log("🚀 Teams permission:", teamsPermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions([]);
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Teams', accessLevel: 'crud' }],
+      hr: [{ module: 'Teams', accessLevel: 'crud' }],
+      employee: [{ module: 'Teams', accessLevel: 'read' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Teams module permission
+    const teamsPermission = userPermissions.find(p => p.module === 'Teams');
+    if (!teamsPermission) {
+      console.log("❌ No Teams permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = teamsPermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'manage_members':
+        // Manage members access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view teams" 
+      });
+      setTeams([]);
+    }
+  }, [currentUserRole, userPermissions]);
 
   const fetchTeams = async () => {
     try {
@@ -1322,13 +1439,17 @@ const TeamSection = () => {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => setCreateModalOpen(true)}
-            className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Create Team
-          </Button>
+          
+          {/* ✅ Permission-based Create Button */}
+          {hasPermission('create') && (
+            <Button
+              onClick={() => setCreateModalOpen(true)}
+              className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create Team
+            </Button>
+          )}
         </motion.div>
 
         <motion.div
@@ -1408,45 +1529,56 @@ const TeamSection = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setEditingTeam(team)}>
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Team
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setViewingMembersTeam(team)}
-                      >
-                        <Users className="w-4 h-4 mr-2" />
-                        View Members
-                      </DropdownMenuItem>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem
-                            onSelect={(e) => e.preventDefault()}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete Team
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will
-                              permanently delete the team and remove all
-                              associated data.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteTeam(team._id)}
-                              className="bg-red-600 hover:bg-red-700"
+                      {/* ✅ Permission-based Edit Option */}
+                      {hasPermission('update') && (
+                        <DropdownMenuItem onClick={() => setEditingTeam(team)}>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit Team
+                        </DropdownMenuItem>
+                      )}
+                      
+                      {/* View Members - Always visible for read access */}
+                      {hasPermission('read') && (
+                        <DropdownMenuItem
+                          onClick={() => setViewingMembersTeam(team)}
+                        >
+                          <Users className="w-4 h-4 mr-2" />
+                          View Members
+                        </DropdownMenuItem>
+                      )}
+                      
+                      {/* ✅ Permission-based Delete Option */}
+                      {hasPermission('delete') && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <DropdownMenuItem
+                              onSelect={(e) => e.preventDefault()}
                             >
+                              <Trash2 className="w-4 h-4 mr-2" />
                               Delete Team
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                            </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will
+                                permanently delete the team and remove all
+                                associated data.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteTeam(team._id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete Team
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1471,24 +1603,31 @@ const TeamSection = () => {
                 </div>
 
                 <div className="flex gap-2 mt-4 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setViewingMembersTeam(team)}
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Members
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setEditingTeam(team)}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
+                  {/* View Members Button - Only for read access */}
+                  {hasPermission('read') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setViewingMembersTeam(team)}
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Members
+                    </Button>
+                  )}
+                  
+                  {/* ✅ Permission-based Edit Button */}
+                  {hasPermission('update') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setEditingTeam(team)}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit
+                    </Button>
+                  )}
                 </div>
               </Card>
             </motion.div>
@@ -1511,7 +1650,7 @@ const TeamSection = () => {
                 ? "Try adjusting your search or filters to find what you are looking for."
                 : "Get started by creating your first team."}
             </p>
-            {!searchTerm && activeFiltersCount === 0 && (
+            {!searchTerm && activeFiltersCount === 0 && hasPermission('create') && (
               <Button
                 onClick={() => setCreateModalOpen(true)}
                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex items-center gap-2 mx-auto"
@@ -1521,6 +1660,21 @@ const TeamSection = () => {
               </Button>
             )}
           </motion.div>
+        )}
+
+        {/* ✅ Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+            <div className="font-bold mb-2">🔐 Permission Debug</div>
+            <div>Role: {currentUserRole}</div>
+            <div>Teams Access: {userPermissions.find(p => p.module === 'Teams')?.accessLevel || 'none'}</div>
+            <div className="mt-1">
+              <div>Read: {hasPermission('read').toString()}</div>
+              <div>Create: {hasPermission('create').toString()}</div>
+              <div>Edit: {hasPermission('update').toString()}</div>
+              <div>Delete: {hasPermission('delete').toString()}</div>
+            </div>
+          </div>
         )}
       </div>
     </>

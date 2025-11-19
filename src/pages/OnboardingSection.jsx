@@ -51,7 +51,7 @@ import {
 } from "lucide-react";
 
 // ================== Document Viewer Component ==================
-const DocumentViewer = ({ documents, stepName, onDeleteDocument }) => {
+const DocumentViewer = ({ documents, stepName, onDeleteDocument, hasDeletePermission }) => {
   const [viewingDocument, setViewingDocument] = useState(null);
 
   const handleDownload = async (document) => {
@@ -148,14 +148,16 @@ const DocumentViewer = ({ documents, stepName, onDeleteDocument }) => {
               >
                 <Download className="w-4 h-4" />
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleDelete(doc)}
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              {hasDeletePermission && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDelete(doc)}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
         </Card>
@@ -192,9 +194,34 @@ const DocumentUploadModal = ({
   employeeId,
   onClose,
   onUploadSuccess,
+  hasUploadPermission
 }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  // Check permission before allowing upload
+  if (!hasUploadPermission) {
+    return (
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            Upload Document - {step.name}
+          </DialogTitle>
+          <DialogDescription>
+            You do not have permission to upload documents for this onboarding step.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="text-center py-6">
+          <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">Access Denied</p>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    );
+  }
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -514,7 +541,7 @@ const EmployeeSelect = ({ employees, selectedEmployee, onEmployeeSelect }) => {
 };
 
 // ================== Onboarding Form ==================
-const OnboardingForm = ({ onSave, onCancel }) => {
+const OnboardingForm = ({ onSave, onCancel, hasCreatePermission }) => {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [formData, setFormData] = useState({
@@ -557,6 +584,16 @@ const OnboardingForm = ({ onSave, onCancel }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check permission before submitting
+    if (!hasCreatePermission) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to start onboarding processes",
+        variant: "destructive"
+      });
+      return;
+    }
 
     if (!selectedEmployee) {
       toast({
@@ -674,7 +711,7 @@ const OnboardingForm = ({ onSave, onCancel }) => {
         </Button>
         <Button
           type="submit"
-          disabled={!selectedEmployee || !formData.startDate || submitLoading}
+          disabled={!selectedEmployee || !formData.startDate || submitLoading || !hasCreatePermission}
           className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
         >
           {submitLoading ? (
@@ -695,12 +732,22 @@ const OnboardingForm = ({ onSave, onCancel }) => {
 };
 
 // ================== Step Completion Component ==================
-const StepCompletionSection = ({ candidate, onStepUpdate }) => {
+const StepCompletionSection = ({ candidate, onStepUpdate, hasUpdatePermission, hasUploadPermission, hasDeletePermission }) => {
   const [completingStep, setCompletingStep] = useState(null);
   const [completionNotes, setCompletionNotes] = useState("");
   const [selectedStepForDocs, setSelectedStepForDocs] = useState(null);
 
   const handleCompleteStep = async (step) => {
+    // Check permission before completing step
+    if (!hasUpdatePermission) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to complete onboarding steps",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setCompletingStep(step.stepId);
 
@@ -739,6 +786,16 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
   };
 
   const handleDeleteDocument = async (stepId, documentId) => {
+    // Check permission before deleting document
+    if (!hasDeletePermission) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to delete documents",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const response = await fetch(
         `http://localhost:5000/api/onboarding/${candidate.employeeId}/documents/${documentId}`,
@@ -898,7 +955,7 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
                     </div>
 
                     <div className="flex items-center space-x-2 ml-4">
-                      {status === "current" && (
+                      {status === "current" && hasUpdatePermission && (
                         <>
                           <Textarea
                             placeholder="Add completion notes..."
@@ -938,7 +995,7 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
                         <Label className="text-sm font-medium text-gray-700">
                           Documents for this step
                         </Label>
-                        {status === "current" && (
+                        {status === "current" && hasUploadPermission && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -955,6 +1012,7 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
                         onDeleteDocument={(docId) =>
                           handleDeleteDocument(step.stepId, docId)
                         }
+                        hasDeletePermission={hasDeletePermission}
                       />
                     </div>
                   )}
@@ -982,6 +1040,7 @@ const StepCompletionSection = ({ candidate, onStepUpdate }) => {
                 .then((res) => res.json())
                 .then((updatedOnboarding) => onStepUpdate(updatedOnboarding));
             }}
+            hasUploadPermission={hasUploadPermission}
           />
         )}
       </Dialog>
@@ -996,17 +1055,40 @@ const OnboardingDetailsModal = ({
   onUpdateStatus,
   onStepUpdate,
   onSendReminder,
+  hasUpdatePermission,
+  hasSendReminderPermission,
+  hasUploadPermission,
+  hasDeletePermission
 }) => {
   const [newStatus, setNewStatus] = useState(candidate.status);
   const [notes, setNotes] = useState(candidate.notes || "");
   const [sendingReminder, setSendingReminder] = useState(false);
 
   const handleUpdate = () => {
+    // Check permission before updating status
+    if (!hasUpdatePermission) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to update onboarding status",
+        variant: "destructive"
+      });
+      return;
+    }
     onUpdateStatus(candidate.employeeId, newStatus, notes);
   };
 
   // ✅ ENHANCED: Handle send reminder with dynamic message based on status
   const handleSendReminder = async () => {
+    // Check permission before sending reminder
+    if (!hasSendReminderPermission) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to send reminders",
+        variant: "destructive"
+      });
+      return;
+    }
+
     console.log(
       "🔔 [DEBUG] Sending reminder from details modal for:",
       candidate
@@ -1211,6 +1293,9 @@ const OnboardingDetailsModal = ({
         <StepCompletionSection
           candidate={candidate}
           onStepUpdate={onStepUpdate}
+          hasUpdatePermission={hasUpdatePermission}
+          hasUploadPermission={hasUploadPermission}
+          hasDeletePermission={hasDeletePermission}
         />
 
         {/* Status Update Section */}
@@ -1224,7 +1309,7 @@ const OnboardingDetailsModal = ({
                 <Label htmlFor="status-update" className="text-sm font-medium">
                   Update Status
                 </Label>
-                <Select value={newStatus} onValueChange={setNewStatus}>
+                <Select value={newStatus} onValueChange={setNewStatus} disabled={!hasUpdatePermission}>
                   <SelectTrigger id="status-update" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -1237,6 +1322,9 @@ const OnboardingDetailsModal = ({
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
+                {!hasUpdatePermission && (
+                  <p className="text-xs text-gray-500">You don't have permission to update status</p>
+                )}
               </div>
               <div className="flex items-center justify-center">
                 <Badge
@@ -1259,41 +1347,51 @@ const OnboardingDetailsModal = ({
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add relevant notes, comments, or instructions..."
                 rows={4}
+                disabled={!hasUpdatePermission}
               />
+              {!hasUpdatePermission && (
+                <p className="text-xs text-gray-500">You don't have permission to add notes</p>
+              )}
             </div>
           </div>
         </Card>
       </div>
 
       <DialogFooter className="flex justify-between">
-        <Button
-          onClick={handleSendReminder}
-          disabled={sendingReminder}
-          className="bg-orange-600 hover:bg-orange-700"
-        >
-          {sendingReminder ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Sending...
-            </>
-          ) : (
-            <>
-              <Bell className="w-4 h-4 mr-2" />
-              Send Reminder
-            </>
-          )}
-        </Button>
+        {hasSendReminderPermission ? (
+          <Button
+            onClick={handleSendReminder}
+            disabled={sendingReminder}
+            className="bg-orange-600 hover:bg-orange-700"
+          >
+            {sendingReminder ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Bell className="w-4 h-4 mr-2" />
+                Send Reminder
+              </>
+            )}
+          </Button>
+        ) : (
+          <div></div>
+        )}
         <div className="flex space-x-2">
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
-          <Button
-            onClick={handleUpdate}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Update Status
-          </Button>
+          {hasUpdatePermission && (
+            <Button
+              onClick={handleUpdate}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Update Status
+            </Button>
+          )}
         </div>
       </DialogFooter>
     </DialogContent>
@@ -1308,12 +1406,158 @@ const OnboardingSection = () => {
   const [onboardingCandidates, setOnboardingCandidates] = useState([]);
   const [completedOnboarding, setCompletedOnboarding] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const onboardingPermission = userRoleData.permissions.find(p => p.module === 'Employee-Onboarding');
+          console.log("🚀 Employee-Onboarding permission:", onboardingPermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions([]);
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Employee-Onboarding', accessLevel: 'crud' }],
+      hr: [{ module: 'Employee-Onboarding', accessLevel: 'crud' }],
+      employer: [{ module: 'Employee-Onboarding', accessLevel: 'crud' }],
+      employee: [{ module: 'Employee-Onboarding', accessLevel: 'read' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Employee-Onboarding module permission
+    const onboardingPermission = userPermissions.find(p => p.module === 'Employee-Onboarding');
+    if (!onboardingPermission) {
+      console.log("❌ No Employee-Onboarding permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = onboardingPermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'upload_documents':
+        // Upload documents access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete_documents':
+        // Delete documents access for: crud only
+        return accessLevel === 'crud';
+      case 'send_reminders':
+        // Send reminders access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view onboarding data" 
+      });
+      setOnboardingCandidates([]);
+      setCompletedOnboarding([]);
+    }
+  }, [currentUserRole, userPermissions]);
 
   useEffect(() => {
     fetchOnboardings();
-  }, []);
+  }, [currentUserRole, userPermissions]);
 
   const fetchOnboardings = async () => {
+    // Check read permission before fetching
+    if (!hasPermission('read')) {
+      setOnboardingCandidates([]);
+      setCompletedOnboarding([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       console.log("🔄 [DEBUG] Fetching onboarding data...");
@@ -1344,6 +1588,16 @@ const OnboardingSection = () => {
   };
 
   const handleStartOnboarding = async (onboardingData) => {
+    // Check create permission before starting
+    if (!hasPermission('create')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to start onboarding processes",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       console.log("🔄 [DEBUG] Starting onboarding for:", onboardingData);
       const res = await fetch("http://localhost:5000/api/onboarding", {
@@ -1380,6 +1634,16 @@ const OnboardingSection = () => {
 
   // ✅ ENHANCED: Send reminder notification to employee with dynamic message
   const handleSendReminder = async (candidate) => {
+    // Check permission before sending reminder
+    if (!hasPermission('send_reminders')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to send reminders",
+        variant: "destructive"
+      });
+      return;
+    }
+
     console.log("🔔 [DEBUG] Sending reminder from main list for:", candidate);
 
     try {
@@ -1434,6 +1698,16 @@ const OnboardingSection = () => {
   };
 
   const handleUpdateStatus = async (employeeId, newStatus, notes) => {
+    // Check update permission before updating
+    if (!hasPermission('update')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to update onboarding status",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       console.log(
         "🔄 [DEBUG] Updating status for:",
@@ -1580,6 +1854,20 @@ const OnboardingSection = () => {
   ];
 
   const renderActiveOnboarding = () => {
+    if (!hasPermission('read')) {
+      return (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-center">
+            <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Access Denied</h3>
+            <p className="text-gray-600">
+              You don't have permission to view onboarding data.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     if (loading) {
       return (
         <div className="flex items-center justify-center py-12">
@@ -1599,13 +1887,15 @@ const OnboardingSection = () => {
           <p className="text-gray-500 mb-6">
             Start a new onboarding process for employees
           </p>
-          <Button
-            onClick={() => setModalOpen(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Start Onboarding
-          </Button>
+          {hasPermission('create') && (
+            <Button
+              onClick={() => setModalOpen(true)}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Start Onboarding
+            </Button>
+          )}
         </div>
       );
     }
@@ -1714,14 +2004,16 @@ const OnboardingSection = () => {
                       <Eye className="mr-2 h-4 w-4" />
                       View Details & Documents
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleSendReminder(candidate)}
-                    >
-                      <Bell className="mr-2 h-4 w-4" />
-                      Send Reminder
-                    </Button>
+                    {hasPermission('send_reminders') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSendReminder(candidate)}
+                      >
+                        <Bell className="mr-2 h-4 w-4" />
+                        Send Reminder
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -1766,6 +2058,20 @@ const OnboardingSection = () => {
   );
 
   const renderCompletedOnboarding = () => {
+    if (!hasPermission('read')) {
+      return (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-center">
+            <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Access Denied</h3>
+            <p className="text-gray-600">
+              You don't have permission to view onboarding data.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     if (loading) {
       return (
         <div className="flex items-center justify-center py-12">
@@ -1862,6 +2168,13 @@ const OnboardingSection = () => {
     },
   ];
 
+  // Check permissions for various actions
+  const canCreateOnboarding = hasPermission('create');
+  const canUpdateOnboarding = hasPermission('update');
+  const canUploadDocuments = hasPermission('upload_documents');
+  const canDeleteDocuments = hasPermission('delete_documents');
+  const canSendReminders = hasPermission('send_reminders');
+
   return (
     <>
       <Helmet>
@@ -1888,6 +2201,7 @@ const OnboardingSection = () => {
           <OnboardingForm
             onSave={handleStartOnboarding}
             onCancel={() => setModalOpen(false)}
+            hasCreatePermission={canCreateOnboarding}
           />
         </DialogContent>
       </Dialog>
@@ -1904,6 +2218,10 @@ const OnboardingSection = () => {
             onUpdateStatus={handleUpdateStatus}
             onStepUpdate={handleStepUpdate}
             onSendReminder={handleSendReminder}
+            hasUpdatePermission={canUpdateOnboarding}
+            hasSendReminderPermission={canSendReminders}
+            hasUploadPermission={canUploadDocuments}
+            hasDeletePermission={canDeleteDocuments}
           />
         )}
       </Dialog>
@@ -1925,13 +2243,15 @@ const OnboardingSection = () => {
               tracking, and progress monitoring
             </p>
           </div>
-          <Button
-            onClick={() => setModalOpen(true)}
-            className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Start Onboarding
-          </Button>
+          {canCreateOnboarding && (
+            <Button
+              onClick={() => setModalOpen(true)}
+              className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Start Onboarding
+            </Button>
+          )}
         </motion.div>
 
         {/* Statistics Cards */}
@@ -2057,6 +2377,23 @@ const OnboardingSection = () => {
           {activeTab === "steps" && renderOnboardingSteps()}
           {activeTab === "completed" && renderCompletedOnboarding()}
         </motion.div>
+
+        {/* ✅ Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+            <div className="font-bold mb-2">🔐 Permission Debug</div>
+            <div>Role: {currentUserRole}</div>
+            <div>Onboarding Access: {userPermissions.find(p => p.module === 'Employee-Onboarding')?.accessLevel || 'none'}</div>
+            <div className="mt-1">
+              <div>Read: {hasPermission('read').toString()}</div>
+              <div>Create: {hasPermission('create').toString()}</div>
+              <div>Update: {hasPermission('update').toString()}</div>
+              <div>Upload Docs: {hasPermission('upload_documents').toString()}</div>
+              <div>Delete Docs: {hasPermission('delete_documents').toString()}</div>
+              <div>Send Reminders: {hasPermission('send_reminders').toString()}</div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

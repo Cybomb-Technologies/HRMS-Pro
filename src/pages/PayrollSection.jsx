@@ -155,6 +155,10 @@ const PayrollSection = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [pdfUrl, setPdfUrl] = useState("");
 
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
   const months = [
     "January",
     "February",
@@ -175,6 +179,142 @@ const PayrollSection = () => {
   // API base URL
   const API_BASE =
     process.env.NODE_ENV === "production" ? "" : "http://localhost:5000";
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Payroll - Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Payroll - Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 Payroll - All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 Payroll - User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const payrollPermission = userRoleData.permissions.find(p => p.module === 'Payroll-Management');
+          console.log("💰 Payroll permission:", payrollPermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Payroll - Role not found in database:", role);
+          setUserPermissions([]);
+        }
+      } else {
+        console.log("❌ Payroll - API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Payroll-Management', accessLevel: 'crud' }],
+      hr: [{ module: 'Payroll-Management', accessLevel: 'read' }],
+      employee: [{ module: 'Payroll-Management', accessLevel: 'read-self' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ NEW: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Payroll-Management module permission
+    const payrollPermission = userPermissions.find(p => p.module === 'Payroll-Management');
+    if (!payrollPermission) {
+      console.log("❌ No Payroll-Management permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = payrollPermission.accessLevel;
+    console.log(`🔐 Payroll - Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, read-self, custom, crud
+        return ['read', 'read-self', 'custom', 'crud'].includes(accessLevel);
+      case 'read_self':
+        // Read-self access only for read-self
+        return accessLevel === 'read-self';
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'run_payroll':
+        // Run payroll access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'edit_salary':
+        // Edit salary access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'generate_payslip':
+        // Generate payslip access for: read, read-self, custom, crud
+        return ['read', 'read-self', 'custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view payroll" 
+      });
+      setEmployees([]);
+      setPayrollHistory([]);
+    }
+  }, [currentUserRole, userPermissions]);
 
   // Debug currency changes
   useEffect(() => {
@@ -318,9 +458,11 @@ const PayrollSection = () => {
   };
 
   useEffect(() => {
-    fetchEmployees();
-    fetchPayrollHistory();
-    fetchLastPayrollRun();
+    if (hasPermission('read')) {
+      fetchEmployees();
+      fetchPayrollHistory();
+      fetchLastPayrollRun();
+    }
   }, []);
 
   // Calculate derived values from form data
@@ -510,6 +652,15 @@ const PayrollSection = () => {
 
   // Open edit dialog for employee
   const handleEditEmployee = (employee) => {
+    if (!hasPermission('edit_salary')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to edit salaries",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSelectedEmployee(employee);
     setEditFormData({
       ctc: employee.ctc || 0,
@@ -540,6 +691,15 @@ const PayrollSection = () => {
   // Save salary changes
   const handleSaveSalary = async () => {
     if (!selectedEmployee) return;
+
+    if (!hasPermission('edit_salary')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to edit salaries",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       setSavingEdits(true);
@@ -580,6 +740,15 @@ const PayrollSection = () => {
 
   // Run payroll for individual employee - MODIFIED: Show success modal instead of just toast
   const handleRunIndividualPayroll = async (employeeId) => {
+    if (!hasPermission('run_payroll')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to run payroll",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!selectedMonth || !selectedYear) {
       toast({
         title: "Error",
@@ -756,6 +925,15 @@ const PayrollSection = () => {
   };
 
   const handleDeletePayroll = async (month, year) => {
+    if (!hasPermission('delete')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to delete payroll",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (
       !window.confirm(
         `Are you sure you want to delete payroll for ${month} ${year}? This action cannot be undone.`
@@ -808,6 +986,15 @@ const PayrollSection = () => {
   };
 
   const handleRunPayroll = async () => {
+    if (!hasPermission('run_payroll')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to run payroll",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!selectedMonth || !selectedYear) {
       toast({
         title: "Error",
@@ -888,6 +1075,15 @@ const PayrollSection = () => {
   };
 
   const handlePayrollFieldChange = (payrollId, field, value) => {
+    if (!hasPermission('update')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to edit payroll data",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const numericValue = parseFloat(value);
     const safeValue = isNaN(numericValue) ? 0 : numericValue;
 
@@ -947,6 +1143,15 @@ const PayrollSection = () => {
   };
 
   const handleSavePayrollEdits = async (payrollId) => {
+    if (!hasPermission('update')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to update payroll data",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const edits = editingPayrollData[payrollId];
     if (!edits) return;
 
@@ -1044,6 +1249,15 @@ const PayrollSection = () => {
   };
 
   const handleBulkSavePayrollEdits = async () => {
+    if (!hasPermission('update')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to update payroll data",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const updates = Object.keys(editingPayrollData).map((payrollId) => {
       const edits = editingPayrollData[payrollId];
       return {
@@ -1147,6 +1361,15 @@ const PayrollSection = () => {
   };
 
   const handleRerunPayroll = async () => {
+    if (!hasPermission('run_payroll')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to run payroll",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!selectedMonthHistory || !selectedYearHistory) {
       toast({
         title: "Error",
@@ -1525,6 +1748,15 @@ const PayrollSection = () => {
   };
 
   const handleGeneratePayslip = async (payrollId, employeeName) => {
+    if (!hasPermission('generate_payslip')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to generate payslips",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setGeneratingPayslip(payrollId);
       const response = await fetch(
@@ -1554,6 +1786,15 @@ const PayrollSection = () => {
 
   // View payslip preview
   const handleViewPayslipPreview = async (payrollId, employeeName) => {
+    if (!hasPermission('generate_payslip')) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to view payslips",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setGeneratingPayslip(payrollId);
 
@@ -2038,7 +2279,6 @@ const PayrollSection = () => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              {/* <IndianRupee className="w-8 h-8 text-blue-600" /> */}
               Payroll Management
             </h1>
             <p className="text-gray-600 mt-2">
@@ -2129,7 +2369,7 @@ const PayrollSection = () => {
                       className={`p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200 cursor-pointer ${
                         !hasSalaryData ? "border-orange-300 bg-orange-50" : ""
                       }`}
-                      onClick={() => handleEditEmployee(employee)}
+                      onClick={() => hasPermission('edit_salary') && handleEditEmployee(employee)}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3 flex-1">
@@ -2169,7 +2409,9 @@ const PayrollSection = () => {
                             </div>
                           </div>
                         </div>
-                        <Edit className="w-4 h-4 text-gray-400" />
+                        {hasPermission('edit_salary') && (
+                          <Edit className="w-4 h-4 text-gray-400" />
+                        )}
                       </div>
 
                       <div className="space-y-3 mb-4">
@@ -2230,20 +2472,40 @@ const PayrollSection = () => {
                         </div>
                       </div>
 
-                      {/* UPDATED: Removed "Run Payroll" button, keeping only "Edit Salary" button */}
+                      {/* UPDATED: Permission-based buttons */}
                       <div className="flex gap-2 mt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditEmployee(employee);
-                          }}
-                          className="flex-1"
-                        >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Edit Salary
-                        </Button>
+                        {hasPermission('edit_salary') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditEmployee(employee);
+                            }}
+                            className="flex-1"
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit Salary
+                          </Button>
+                        )}
+                        {hasPermission('run_payroll') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRunIndividualPayroll(employee.employeeId);
+                            }}
+                            disabled={individualPayrollLoading === employee.employeeId}
+                            className="flex-1"
+                          >
+                            {individualPayrollLoading === employee.employeeId ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            ) : (
+                              "Run Payroll"
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </Card>
                   );
@@ -2736,7 +2998,7 @@ const PayrollSection = () => {
                                             employee.employeeId
                                           )
                                         }
-                                        disabled={!hasSalaryData}
+                                        disabled={!hasSalaryData || !hasPermission('run_payroll')}
                                       />
                                     </TableCell>
                                     <TableCell>
@@ -2776,37 +3038,41 @@ const PayrollSection = () => {
                                     </TableCell>
                                     <TableCell>
                                       <div className="flex gap-2">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleEditEmployee(employee)
-                                          }
-                                        >
-                                          <Edit className="w-3 h-3 mr-1" />
-                                          Edit Salary
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleRunIndividualPayroll(
-                                              employee.employeeId
-                                            )
-                                          }
-                                          disabled={
-                                            !hasSalaryData ||
-                                            individualPayrollLoading ===
-                                              employee.employeeId
-                                          }
-                                        >
-                                          {individualPayrollLoading ===
-                                          employee.employeeId ? (
-                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                                          ) : (
-                                            "Run Individual"
-                                          )}
-                                        </Button>
+                                        {hasPermission('edit_salary') && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleEditEmployee(employee)
+                                            }
+                                          >
+                                            <Edit className="w-3 h-3 mr-1" />
+                                            Edit Salary
+                                          </Button>
+                                        )}
+                                        {hasPermission('run_payroll') && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleRunIndividualPayroll(
+                                                employee.employeeId
+                                              )
+                                            }
+                                            disabled={
+                                              !hasSalaryData ||
+                                              individualPayrollLoading ===
+                                                employee.employeeId
+                                            }
+                                          >
+                                            {individualPayrollLoading ===
+                                            employee.employeeId ? (
+                                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                            ) : (
+                                              "Run Individual"
+                                            )}
+                                          </Button>
+                                        )}
                                       </div>
                                     </TableCell>
                                   </TableRow>
@@ -2900,25 +3166,27 @@ const PayrollSection = () => {
                     </div>
 
                     <div className="flex gap-3 pt-4">
-                      <Button
-                        onClick={handleRunPayroll}
-                        disabled={
-                          runPayrollLoading ||
-                          !selectedMonth ||
-                          !selectedYear ||
-                          selectedEmployees.length === 0
-                        }
-                        className="px-6 py-2"
-                      >
-                        {runPayrollLoading ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Processing Payroll...
-                          </>
-                        ) : (
-                          `Run Payroll for ${selectedEmployees.length} Employees`
-                        )}
-                      </Button>
+                      {hasPermission('run_payroll') && (
+                        <Button
+                          onClick={handleRunPayroll}
+                          disabled={
+                            runPayrollLoading ||
+                            !selectedMonth ||
+                            !selectedYear ||
+                            selectedEmployees.length === 0
+                          }
+                          className="px-6 py-2"
+                        >
+                          {runPayrollLoading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Processing Payroll...
+                            </>
+                          ) : (
+                            `Run Payroll for ${selectedEmployees.length} Employees`
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -3383,7 +3651,7 @@ const PayrollSection = () => {
                                 {isEditable(
                                   selectedMonthHistory,
                                   selectedYearHistory
-                                ) && (
+                                ) && hasPermission('update') && (
                                   <>
                                     {hasEdits && (
                                       <Button
@@ -3408,27 +3676,29 @@ const PayrollSection = () => {
                                         )}
                                       </Button>
                                     )}
-                                    <Button
-                                      variant="outline"
-                                      onClick={handleRerunPayroll}
-                                      disabled={rerunLoading}
-                                      className="flex items-center gap-2"
-                                    >
-                                      {rerunLoading ? (
-                                        <>
-                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                                          Rerunning...
-                                        </>
-                                      ) : (
-                                        "Rerun Payroll"
-                                      )}
-                                    </Button>
+                                    {hasPermission('run_payroll') && (
+                                      <Button
+                                        variant="outline"
+                                        onClick={handleRerunPayroll}
+                                        disabled={rerunLoading}
+                                        className="flex items-center gap-2"
+                                      >
+                                        {rerunLoading ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                            Rerunning...
+                                          </>
+                                        ) : (
+                                          "Rerun Payroll"
+                                        )}
+                                      </Button>
+                                    )}
                                   </>
                                 )}
                                 {!isEditable(
                                   selectedMonthHistory,
                                   selectedYearHistory
-                                ) && (
+                                ) && hasPermission('delete') && (
                                   <Button
                                     variant="destructive"
                                     onClick={() =>
@@ -3494,7 +3764,7 @@ const PayrollSection = () => {
                                         const editable = isEditable(
                                           selectedMonthHistory,
                                           selectedYearHistory
-                                        );
+                                        ) && hasPermission('update');
                                         const isExpanded =
                                           expandedRows[payroll._id];
                                         const isCurrentMonthPayroll =
@@ -3618,50 +3888,54 @@ const PayrollSection = () => {
                                               <TableCell>
                                                 <div className="flex gap-2">
                                                   {/* ADDED: Preview button */}
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                      handleViewPayslipPreview(
-                                                        payroll._id,
-                                                        payroll.employeeDetails
-                                                          ?.name
-                                                      )
-                                                    }
-                                                    disabled={
-                                                      generatingPayslip ===
-                                                      payroll._id
-                                                    }
-                                                  >
-                                                    {generatingPayslip ===
-                                                    payroll._id ? (
-                                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                                                    ) : (
-                                                      <Eye className="w-4 h-4" />
-                                                    )}
-                                                  </Button>
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                      handleGeneratePayslip(
-                                                        payroll._id,
-                                                        payroll.employeeDetails
-                                                          ?.name
-                                                      )
-                                                    }
-                                                    disabled={
-                                                      generatingPayslip ===
-                                                      payroll._id
-                                                    }
-                                                  >
-                                                    {generatingPayslip ===
-                                                    payroll._id ? (
-                                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                                                    ) : (
-                                                      "Payslip"
-                                                    )}
-                                                  </Button>
+                                                  {hasPermission('generate_payslip') && (
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={() =>
+                                                        handleViewPayslipPreview(
+                                                          payroll._id,
+                                                          payroll.employeeDetails
+                                                            ?.name
+                                                        )
+                                                      }
+                                                      disabled={
+                                                        generatingPayslip ===
+                                                        payroll._id
+                                                      }
+                                                    >
+                                                      {generatingPayslip ===
+                                                      payroll._id ? (
+                                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                                      ) : (
+                                                        <Eye className="w-4 h-4" />
+                                                      )}
+                                                    </Button>
+                                                  )}
+                                                  {hasPermission('generate_payslip') && (
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={() =>
+                                                        handleGeneratePayslip(
+                                                          payroll._id,
+                                                          payroll.employeeDetails
+                                                            ?.name
+                                                        )
+                                                      }
+                                                      disabled={
+                                                        generatingPayslip ===
+                                                        payroll._id
+                                                      }
+                                                    >
+                                                      {generatingPayslip ===
+                                                      payroll._id ? (
+                                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                                      ) : (
+                                                        "Payslip"
+                                                      )}
+                                                    </Button>
+                                                  )}
                                                   {editable && isEdited && (
                                                     <Button
                                                       variant="outline"
@@ -4079,12 +4353,14 @@ const PayrollSection = () => {
                         <p className="text-gray-600">
                           No payroll history found
                         </p>
-                        <Button
-                          onClick={() => setActiveTab("run")}
-                          className="mt-4"
-                        >
-                          Run First Payroll
-                        </Button>
+                        {hasPermission('run_payroll') && (
+                          <Button
+                            onClick={() => setActiveTab("run")}
+                            className="mt-4"
+                          >
+                            Run First Payroll
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -4104,27 +4380,29 @@ const PayrollSection = () => {
                   {previewPayslip?.month} {previewPayslip?.year}
                 </h2>
                 <div className="flex gap-2">
-                  <Button
-                    onClick={() =>
-                      handleGeneratePayslip(
-                        previewPayslip?._id,
-                        previewPayslip?.employeeName
-                      )
-                    }
-                    disabled={generatingPayslip === previewPayslip?._id}
-                  >
-                    {generatingPayslip === previewPayslip?._id ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4 mr-2" />
-                        Download PDF
-                      </>
-                    )}
-                  </Button>
+                  {hasPermission('generate_payslip') && (
+                    <Button
+                      onClick={() =>
+                        handleGeneratePayslip(
+                          previewPayslip?._id,
+                          previewPayslip?.employeeName
+                        )
+                      }
+                      disabled={generatingPayslip === previewPayslip?._id}
+                    >
+                      {generatingPayslip === previewPayslip?._id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download PDF
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button variant="outline" onClick={handleClosePreview}>
                     <X className="w-4 h-4 mr-2" />
                     Close
@@ -4146,6 +4424,25 @@ const PayrollSection = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+            <div className="font-bold mb-2">🔐 Payroll Permission Debug</div>
+            <div>Role: {currentUserRole}</div>
+            <div>Payroll Access: {userPermissions.find(p => p.module === 'Payroll-Management')?.accessLevel || 'none'}</div>
+            <div className="mt-1">
+              <div>Read: {hasPermission('read').toString()}</div>
+              <div>Read Self: {hasPermission('read_self').toString()}</div>
+              <div>Create: {hasPermission('create').toString()}</div>
+              <div>Edit: {hasPermission('update').toString()}</div>
+              <div>Delete: {hasPermission('delete').toString()}</div>
+              <div>Run Payroll: {hasPermission('run_payroll').toString()}</div>
+              <div>Edit Salary: {hasPermission('edit_salary').toString()}</div>
+              <div>Payslip: {hasPermission('generate_payslip').toString()}</div>
             </div>
           </div>
         )}

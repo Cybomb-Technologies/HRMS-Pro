@@ -52,7 +52,12 @@ import {
   Clock,
   User,
   Eye,
-  Search
+  Search,
+  Shield,
+  UserCheck,
+  Building,
+  MapPinned,
+  Activity
 } from 'lucide-react';
 
 const getProfilePictureUrl = (profilePicture) => {
@@ -463,6 +468,136 @@ const OrganizationSection = () => {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const organizationPermission = userRoleData.permissions.find(p => p.module === 'Organization');
+          console.log("🏢 Organization permission:", organizationPermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions([]);
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Organization', accessLevel: 'crud' }],
+      hr: [{ module: 'Organization', accessLevel: 'crud' }],
+      employee: [{ module: 'Organization', accessLevel: 'read' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Organization module permission
+    const organizationPermission = userPermissions.find(p => p.module === 'Organization');
+    if (!organizationPermission) {
+      console.log("❌ No Organization permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = organizationPermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'view_employees':
+        // View employees access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view organization data" 
+      });
+      setItems([]);
+    }
+  }, [currentUserRole, userPermissions]);
 
   // Get token with better error handling
   const getToken = () => {
@@ -548,6 +683,12 @@ const OrganizationSection = () => {
 
   // In OrganizationSection.jsx - Update fetchItems function
   const fetchItems = async () => {
+    // Check read permission before fetching
+    if (!hasPermission('read')) {
+      setItems([]);
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await apiFetch(`http://localhost:5000/api/organization/${activeTab}`);
@@ -589,6 +730,15 @@ const OrganizationSection = () => {
   };
 
   const fetchEmployeeList = async (type, id) => {
+    // Check view_employees permission
+    if (!hasPermission('view_employees')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view employee lists" 
+      });
+      return;
+    }
+
     setLoadingEmployees(true);
     try {
       let url = '';
@@ -624,23 +774,56 @@ const OrganizationSection = () => {
 
   useEffect(() => {
     fetchItems();
-  }, [activeTab]);
+  }, [activeTab, currentUserRole, userPermissions]);
 
   const handleAddNew = () => {
+    // Check create permission
+    if (!hasPermission('create')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to create organization data" 
+      });
+      return;
+    }
     setEditingItem({});
     setModalOpen(true);
   };
 
   const handleEdit = (item) => {
+    // Check update permission
+    if (!hasPermission('update')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to edit organization data" 
+      });
+      return;
+    }
     setEditingItem(item);
     setModalOpen(true);
   };
 
   const handleDelete = (item) => {
+    // Check delete permission
+    if (!hasPermission('delete')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to delete organization data" 
+      });
+      return;
+    }
     setDeletingItem(item);
   };
 
   const handleViewEmployees = (item) => {
+    // Check view_employees permission
+    if (!hasPermission('view_employees')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view employee lists" 
+      });
+      return;
+    }
+
     if (activeTab === 'departments') {
       fetchEmployeeList('department', item.departmentId);
     } else if (activeTab === 'designations') {
@@ -754,6 +937,9 @@ const OrganizationSection = () => {
                 onEdit={() => handleEdit(dept)} 
                 onDelete={() => handleDelete(dept)}
                 onViewEmployees={() => handleViewEmployees(dept)}
+                hasUpdatePermission={hasPermission('update')}
+                hasDeletePermission={hasPermission('delete')}
+                hasViewEmployeesPermission={hasPermission('view_employees')}
               />
             </div>
             <div className="space-y-3">
@@ -764,6 +950,7 @@ const OrganizationSection = () => {
                   size="sm" 
                   onClick={() => handleViewEmployees(dept)}
                   className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                  disabled={!hasPermission('view_employees')}
                 >
                   <Users className="w-4 h-4 mr-1" />
                   <span className="text-sm font-medium">
@@ -810,6 +997,7 @@ const OrganizationSection = () => {
                   size="sm" 
                   onClick={() => handleViewEmployees(designation)}
                   className="text-purple-600 hover:text-purple-800 hover:bg-purple-50"
+                  disabled={!hasPermission('view_employees')}
                 >
                   <Users className="w-4 h-4 mr-1" />
                   View Employees
@@ -817,6 +1005,9 @@ const OrganizationSection = () => {
                 <ItemMenu 
                   onEdit={() => handleEdit(designation)} 
                   onDelete={() => handleDelete(designation)}
+                  hasUpdatePermission={hasPermission('update')}
+                  hasDeletePermission={hasPermission('delete')}
+                  hasViewEmployeesPermission={hasPermission('view_employees')}
                 />
               </div>
             </div>
@@ -858,12 +1049,16 @@ const OrganizationSection = () => {
                   size="sm" 
                   onClick={() => handleViewEmployees(location)}
                   className="text-green-600 hover:text-green-800 hover:bg-green-50"
+                  disabled={!hasPermission('view_employees')}
                 >
                   <Users className="w-4 h-4 mr-1" />
                 </Button>
                 <ItemMenu 
                   onEdit={() => handleEdit(location)} 
                   onDelete={() => handleDelete(location)}
+                  hasUpdatePermission={hasPermission('update')}
+                  hasDeletePermission={hasPermission('delete')}
+                  hasViewEmployeesPermission={hasPermission('view_employees')}
                 />
               </div>
             </div>
@@ -884,7 +1079,14 @@ const OrganizationSection = () => {
     </div>
   );
 
-  const ItemMenu = ({ onEdit, onDelete, onViewEmployees }) => (
+  const ItemMenu = ({ 
+    onEdit, 
+    onDelete, 
+    onViewEmployees, 
+    hasUpdatePermission, 
+    hasDeletePermission, 
+    hasViewEmployeesPermission 
+  }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon">
@@ -892,22 +1094,45 @@ const OrganizationSection = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        {onViewEmployees && (
+        {onViewEmployees && hasViewEmployeesPermission && (
           <DropdownMenuItem onClick={onViewEmployees}>
             <Eye className="mr-2 h-4 w-4" /> View Employees
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onClick={onEdit}>
-          <Edit className="mr-2 h-4 w-4" /> Edit
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onDelete} className="text-red-600">
-          <Trash2 className="mr-2 h-4 w-4" /> Delete
-        </DropdownMenuItem>
+        {hasUpdatePermission && (
+          <DropdownMenuItem onClick={onEdit}>
+            <Edit className="mr-2 h-4 w-4" /> Edit
+          </DropdownMenuItem>
+        )}
+        {hasDeletePermission && (
+          <DropdownMenuItem onClick={onDelete} className="text-red-600">
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          </DropdownMenuItem>
+        )}
+        {!hasUpdatePermission && !hasDeletePermission && !hasViewEmployeesPermission && (
+          <DropdownMenuItem disabled>
+            <Shield className="mr-2 h-4 w-4" /> No Actions Available
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
   const renderContent = () => {
+    if (!hasPermission('read')) {
+      return (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-center">
+            <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Access Denied</h3>
+            <p className="text-gray-600">
+              You don't have permission to view organization data.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     if (loading) {
       return (
         <div className="flex justify-center items-center py-12">
@@ -950,10 +1175,14 @@ const OrganizationSection = () => {
               Manage departments, designations, and locations across your organization
             </p>
           </div>
-          <Button onClick={handleAddNew} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add New
-          </Button>
+          
+          {/* ✅ Permission-based Add New Button */}
+          {hasPermission('create') && (
+            <Button onClick={handleAddNew} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add New
+            </Button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -1044,6 +1273,22 @@ const OrganizationSection = () => {
         >
           {renderContent()}
         </motion.div>
+
+        {/* ✅ Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+            <div className="font-bold mb-2">🔐 Permission Debug</div>
+            <div>Role: {currentUserRole}</div>
+            <div>Organization Access: {userPermissions.find(p => p.module === 'Organization')?.accessLevel || 'none'}</div>
+            <div className="mt-1">
+              <div>Read: {hasPermission('read').toString()}</div>
+              <div>Create: {hasPermission('create').toString()}</div>
+              <div>Edit: {hasPermission('update').toString()}</div>
+              <div>Delete: {hasPermission('delete').toString()}</div>
+              <div>View Employees: {hasPermission('view_employees').toString()}</div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -98,7 +99,7 @@ const announcementAPI = {
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error("Received non-JSON response:", text.substring(0, 200));
+        console.error("Received non-JJSON response:", text.substring(0, 200));
         throw new Error(
           `Server returned HTML instead of JSON. Status: ${response.status}. Please check if backend server is running.`
         );
@@ -408,184 +409,31 @@ const FloatingHearts = () => {
 const EmojiPicker = ({ onEmojiSelect, onClose }) => {
   const emojiCategories = {
     Smileys: [
-      "😀",
-      "😃",
-      "😄",
-      "😁",
-      "😆",
-      "😅",
-      "😂",
-      "🤣",
-      "😊",
-      "😇",
-      "🙂",
-      "🙃",
-      "😉",
-      "😌",
-      "😍",
-      "🥰",
-      "😘",
-      "😗",
-      "😙",
-      "😚",
-      "😋",
-      "😛",
-      "😝",
-      "😜",
-      "🤪",
-      "🤨",
-      "🧐",
-      "🤓",
-      "😎",
-      "🤩",
-      "🥳",
-      "😏",
-      "😒",
-      "😞",
-      "😔",
-      "😟",
-      "😕",
-      "🙁",
-      "☹️",
-      "😣",
-      "😖",
-      "😫",
-      "😩",
-      "🥺",
-      "😢",
-      "😭",
-      "😤",
-      "😠",
-      "😡",
-      "🤬",
-      "🤯",
-      "😳",
-      "🥵",
-      "🥶",
-      "😱",
-      "😨",
-      "😰",
-      "😥",
-      "😓",
-      "🤗",
-      "🤔",
-      "🤭",
-      "🤫",
-      "🤥",
-      "😶",
-      "😐",
-      "😑",
-      "😬",
-      "🙄",
-      "😯",
-      "😦",
-      "😧",
-      "😮",
-      "😲",
-      "🥱",
-      "😴",
-      "🤤",
-      "😪",
-      "😵",
-      "🤐",
-      "🥴",
-      "🤢",
-      "🤮",
-      "🤧",
-      "😷",
-      "🤒",
-      "🤕",
-      "🤑",
-      "🤠",
+      "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
+      "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+      "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩",
+      "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣",
+      "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬",
+      "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗",
+      "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯",
+      "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐",
+      "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠",
     ],
     Gestures: [
-      "👋",
-      "🤚",
-      "🖐️",
-      "✋",
-      "🖖",
-      "👌",
-      "🤌",
-      "🤏",
-      "✌️",
-      "🤞",
-      "🤟",
-      "🤘",
-      "🤙",
-      "👈",
-      "👉",
-      "👆",
-      "🖕",
-      "👇",
-      "☝️",
-      "👍",
-      "👎",
-      "👊",
-      "✊",
-      "🤛",
-      "🤜",
-      "👏",
-      "🙌",
-      "👐",
-      "🤲",
-      "🤝",
+      "👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞",
+      "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍",
+      "👎", "👊", "✊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝",
       "🙏",
     ],
     Hearts: [
-      "❤️",
-      "🧡",
-      "💛",
-      "💚",
-      "💙",
-      "💜",
-      "🖤",
-      "🤍",
-      "🤎",
-      "💔",
-      "❣️",
-      "💕",
-      "💞",
-      "💓",
-      "💗",
-      "💖",
-      "💘",
-      "💝",
+      "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+      "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝",
     ],
     Objects: [
-      "🔥",
-      "💯",
-      "✨",
-      "🌟",
-      "💫",
-      "⭐",
-      "🎉",
-      "🎊",
-      "🏆",
-      "🥇",
-      "🥈",
-      "🥉",
-      "🎁",
-      "🎈",
-      "🎀",
-      "🎗️",
-      "🎭",
-      "🎨",
-      "🎪",
-      "🎤",
-      "🎧",
-      "🎼",
-      "🎹",
-      "🥁",
-      "🎷",
-      "🎺",
-      "🎸",
-      "🪕",
-      "🎻",
-      "🎲",
-      "🎯",
-      "🎳",
-      "🎮",
-      "🎰",
+      "🔥", "💯", "✨", "🌟", "💫", "⭐", "🎉", "🎊", "🏆", "🥇",
+      "🥈", "🥉", "🎁", "🎈", "🎀", "🎗️", "🎭", "🎨", "🎪", "🎤",
+      "🎧", "🎼", "🎹", "🥁", "🎷", "🎺", "🎸", "🪕", "🎻", "🎲",
+      "🎯", "🎳", "🎮", "🎰",
     ],
   };
 
@@ -1330,6 +1178,7 @@ const AnnouncementCard = ({
   onLike,
   onComment,
   onView,
+  hasPermission,
 }) => {
   const [isLiked, setIsLiked] = useState(
     announcement.likedBy?.includes("admin") || false
@@ -1528,66 +1377,77 @@ const AnnouncementCard = ({
               </div>
             </div>
 
-            <AlertDialog>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-gray-100 rounded-lg"
-                  >
-                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem
-                    onClick={handleView}
-                    className="cursor-pointer"
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    View Details
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onTogglePin(announcement)}
-                    className="cursor-pointer"
-                  >
-                    <Pin className="mr-2 h-4 w-4" />
-                    {announcement.isPinned ? "Unpin" : "Pin"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onEdit(announcement)}
-                    className="cursor-pointer"
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  <AlertDialogTrigger asChild>
-                    <DropdownMenuItem className="text-red-600 cursor-pointer">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
+            {/* Permission-based dropdown menu */}
+            {(hasPermission('update') || hasPermission('delete')) && (
+              <AlertDialog>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-gray-100 rounded-lg"
+                    >
+                      <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem
+                      onClick={handleView}
+                      className="cursor-pointer"
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Details
                     </DropdownMenuItem>
-                  </AlertDialogTrigger>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete "{announcement.title}". This
-                    action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => onDelete(announcement._id)}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                    
+                    {hasPermission('update') && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => onTogglePin(announcement)}
+                          className="cursor-pointer"
+                        >
+                          <Pin className="mr-2 h-4 w-4" />
+                          {announcement.isPinned ? "Unpin" : "Pin"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onEdit(announcement)}
+                          className="cursor-pointer"
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    
+                    {hasPermission('delete') && (
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem className="text-red-600 cursor-pointer">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete "{announcement.title}". This
+                      action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => onDelete(announcement._id)}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
 
           {/* Content Section */}
@@ -1747,7 +1607,7 @@ const AnnouncementCard = ({
 };
 
 // ================== Announcement Detail View ==================
-const AnnouncementDetail = ({ announcement, onClose, onEdit, onDelete }) => {
+const AnnouncementDetail = ({ announcement, onClose, onEdit, onDelete, hasPermission }) => {
   if (!announcement) return null;
 
   const getCategoryColor = (category) => {
@@ -1864,24 +1724,30 @@ const AnnouncementDetail = ({ announcement, onClose, onEdit, onDelete }) => {
           <Button variant="outline" onClick={onClose} className="px-6">
             Close
           </Button>
-          <Button
-            onClick={() => onEdit(announcement)}
-            className="px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            <Edit className="w-4 h-4 mr-2" />
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              onClose();
-              onDelete(announcement._id);
-            }}
-            className="px-6"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
+          
+          {hasPermission('update') && (
+            <Button
+              onClick={() => onEdit(announcement)}
+              className="px-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+          )}
+          
+          {hasPermission('delete') && (
+            <Button
+              variant="destructive"
+              onClick={() => {
+                onClose();
+                onDelete(announcement._id);
+              }}
+              className="px-6"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1909,6 +1775,142 @@ const AnnouncementsFeed = () => {
     pinned: 0,
     engagement: 0,
   });
+
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          // ✅ FIXED: Case-insensitive module name check
+          const announcementsPermission = userRoleData.permissions.find(p => 
+            p.module.toLowerCase() === 'announcements'
+          );
+          console.log("📢 Announcements permission:", announcementsPermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions(getDefaultPermissions(role));
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'announcements', accessLevel: 'crud' }],
+      hr: [{ module: 'announcements', accessLevel: 'crud' }],
+      employee: [{ module: 'announcements', accessLevel: 'read' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function for Announcements
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // ✅ FIXED: Case-insensitive module name check
+    const announcementsPermission = userPermissions.find(p => 
+      p.module.toLowerCase() === 'announcements'
+    );
+    
+    if (!announcementsPermission) {
+      console.log("❌ No Announcements permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = announcementsPermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'pin':
+        // Pin/unpin access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view announcements" 
+      });
+      setAnnouncements([]);
+    }
+  }, [currentUserRole, userPermissions]);
 
   // Fetch announcements on component mount and when filters change
   useEffect(() => {
@@ -2169,6 +2171,7 @@ const AnnouncementsFeed = () => {
             setModalOpen(true);
           }}
           onDelete={handleDeleteAnnouncement}
+          hasPermission={hasPermission}
         />
       )}
 
@@ -2198,16 +2201,20 @@ const AnnouncementsFeed = () => {
               <Download className="w-4 h-4" />
               Export
             </Button>
-            <Button
-              onClick={() => {
-                setEditingAnnouncement(null);
-                setModalOpen(true);
-              }}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus className="w-4 h-4" />
-              New Announcement
-            </Button>
+            
+            {/* ✅ Permission-based Create Button */}
+            {hasPermission('create') && (
+              <Button
+                onClick={() => {
+                  setEditingAnnouncement(null);
+                  setModalOpen(true);
+                }}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Plus className="w-4 h-4" />
+                New Announcement
+              </Button>
+            )}
           </div>
         </motion.div>
 
@@ -2470,6 +2477,7 @@ const AnnouncementsFeed = () => {
                   onLike={handleLike}
                   onComment={handleCommentAdded}
                   onView={setViewingAnnouncement}
+                  hasPermission={hasPermission}
                 />
               ))}
             </AnimatePresence>
@@ -2494,17 +2502,19 @@ const AnnouncementsFeed = () => {
               Create your first announcement to share important updates, news,
               and information with your team.
             </p>
-            <Button
-              onClick={() => {
-                setEditingAnnouncement(null);
-                setModalOpen(true);
-              }}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 px-8 py-3 text-lg"
-              size="lg"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Create First Announcement
-            </Button>
+            {hasPermission('create') && (
+              <Button
+                onClick={() => {
+                  setEditingAnnouncement(null);
+                  setModalOpen(true);
+                }}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 px-8 py-3 text-lg"
+                size="lg"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Create First Announcement
+              </Button>
+            )}
           </motion.div>
         )}
 
@@ -2538,6 +2548,22 @@ const AnnouncementsFeed = () => {
               </Button>
             </motion.div>
           )}
+
+        {/* ✅ Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+            <div className="font-bold mb-2">🔐 Permission Debug</div>
+            <div>Role: {currentUserRole}</div>
+            <div>Announcements Access: {userPermissions.find(p => p.module.toLowerCase() === 'announcements')?.accessLevel || 'none'}</div>
+            <div className="mt-1">
+              <div>Read: {hasPermission('read').toString()}</div>
+              <div>Create: {hasPermission('create').toString()}</div>
+              <div>Edit: {hasPermission('update').toString()}</div>
+              <div>Delete: {hasPermission('delete').toString()}</div>
+              <div>Pin: {hasPermission('pin').toString()}</div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

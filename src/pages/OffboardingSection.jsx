@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet";
 import { Card } from "@/components/ui/card";
@@ -514,7 +514,7 @@ const EmployeeSelect = ({ employees, selectedEmployee, onEmployeeSelect }) => {
 };
 
 // ================== Offboarding Form ==================
-const OffboardingForm = ({ onSave, onCancel }) => {
+const OffboardingForm = ({ onSave, onCancel, hasPermission }) => {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [formData, setFormData] = useState({
@@ -734,35 +734,37 @@ const OffboardingForm = ({ onSave, onCancel }) => {
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabled={
-            !selectedEmployee ||
-            !formData.reason ||
-            !formData.lastWorkingDay ||
-            submitLoading
-          }
-          className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
-        >
-          {submitLoading ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Starting Offboarding...
-            </>
-          ) : (
-            <>
-              <UserMinus className="w-4 h-4 mr-2" />
-              Start Offboarding Process
-            </>
-          )}
-        </Button>
+        {hasPermission('create') && (
+          <Button
+            type="submit"
+            disabled={
+              !selectedEmployee ||
+              !formData.reason ||
+              !formData.lastWorkingDay ||
+              submitLoading
+            }
+            className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
+          >
+            {submitLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Starting Offboarding...
+              </>
+            ) : (
+              <>
+                <UserMinus className="w-4 h-4 mr-2" />
+                Start Offboarding Process
+              </>
+            )}
+          </Button>
+        )}
       </DialogFooter>
     </form>
   );
 };
 
 // ================== Step Completion Component ==================
-const StepCompletionSection = ({ employee, onStepUpdate }) => {
+const StepCompletionSection = ({ employee, onStepUpdate, hasPermission }) => {
   const [completingStep, setCompletingStep] = useState(null);
   const [completionNotes, setCompletionNotes] = useState("");
   const [selectedStepForDocs, setSelectedStepForDocs] = useState(null);
@@ -963,7 +965,7 @@ const StepCompletionSection = ({ employee, onStepUpdate }) => {
                     </div>
 
                     <div className="flex items-center space-x-2 ml-4">
-                      {status === "current" && (
+                      {status === "current" && hasPermission('update') && (
                         <>
                           <Textarea
                             placeholder="Add completion notes..."
@@ -1003,7 +1005,7 @@ const StepCompletionSection = ({ employee, onStepUpdate }) => {
                         <Label className="text-sm font-medium text-gray-700">
                           Documents for this step
                         </Label>
-                        {status === "current" && (
+                        {status === "current" && hasPermission('update') && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -1054,7 +1056,7 @@ const StepCompletionSection = ({ employee, onStepUpdate }) => {
   );
 };
 
-// ================== Offboarding Details Modal (updated to remove internal status update and rely on StepCompletion and new Complete button) ==================
+// ================== Offboarding Details Modal ==================
 const OffboardingDetailsModal = ({
   employee,
   onClose,
@@ -1062,16 +1064,10 @@ const OffboardingDetailsModal = ({
   onStepUpdate,
   onCompleteOffboarding,
   handleGenerateFF,
+  hasPermission,
 }) => {
-  // Keeping this state for display or future simple updates, though complex status change moved to admin actions
   const [newStatus, setNewStatus] = useState(employee.status);
   const [notes, setNotes] = useState(employee.notes || "");
-
-  // Removed direct handleUpdate for status from here; kept as a prop for future use if needed,
-  // but logic suggests using the dedicated complete button or step completion.
-  // const handleUpdate = () => {
-  //   onUpdateStatus(employee.employeeId, newStatus, notes);
-  // };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -1183,93 +1179,84 @@ const OffboardingDetailsModal = ({
         <StepCompletionSection
           employee={employee}
           onStepUpdate={onStepUpdate}
+          hasPermission={hasPermission}
         />
 
-        {/* Status Update/Admin Actions Section (Modified) */}
-        <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 border-0">
-          <h3 className="text-lg font-semibold mb-3 text-gray-900">
-            Admin Actions / Status Management
-          </h3>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center justify-start">
-                <Badge
-                  className={`text-sm px-3 py-1 ${getStatusColor(
-                    employee.status
-                  )}`}
-                >
-                  Current Status: {employee.status.replace("-", " ")}
-                </Badge>
+        {/* Status Update/Admin Actions Section */}
+        {hasPermission('update') && (
+          <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 border-0">
+            <h3 className="text-lg font-semibold mb-3 text-gray-900">
+              Admin Actions / Status Management
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center justify-start">
+                  <Badge
+                    className={`text-sm px-3 py-1 ${getStatusColor(
+                      employee.status
+                    )}`}
+                  >
+                    Current Status: {employee.status.replace("-", " ")}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="status-update" className="text-sm font-medium">
+                    Update Status (Manual)
+                  </Label>
+                  <Select value={newStatus} onValueChange={setNewStatus}>
+                    <SelectTrigger id="status-update" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="on-hold">On Hold</SelectItem>
+                      <SelectItem value="pending-final">
+                        Pending Final Settlement
+                      </SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    onClick={() => onCompleteOffboarding(employee)}
+                    className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 w-full"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Apply Status Update
+                  </Button>
+                </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="status-update" className="text-sm font-medium">
-                  Update Status (Manual)
+                <Label htmlFor="notes" className="text-sm font-medium">
+                  Notes & Comments
                 </Label>
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger id="status-update" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                    <SelectItem value="on-hold">On Hold</SelectItem>
-                    <SelectItem value="pending-final">
-                      Pending Final Settlement
-                    </SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button
-                  onClick={() => onCompleteOffboarding(employee)}
-                  className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 w-full"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Apply Status Update
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notes" className="text-sm font-medium">
-                Notes & Comments
-              </Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add relevant notes, comments, or instructions..."
-                rows={4}
-              />
-            </div>
-
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pt-4 border-t">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => handleGenerateFF(employee)}
-                >
-                  <DollarSign className="mr-2 w-4 h-4" />
-                  Generate F&F
-                </Button>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add relevant notes, comments, or instructions..."
+                  rows={4}
+                />
               </div>
 
-              {/* NEW: Complete Offboarding Button */}
-              {/* <div className="flex items-center gap-3">
-                 {employee.status !== 'completed' && (
-                   <Button 
-                     className="bg-green-600 hover:bg-green-700"
-                     onClick={() => onCompleteOffboarding(employee)}
-                     title="Complete offboarding and mark employee inactive"
-                   >
-                     <CheckCircle className="w-4 h-4 mr-2" />
-                     Complete Offboarding (Mark Inactive)
-                   </Button>
-                 )}
-               </div> */}
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pt-4 border-t">
+                <div className="flex items-center gap-3">
+                  {hasPermission('update') && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleGenerateFF(employee)}
+                    >
+                      <DollarSign className="mr-2 w-4 h-4" />
+                      Generate F&F
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
 
       <DialogFooter>
@@ -1289,6 +1276,137 @@ const OffboardingSection = () => {
   const [offboardingEmployees, setOffboardingEmployees] = useState([]);
   const [completedOffboarding, setCompletedOffboarding] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // ✅ NEW: Role-based permission states
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // JWT token decode function
+  const decodeJWT = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch (error) {
+      console.error("Error decoding JWT:", error);
+      return null;
+    }
+  };
+
+  // ✅ NEW: Get current user role and permissions
+  useEffect(() => {
+    const initializeUserPermissions = async () => {
+      try {
+        const token = localStorage.getItem("hrms_token");
+        if (token) {
+          const decoded = decodeJWT(token);
+          console.log("🔐 Decoded user data:", decoded);
+          
+          if (decoded && decoded.role) {
+            setCurrentUserRole(decoded.role);
+            await fetchUserPermissions(decoded.role);
+          } else {
+            setCurrentUserRole('employee');
+          }
+        } else {
+          setCurrentUserRole('employee');
+        }
+      } catch (error) {
+        console.error("Error initializing permissions:", error);
+        setCurrentUserRole('employee');
+      }
+    };
+
+    initializeUserPermissions();
+  }, []);
+
+  const fetchUserPermissions = async (role) => {
+    try {
+      console.log("🔍 Fetching permissions for role:", role);
+      const res = await fetch('http://localhost:5000/api/settings/roles/roles');
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("📋 All roles data:", data.data);
+        
+        const userRoleData = data.data.find(r => r.name === role);
+        console.log("🎯 User role data:", userRoleData);
+        
+        if (userRoleData) {
+          const offboardingPermission = userRoleData.permissions.find(p => p.module === 'Employee-Offboarding');
+          console.log("🚀 Employee-Offboarding permission:", offboardingPermission);
+          setUserPermissions(userRoleData.permissions);
+        } else {
+          console.log("❌ Role not found in database:", role);
+          setUserPermissions(getDefaultPermissions(role));
+        }
+      } else {
+        console.log("❌ API failed, using default permissions");
+        setUserPermissions(getDefaultPermissions(role));
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setUserPermissions(getDefaultPermissions(role));
+    }
+  };
+
+  // Fallback permissions if API fails
+  const getDefaultPermissions = (role) => {
+    const defaults = {
+      admin: [{ module: 'Employee-Offboarding', accessLevel: 'crud' }],
+      hr: [{ module: 'Employee-Offboarding', accessLevel: 'crud' }],
+      employee: [{ module: 'Employee-Offboarding', accessLevel: 'read' }]
+    };
+    return defaults[role] || [];
+  };
+
+  // ✅ UPDATED: Correct Permission check function
+  const hasPermission = (action) => {
+    // Admin ku full access
+    if (currentUserRole === 'admin') return true;
+    
+    // Find Employee-Offboarding module permission
+    const offboardingPermission = userPermissions.find(p => p.module === 'Employee-Offboarding');
+    if (!offboardingPermission) {
+      console.log("❌ No Employee-Offboarding permission found for role:", currentUserRole);
+      return false;
+    }
+
+    const accessLevel = offboardingPermission.accessLevel;
+    console.log(`🔐 Checking ${action} permission for ${currentUserRole}:`, accessLevel);
+    
+    // ✅ UPDATED CORRECT LOGIC:
+    switch (action) {
+      case 'read':
+        // Read access for: read, custom, crud
+        return ['read', 'custom', 'crud'].includes(accessLevel);
+      case 'create':
+        // Create access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'update':
+        // Update access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      case 'delete':
+        // Delete access ONLY for crud (custom la delete illa)
+        return accessLevel === 'crud';
+      case 'manage_members':
+        // Manage members access for: custom, crud
+        return ['custom', 'crud'].includes(accessLevel);
+      default:
+        return false;
+    }
+  };
+
+  // ✅ Check read permission on component load
+  useEffect(() => {
+    if (currentUserRole && !hasPermission('read')) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to view offboarding" 
+      });
+      setOffboardingEmployees([]);
+      setCompletedOffboarding([]);
+    }
+  }, [currentUserRole, userPermissions]);
 
   useEffect(() => {
     fetchOffboardings();
@@ -1583,7 +1701,6 @@ const OffboardingSection = () => {
       });
     }
   };
-  // =================================================================================================================
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -1680,13 +1797,15 @@ const OffboardingSection = () => {
           <p className="text-gray-500 mb-6">
             Start a new offboarding process for employees
           </p>
-          <Button
-            onClick={() => setModalOpen(true)}
-            className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Start Offboarding
-          </Button>
+          {hasPermission('create') && (
+            <Button
+              onClick={() => setModalOpen(true)}
+              className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Start Offboarding
+            </Button>
+          )}
         </div>
       );
     }
@@ -1797,32 +1916,38 @@ const OffboardingSection = () => {
                       View Details & Documents
                     </Button>
                     {/* ✅ UPDATED: Send Reminder button now triggers notification */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleSendReminder(employee)}
-                    >
-                      <Send className="mr-2 h-4 w-4" />
-                      Send Reminder
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleGenerateFF(employee)}
-                    >
-                      <DollarSign className="mr-2 h-4 w-4" />
-                      Generate F&F
-                    </Button>
+                    {hasPermission('update') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSendReminder(employee)}
+                      >
+                        <Send className="mr-2 h-4 w-4" />
+                        Send Reminder
+                      </Button>
+                    )}
+                    {hasPermission('update') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleGenerateFF(employee)}
+                      >
+                        <DollarSign className="mr-2 h-4 w-4" />
+                        Generate F&F
+                      </Button>
+                    )}
                     {/* NEW: Complete Offboarding Button */}
-                    <Button
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 ml-2"
-                      onClick={() => handleCompleteOffboarding(employee)}
-                      title="Complete offboarding and mark employee inactive"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Complete Offboarding
-                    </Button>
+                    {hasPermission('delete') && (
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 ml-2"
+                        onClick={() => handleCompleteOffboarding(employee)}
+                        title="Complete offboarding and mark employee inactive"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Complete Offboarding
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -1998,6 +2123,7 @@ const OffboardingSection = () => {
           <OffboardingForm
             onSave={handleStartOffboarding}
             onCancel={() => setModalOpen(false)}
+            hasPermission={hasPermission}
           />
         </DialogContent>
       </Dialog>
@@ -2013,8 +2139,9 @@ const OffboardingSection = () => {
             onClose={() => setViewingEmployee(null)}
             onUpdateStatus={handleUpdateStatus}
             onStepUpdate={handleStepUpdate}
-            onCompleteOffboarding={handleCompleteOffboarding} // Pass the new handler
-            handleGenerateFF={handleGenerateFF} // Pass existing handler
+            onCompleteOffboarding={handleCompleteOffboarding}
+            handleGenerateFF={handleGenerateFF}
+            hasPermission={hasPermission}
           />
         )}
       </Dialog>
@@ -2036,13 +2163,15 @@ const OffboardingSection = () => {
               recovery, and final settlement tracking
             </p>
           </div>
-          <Button
-            onClick={() => setModalOpen(true)}
-            className="mt-4 sm:mt-0 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Start Offboarding
-          </Button>
+          {hasPermission('create') && (
+            <Button
+              onClick={() => setModalOpen(true)}
+              className="mt-4 sm:mt-0 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Start Offboarding
+            </Button>
+          )}
         </motion.div>
 
         {/* Statistics Cards */}
@@ -2168,6 +2297,21 @@ const OffboardingSection = () => {
           {activeTab === "steps" && renderOffboardingSteps()}
           {activeTab === "completed" && renderCompletedOffboarding()}
         </motion.div>
+
+        {/* ✅ Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-lg text-xs max-w-xs">
+            <div className="font-bold mb-2">🔐 Permission Debug</div>
+            <div>Role: {currentUserRole}</div>
+            <div>Offboarding Access: {userPermissions.find(p => p.module === 'Employee-Offboarding')?.accessLevel || 'none'}</div>
+            <div className="mt-1">
+              <div>Read: {hasPermission('read').toString()}</div>
+              <div>Create: {hasPermission('create').toString()}</div>
+              <div>Edit: {hasPermission('update').toString()}</div>
+              <div>Delete: {hasPermission('delete').toString()}</div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

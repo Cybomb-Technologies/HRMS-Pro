@@ -1,63 +1,258 @@
 // components/settings/PermissionsManager.jsx
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useSettings } from '@/contexts/SettingsContext';
-import { Shield, Users, Save, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Shield, Save, RefreshCw, Users, CheckCircle, XCircle } from "lucide-react";
 
 const PermissionsManager = () => {
-  const { apiRequest, roles, modules } = useSettings();
+  // Default modules data
+  const defaultModules = [
+    // {
+    //   module: "dashboard",
+    //   label: "Dashboard",
+    //   description: "Access to main dashboard and analytics"
+    // },
+    // {
+    //   module: "EmployeesProfile",
+    //   label: "EmployeesProfile",
+    //   description: "Manage employee profiles and personal information" // ✅ FIX DESCRIPTION"
+    // },
+    // {
+    //   module: "employees",
+    //   label: "Employees",
+    //   description: "Manage employee records"
+    // },
+     {
+      module: "Teams",
+      label: "Teams",
+      description: "Manage Teams records and profiles"
+      }, {
+      module: "Announcements",
+      label: "Announcements",
+      description: "Manage Announcements records and profiles"
+      },{
+      module: "Organization",
+      label: "Organization",
+      description: "Manage Organization records and profiles"
+      },{
+      module: "Employee-Management",
+      label: "Employee-Management",
+      description: "Manage Employee-Management records and profiles"
+      },
+      {
+      module: "Employee-Onboarding",
+      label: "Employee-Onboarding",
+      description: "Manage Employee-Onboarding records and profiles"
+      },
+      {
+      module: "Employee-Offboarding",
+      label: "Employee-Offboarding",
+      description: "Manage Employee Offboarding records and profiles"
+      },
+       {
+      module: "Leave-Management",
+      label: "Leave-Management",
+      description: "Manage Leave Management records and profiles"
+      },
+      {
+      module: "Payroll-Management",
+      label: "Payroll-Management",
+      description: "Manage Payroll Management records and profiles"
+      },
+      {
+      module: "Timesheet-Reports",
+      label: "Timesheet-Reports",
+      description: "Manage Timesheet Reports records and profiles"
+      },
+      {
+      module: "Attendance",
+      label: "Attendance",
+      description: "Manage Attendance records and profiles"
+      },
+      {
+      module: "Leave-Approvals",
+      label: "Leave-Approvals",
+      description: "Manage Leave Approvals records and profiles"
+      },
+      {
+      module: "HR-Letters",
+      label: "HR-Letters",
+      description: "Manage HR Letters records and profiles"
+      },
+      
+  
+      
+    // {
+    //   module: "attendance",
+    //   label: "Attendance",
+    //   description: "Track and manage attendance records"
+    // },
+    // {
+    //   module: "payroll",
+    //   label: "Payroll",
+    //   description: "Process and manage payroll data"
+    // },
+    // {
+    //   module: "reports",
+    //   label: "Reports",
+    //   description: "Generate and view system reports"
+    // },
+    // {
+    //   module: "settings",
+    //   label: "Settings",
+    //   description: "Configure system settings"
+    // }
+  ];
+
+  // Default roles data (will be replaced with API data)
+  const defaultRoles = [
+    {
+      _id: "1",
+      name: "admin",
+      description: "Full system access with all permissions",
+      permissions: [],
+      userCount: 3
+    },
+    {
+      _id: "2", 
+      name: "hr",
+      description: "Human Resources management access",
+      permissions: [],
+      userCount: 5
+    },
+    {
+      _id: "3",
+      name: "employee", 
+      description: "Basic employee self-service access",
+      permissions: [],
+      userCount: 45
+    }
+  ];
+
+  const [roles, setRoles] = useState([]);
+  const [modules, setModules] = useState(defaultModules);
   const [selectedRole, setSelectedRole] = useState(null);
   const [permissions, setPermissions] = useState({});
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const permissionLevels = [
-    { value: 'none', label: 'No Access', color: 'bg-gray-100 text-gray-600' },
-    { value: 'read-self', label: 'Read Self', color: 'bg-blue-100 text-blue-700' },
-    { value: 'read', label: 'Read Only', color: 'bg-green-100 text-green-700' },
-    { value: 'crud', label: 'Full Access', color: 'bg-purple-100 text-purple-700' }
+  const accessTypes = [
+    { key: "read", label: "Read", color: "blue" },
+    { key: "write", label: "Write", color: "orange" },
+    { key: "create", label: "Create", color: "green" },
+    { key: "delete", label: "Delete", color: "red" }
   ];
 
-  useEffect(() => {
-    if (roles.length > 0 && !selectedRole) {
-      setSelectedRole(roles[0]);
-      initializePermissions(roles[0]);
+  // API request function
+  const apiRequest = async (url, method = 'GET', data = null) => {
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+
+    if (data && (method === 'POST' || method === 'PUT')) {
+      options.body = JSON.stringify(data);
     }
-  }, [roles, selectedRole]);
+
+    try {
+      const response = await fetch(url, options);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Something went wrong');
+      }
+
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const convertAccessToFlags = (level) => {
+    switch (level) {
+      case "read":
+        return { read: true, write: false, create: false, delete: false };
+      case "read-self":
+        return { read: true, write: false, create: false, delete: false };
+      case "crud":
+        return { read: true, write: true, create: true, delete: true };
+      default:
+        return { read: false, write: false, create: false, delete: false };
+    }
+  };
+
+  const convertFlagsToAccess = (flags) => {
+    if (!flags.read && !flags.write && !flags.create && !flags.delete) return "none";
+    if (flags.read && !flags.write && !flags.create && !flags.delete) return "read";
+    if (flags.read && flags.write && flags.create && flags.delete) return "crud";
+    return "custom";
+  };
+
+  const getAccessLevelColor = (level) => {
+    switch (level) {
+      case "none": return "gray";
+      case "read": return "blue";
+      case "read-self": return "purple";
+      case "crud": return "green";
+      case "custom": return "orange";
+      default: return "gray";
+    }
+  };
+
+  // Fetch roles from API
+  const fetchRoles = async () => {
+    try {
+      setLoading(true);
+      const response = await apiRequest('http://localhost:5000/api/settings/roles/roles');
+      setRoles(response.data || defaultRoles);
+      
+      // Select first role by default
+      if (response.data && response.data.length > 0) {
+        setSelectedRole(response.data[0]);
+        initializePermissions(response.data[0]);
+      } else {
+        // Fallback to default roles
+        setRoles(defaultRoles);
+        setSelectedRole(defaultRoles[0]);
+        initializePermissions(defaultRoles[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+      // Fallback to default roles if API fails
+      setRoles(defaultRoles);
+      setSelectedRole(defaultRoles[0]);
+      initializePermissions(defaultRoles[0]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const initializePermissions = (role) => {
-    const initialPermissions = {};
-    modules.forEach(module => {
-      const existingPermission = role.permissions?.find(p => p.module === module.module);
-      initialPermissions[module.module] = existingPermission?.accessLevel || 'none';
+    const initial = {};
+    modules.forEach((m) => {
+      const found = role.permissions?.find((p) => p.module === m.module);
+      const level = found?.accessLevel || "none";
+      initial[m.module] = convertAccessToFlags(level);
     });
-    setPermissions(initialPermissions);
-  };
-
-  const handleRoleChange = (roleId) => {
-    const role = roles.find(r => r._id === roleId);
-    setSelectedRole(role);
-    initializePermissions(role);
-    setSuccess(null);
+    setPermissions(initial);
     setError(null);
+    setSuccess(null);
   };
 
-  const handlePermissionChange = (module, accessLevel) => {
-    setPermissions(prev => ({
+  const handleCheckbox = (module, field) => {
+    setPermissions((prev) => ({
       ...prev,
-      [module]: accessLevel
+      [module]: {
+        ...prev[module],
+        [field]: !prev[module][field],
+        // Automatically enable read if any other permission is enabled
+        ...(field !== "read" && !prev[module][field] ? { read: true } : {}),
+      },
     }));
   };
 
@@ -68,52 +263,52 @@ const PermissionsManager = () => {
       setSaving(true);
       setError(null);
 
-      const permissionsArray = Object.entries(permissions).map(([module, accessLevel]) => ({
-        module,
-        accessLevel
-      }));
+      const permissionsArray = Object.entries(permissions).map(
+        ([module, flags]) => ({
+          module,
+          accessLevel: convertFlagsToAccess(flags),
+        })
+      );
 
-      const baseUrl = process.env.NODE_ENV === 'production' 
-        ? window.location.origin 
-        : 'http://localhost:5000';
+      // API call to update permissions
+      await apiRequest(
+        `http://localhost:5000/api/settings/roles/roles/${selectedRole._id}/permissions`, 
+        'PUT', 
+        { permissions: permissionsArray }
+      );
 
-      const response = await apiRequest(`${baseUrl}/api/settings/roles/${selectedRole._id}/permissions`, {
-        method: 'PUT',
-        body: JSON.stringify({ permissions: permissionsArray })
-      });
-
-      if (response.success) {
-        setSuccess('Permissions updated successfully');
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        throw new Error(response.message || 'Failed to save permissions');
-      }
+      setSuccess('Permissions updated successfully!');
+      
+      // Refresh roles data
+      fetchRoles();
+      
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err.message || 'Failed to save permissions');
-      console.error('Error saving permissions:', err);
+      const errorMessage = err.message || 'Failed to save permissions';
+      setError(errorMessage);
       setTimeout(() => setError(null), 5000);
     } finally {
       setSaving(false);
     }
   };
 
-  const getPermissionColor = (level) => {
-    const permission = permissionLevels.find(p => p.value === level);
-    return permission ? permission.color : 'bg-gray-100 text-gray-600';
+  const handleRoleChange = (role) => {
+    setSelectedRole(role);
+    initializePermissions(role);
   };
 
-  const getPermissionLabel = (level) => {
-    const permission = permissionLevels.find(p => p.value === level);
-    return permission ? permission.label : 'No Access';
-  };
+  // Load roles on component mount
+  useEffect(() => {
+    fetchRoles();
+  }, []);
 
   if (loading) {
     return (
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-8">
           <div className="flex items-center justify-center">
-            <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-            Loading permissions...
+            <RefreshCw className="w-6 h-6 animate-spin mr-3" />
+            <span className="text-lg">Loading permissions...</span>
           </div>
         </CardContent>
       </Card>
@@ -121,145 +316,254 @@ const PermissionsManager = () => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="w-6 h-6" />
-          Role Permissions Management
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Status Messages */}
-        {error && (
-          <div className="p-3 bg-red-50 text-red-700 rounded-lg border border-red-200">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="p-3 bg-green-50 text-green-700 rounded-lg border border-green-200">
-            {success}
-          </div>
-        )}
+    <div className="flex flex-col lg:flex-row gap-6">
+      
+      {/* LEFT SIDEBAR - ROLES LIST */}
+      <div className="w-full lg:w-64 flex-shrink-0">
+        <Card className="sticky top-6">
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Shield className="w-5 h-5 text-blue-600" />
+              Roles
+            </CardTitle>
+          </CardHeader>
 
-        {/* Role Selection */}
-        <div className="space-y-2">
-          <Label htmlFor="role-select">Select Role</Label>
-          <Select 
-            value={selectedRole?._id} 
-            onValueChange={handleRoleChange}
-            disabled={roles.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={roles.length === 0 ? "No roles available" : "Choose a role"} />
-            </SelectTrigger>
-            <SelectContent>
-              {roles.map(role => (
-                <SelectItem key={role._id} value={role._id}>
+          <CardContent className="p-0">
+            <div className="space-y-1 py-2">
+              {roles.map((role) => (
+                <button
+                  key={role._id}
+                  onClick={() => handleRoleChange(role)}
+                  className={`w-full text-left p-4 transition-all duration-200 ${
+                    selectedRole?._id === role._id
+                      ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600 font-semibold shadow-sm"
+                      : "hover:bg-gray-50 text-gray-700 hover:text-gray-900"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="capitalize">{role.name}</span>
-                    <div className="flex items-center gap-2 ml-2">
-                      {role.isSystem && (
-                        <Badge variant="secondary" className="text-xs">
-                          System
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="text-xs">
-                        {role.userCount || 0} users
-                      </Badge>
-                    </div>
+                    <span className="capitalize font-medium">{role.name}</span>
+                    {selectedRole?._id === role._id && (
+                      <CheckCircle className="w-4 h-4 text-blue-600" />
+                    )}
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
 
-        {/* Permissions Grid */}
-        {selectedRole && modules.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">
-                  Permissions for {selectedRole.name}
-                </h3>
-                {selectedRole.description && (
-                  <p className="text-sm text-muted-foreground">
-                    {selectedRole.description}
+                  <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                    <Users className="w-3 h-3" />
+                    <span>{role.userCount || 0} users</span>
+                  </div>
+
+                  <p className="text-xs text-gray-400 mt-1 text-left">
+                    {role.description}
                   </p>
-                )}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* RIGHT CONTENT - PERMISSIONS */}
+      <div className="flex-1 min-w-0">
+        <Card>
+          <CardHeader className="border-b bg-gray-50/50">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  <span className="capitalize text-blue-600">{selectedRole?.name}</span>
+                </CardTitle>
+                {/* <p className="text-sm text-gray-500 mt-1">
+                  Configure access permissions for this role across all system modules
+                </p> */}
               </div>
+
               <Button 
                 onClick={savePermissions} 
                 disabled={saving}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                size="lg"
               >
                 {saving ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                {saving ? 'Saving...' : 'Save Permissions'}
+                {saving ? "Saving Changes..." : "Save Permissions"}
               </Button>
             </div>
+          </CardHeader>
 
-            <div className="grid gap-4">
-              {modules.map(module => (
-                <div key={module.module} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-semibold capitalize">{module.label}</h4>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {module.description}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {module.pages.map(page => (
-                          <Badge key={page.path} variant="outline" className="text-xs">
-                            {page.label}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <Select
-                      value={permissions[module.module] || 'none'}
-                      onValueChange={(value) => handlePermissionChange(module.module, value)}
-                    >
-                      <SelectTrigger className={`w-40 ${getPermissionColor(permissions[module.module] || 'none')}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {permissionLevels.map(level => (
-                          <SelectItem key={level.value} value={level.value}>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-3 h-3 rounded-full ${level.color.split(' ')[0]}`} />
-                              {level.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className={`mt-3 p-2 rounded text-sm ${getPermissionColor(permissions[module.module] || 'none')}`}>
-                    Current: {getPermissionLabel(permissions[module.module] || 'none')}
-                    {permissions[module.module] === 'none' && ' - No access to this module'}
-                    {permissions[module.module] === 'read-self' && ' - Can only view their own data'}
-                    {permissions[module.module] === 'read' && ' - Can view all data but cannot modify'}
-                    {permissions[module.module] === 'crud' && ' - Full access: create, read, update, and delete'}
-                  </div>
+          <CardContent className="p-6">
+            {/* Status Messages */}
+            {error && (
+              <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 mb-6 flex items-center gap-3">
+                <XCircle className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Error</p>
+                  <p className="text-sm">{error}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
+            
+            {success && (
+              <div className="p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 mb-6 flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Success</p>
+                  <p className="text-sm">{success}</p>
+                </div>
+              </div>
+            )}
 
-        {(!selectedRole || modules.length === 0) && (
-          <div className="text-center p-6 text-muted-foreground">
-            {roles.length === 0 ? 'No roles available' : 'No modules available for permissions'}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            {/* Permissions Grid */}
+            <div className="space-y-6">
+              {modules.map((module) => {
+                const modulePermissions = permissions[module.module] || {
+                  read: false,
+                  write: false,
+                  create: false,
+                  delete: false,
+                };
+
+                const accessLevel = convertFlagsToAccess(modulePermissions);
+                const accessColor = getAccessLevelColor(accessLevel);
+
+                return (
+                  <div key={module.module} className="border border-gray-200 rounded-xl p-5 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg capitalize text-gray-900">
+                          {module.label}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">{module.description}</p>
+                      </div>
+
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs font-medium capitalize ${
+                          accessLevel === 'none' ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                          accessLevel === 'read' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          accessLevel === 'crud' ? 'bg-green-50 text-green-700 border-green-200' :
+                          'bg-orange-50 text-orange-700 border-orange-200'
+                        }`}
+                      >
+                        {accessLevel} Access
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {accessTypes.map((access) => (
+                        <label
+                          key={access.key}
+                          className={`flex items-center gap-3 p-3 border rounded-lg transition-all cursor-pointer ${
+                            modulePermissions[access.key]
+                              ? access.key === 'read' ? 'border-blue-300 bg-blue-50' :
+                                access.key === 'write' ? 'border-orange-300 bg-orange-50' :
+                                access.key === 'create' ? 'border-green-300 bg-green-50' :
+                                'border-red-300 bg-red-50'
+                              : 'border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={modulePermissions[access.key]}
+                            onChange={() => handleCheckbox(module.module, access.key)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            disabled={access.key !== "read" && !modulePermissions.read}
+                          />
+                          <span className={`font-medium ${
+                            modulePermissions[access.key] 
+                              ? access.key === 'read' ? 'text-blue-700' :
+                                access.key === 'write' ? 'text-orange-700' :
+                                access.key === 'create' ? 'text-green-700' :
+                                'text-red-700'
+                              : 'text-gray-700'
+                          }`}>
+                            {access.label}
+                          </span>
+                          {access.key !== "read" && !modulePermissions.read && (
+                            <span className="text-xs text-gray-400 ml-auto">(Read required)</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* Quick Action Buttons */}
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPermissions(prev => ({
+                            ...prev,
+                            [module.module]: { read: true, write: false, create: false, delete: false }
+                          }));
+                        }}
+                        className="text-xs"
+                      >
+                        Read Only
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPermissions(prev => ({
+                            ...prev,
+                            [module.module]: { read: true, write: true, create: true, delete: true }
+                          }));
+                        }}
+                        className="text-xs"
+                      >
+                        Full Access
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPermissions(prev => ({
+                            ...prev,
+                            [module.module]: { read: false, write: false, create: false, delete: false }
+                          }));
+                        }}
+                        className="text-xs"
+                      >
+                        No Access
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {modules.length === 0 && (
+                <div className="text-center p-12 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                  <Shield className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+                  <p className="text-lg font-medium">No modules available</p>
+                  <p className="text-sm mt-1">System modules will appear here once configured.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Summary Section */}
+            <div className="mt-8 p-4 bg-gray-50 rounded-lg border">
+              <h4 className="font-semibold text-gray-900 mb-2">Permission Summary</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                {modules.map(module => {
+                  const level = convertFlagsToAccess(permissions[module.module] || {});
+                  return (
+                    <div key={module.module} className="flex items-center justify-between">
+                      <span className="capitalize text-gray-600">{module.label}:</span>
+                      <Badge variant="secondary" className="text-xs capitalize">
+                        {level}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 };
 

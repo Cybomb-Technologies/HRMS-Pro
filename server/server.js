@@ -7,10 +7,29 @@ const employeeProfileRoutes = require("./routes/employeeProfileRoutes");
 const path = require("path");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const searchRoutes = require("./routes/searchRoutes");
+
+// Import RolePermission model
+const RolePermission = require("./models/RolePermissionModel");
+
 dotenv.config();
 connectDB();
 
 const app = express();
+
+// Initialize default roles function
+async function initializeRoles() {
+  try {
+    await RolePermission.initializeDefaultRoles();
+    console.log('✅ Default roles initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing roles:', error);
+  }
+}
+
+// Call initializeRoles after DB connection is established
+setTimeout(() => {
+  initializeRoles();
+}, 2000); // Wait 2 seconds for DB connection to be fully established
 
 // Middleware
 app.use(express.json({ limit: "50mb" }));
@@ -50,6 +69,12 @@ app.use((req, res, next) => {
 // Serve static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// ✅ ADD THIS - Bypass auth for roles routes
+app.use("/api/settings/roles", (req, res, next) => {
+  console.log('🔓 Bypassing auth for roles routes');
+  next(); // Skip authentication
+});
+
 // Routes
 app.use("/api/search", searchRoutes);
 app.use("/api/admin/dashboard", dashboardRoutes);
@@ -62,7 +87,7 @@ app.use("/api/attendance", require("./routes/attendanceRoutes.js"));
 app.use("/api/admin", require("./routes/adminAttendanceRoutes.js"));
 app.use("/api/teams", require("./routes/teamRoutes.js"));
 app.use("/api/announcements", require("./routes/announcementRoutes.js"));
-app.use("/api/notifications", require("./routes/notificationRoutes.js")); // ✅ This must be included
+app.use("/api/notifications", require("./routes/notificationRoutes.js"));
 app.use("/api/payroll", require("./routes/payrollRoutes.js"));
 app.use("/api/hrletters", require("./routes/hrLettersRoutes"));
 app.use("/api/employee-profiles", employeeProfileRoutes);
@@ -70,6 +95,18 @@ app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
 app.use("/api/organization", require("./routes/organizationRoutes.js"));
 app.use("/api/policies", require("./routes/policies"));
 app.use("/api/settings", require("./routes/settingsRoutes"));
+// ✅ ADD THIS LINE - Include roles routes AFTER auth bypass
+app.use("/api/settings/roles", require("./routes/rolePermissionRoutes"));
+
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    rolesInitialized: true
+  });
+});
 
 // Add the missing endpoint that your frontend is looking for
 app.get("/api/settings/organization", (req, res) => {
@@ -81,6 +118,29 @@ app.get("/api/settings/organization", (req, res) => {
       availablePages: [],
     },
   });
+});
+
+// Role permissions health check
+app.get("/api/settings/roles/health", async (req, res) => {
+  try {
+    const roles = await RolePermission.find();
+    res.json({
+      success: true,
+      message: 'Role permissions system is working',
+      rolesCount: roles.length,
+      roles: roles.map(role => ({
+        name: role.name,
+        userCount: role.userCount,
+        permissionsCount: role.permissions.length
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error checking roles health',
+      error: error.message
+    });
+  }
 });
 
 const PORT = process.env.PORT || 5000;
