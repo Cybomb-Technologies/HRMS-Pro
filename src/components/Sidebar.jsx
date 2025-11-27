@@ -127,6 +127,11 @@ const allMenuItems = [
     label: "HR Letters",
     path: "/hr-letters",
     roles: ["admin", "hr"],
+  }, {
+    icon: FileText,
+    label: "Letter Templates",
+    path: "/letter-templates",
+    roles: ["admin", "hr"],
   },
   {
     icon: Settings,

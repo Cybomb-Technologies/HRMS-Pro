@@ -41,11 +41,15 @@ import PolicyEmployee from "./pages/EmployeePolicy";
 import EmployeeDashboard from "./components/Dashboard/EmployeeDashboard";
 import EmpOnboarding from "./pages/emponboarding";
 import EmpOffboarding from "./pages/empoffboarding";
+import LetterTemplates from "./pages/LetterTemplates";
+import EditorPage from "./pages/EditorPage";
 
 const AppRoutes = () => {
   const { user } = useAuth();
   const isEmployee = user?.role === "employee";
-  const ishr = user?.role === "hr";
+  const isHR = user?.role === "hr";
+  const isAdmin = user?.role === "admin";
+  const isAdminOrHR = isAdmin || isHR;
 
   return (
     <Routes>
@@ -64,7 +68,7 @@ const AppRoutes = () => {
         path="/profile"
         element={
           <ProtectedRoute>
-            <Layout>{ishr && <EmployeeDashboard />}</Layout>
+            <Layout>{isHR && <EmployeeDashboard />}</Layout>
           </ProtectedRoute>
         }
       />
@@ -181,7 +185,7 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Layout>
-              {ishr && <AttendanceTab />}
+              {isHR && <AttendanceTab />}
               {isEmployee ? <AttendanceTab /> : <AttendanceSection />}
             </Layout>
           </ProtectedRoute>
@@ -212,11 +216,32 @@ const AppRoutes = () => {
         }
       />
       <Route
+        path="/letter-templates"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              {isEmployee ? <Navigate to="/" replace /> : <LetterTemplates />}
+            </Layout>
+          </ProtectedRoute>
+        }
+      /> 
+      <Route
         path="/hr-letters"
         element={
           <ProtectedRoute>
             <Layout>
               {isEmployee ? <Navigate to="/" replace /> : <HRLetters />}
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      {/* Editor Route - Only for Admin and HR */}
+      <Route
+        path="/editor/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              {isAdminOrHR ? <EditorPage /> : <Navigate to="/" replace />}
             </Layout>
           </ProtectedRoute>
         }

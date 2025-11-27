@@ -7,6 +7,8 @@ const employeeProfileRoutes = require("./routes/employeeProfileRoutes");
 const path = require("path");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const searchRoutes = require("./routes/searchRoutes");
+const fileUpload = require('express-fileupload'); // ADD THIS
+const editorRoutes = require('./routes/editorRoutes');
 
 // Import RolePermission model
 const RolePermission = require("./models/RolePermissionModel");
@@ -34,6 +36,19 @@ setTimeout(() => {
 // Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// ADD THIS - File upload middleware (MUST come after express.json)
+app.use(fileUpload({
+  createParentPath: true,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  abortOnLimit: true,
+  responseOnLimit: 'File size exceeds the 5MB limit',
+  useTempFiles: false, // Store files in memory instead of temp files
+  safeFileNames: true,
+  preserveExtension: true
+}));
 
 // Enhanced CORS configuration - handle preflight properly
 app.use((req, res, next) => {
@@ -95,6 +110,8 @@ app.use("/api/timesheets", require("./routes/timesheetRoutes.js"));
 app.use("/api/organization", require("./routes/organizationRoutes.js"));
 app.use("/api/policies", require("./routes/policies"));
 app.use("/api/settings", require("./routes/settingsRoutes"));
+app.use('/api/letter-templates', require('./routes/letterTemplates'));
+app.use('/api/editor', editorRoutes);
 // ✅ ADD THIS LINE - Include roles routes AFTER auth bypass
 app.use("/api/settings/roles", require("./routes/rolePermissionRoutes"));
 
