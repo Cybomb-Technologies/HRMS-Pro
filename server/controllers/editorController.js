@@ -1,3 +1,5 @@
+// controllers/editorController.js
+
 const LetterTemplate = require("../models/LetterTemplate");
 const UserDocument = require("../models/UserDocument");
 const User = require("../models/User");
@@ -8,13 +10,17 @@ const mongoose = require("mongoose");
 // =========================
 // ENV VARS
 // =========================
-let ONLYOFFICE_SERVER, APP_JWT_SECRET, DS_JWT_SECRET, APP_INTERNAL_URL, DS_PUBLIC_URL;
+let ONLYOFFICE_SERVER,
+  APP_JWT_SECRET,
+  DS_JWT_SECRET,
+  APP_INTERNAL_URL,
+  DS_PUBLIC_URL;
 
 function initializeEnv() {
   ONLYOFFICE_SERVER = process.env.ONLYOFFICE_URL || "http://localhost:8083";
   APP_JWT_SECRET = process.env.JWT_SECRET;
   DS_JWT_SECRET = process.env.DOCUMENT_SERVER_JWT_SECRET;
-  APP_INTERNAL_URL = process.env.APP_INTERNAL_URL || "http://host.docker.internal:5000";
+  APP_INTERNAL_URL = process.env.APP_INTERNAL_URL || "http://localhost:5000";
   DS_PUBLIC_URL = process.env.DS_PUBLIC_URL || "http://localhost:8083";
 }
 
@@ -28,15 +34,22 @@ function getEnv() {
     DS_PUBLIC_URL,
   });
 
-  return { ONLYOFFICE_SERVER, APP_JWT_SECRET, DS_JWT_SECRET, APP_INTERNAL_URL, DS_PUBLIC_URL };
+  return {
+    ONLYOFFICE_SERVER,
+    APP_JWT_SECRET,
+    DS_JWT_SECRET,
+    APP_INTERNAL_URL,
+    DS_PUBLIC_URL,
+  };
 }
 
 // =========================
-// HELPERS
+// AUTH HELPERS
 // =========================
 function extractToken(req) {
-  if (req.headers.authorization?.startsWith("Bearer "))
+  if (req.headers.authorization?.startsWith("Bearer ")) {
     return req.headers.authorization.slice(7);
+  }
   if (req.query.token) return req.query.token;
   return null;
 }
@@ -48,7 +61,6 @@ async function verifyToken(req, allowDS = false) {
 
   try {
     const decoded = jwt.verify(token, APP_JWT_SECRET);
-
     const userId = decoded.userId || decoded.id;
     if (!userId) throw new Error("Token missing user id");
 
@@ -68,7 +80,7 @@ async function verifyToken(req, allowDS = false) {
 }
 
 // =========================
-// FIX FILE TYPE
+// FILE TYPE HELPERS
 // =========================
 function cleanExt(filename) {
   if (!filename) return "docx";
@@ -95,68 +107,125 @@ function extToDocTypeAndFileType(filename) {
 }
 
 // =========================
-// GET CONFIG
+// CREATE DOC FROM TEMPLATE
 // =========================
+// POST /api/editor/template/:id/create
+// body: { name?: string }
+exports.createDocumentFromTemplate = async (req, res) => {
+  try {
+    initializeEnv();
+    const { user } = await verifyToken(req);
+
+    const templateId = req.params.id;
+    const customName = (req.body?.name || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(templateId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid template ID" });
+    }
+
+    const template = await LetterTemplate.findById(templateId);
+    if (!template) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Template not found" });
+    }
+    if (!template.file || !template.file.fileId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Template file not found" });
+    }
+
+    const originalName =
+      template.file.fileName || `${template.name || "Document"}.docx`;
+    const ext = cleanExt(originalName);
+    const baseName = originalName.replace(/\.[^/.]+$/, "");
+    const newFileName = `${baseName}-${Date.now()}.${ext}`;
+
+    // Clone underlying file
+    const newFileId = await gridFsService.duplicateFile(
+      template.file.fileId,
+      newFileName
+    );
+
+    const finalName =
+      customName ||
+      `${template.name} (Copy ${new Date().toLocaleString()})`;
+
+    const userDoc = await UserDocument.create({
+      user: user._id,
+      originalTemplate: template._id,
+      name: finalName,
+      file: {
+        fileId: newFileId,
+        fileName: newFileName,
+        fileSize: template.file.fileSize,
+        fileType:
+          template.file.fileType ||
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+    });
+
+    console.log(
+      `✅ New user document created from template ${template._id} for user ${user.email}: ${userDoc._id}`
+    );
+
+    return res.json({
+      success: true,
+      documentId: userDoc._id,
+      document: userDoc,
+    });
+  } catch (error) {
+    console.error("❌ createDocumentFromTemplate ERROR:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: error.message || "Server error" });
+  }
+};
+
+// =========================
+// GET EDITOR CONFIG
+// =========================
+//  - :id is ALWAYS a UserDocument _id
 exports.getEditorConfig = async (req, res) => {
   try {
     initializeEnv();
     const { DS_JWT_SECRET, APP_INTERNAL_URL, DS_PUBLIC_URL } = getEnv();
     const { user, token } = await verifyToken(req);
 
-    const templateId = req.params.id;
-    console.log(`📋 Editor config request — template: ${templateId} user: ${user.email}`);
+    const docId = req.params.id;
+    console.log(`📋 Editor config request — docId: ${docId} user: ${user.email}`);
 
-    if (!mongoose.Types.ObjectId.isValid(templateId))
-      return res.status(400).json({ success: false, message: "Invalid template ID" });
+    if (!mongoose.Types.ObjectId.isValid(docId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid document ID" });
+    }
 
-    let userDoc = await UserDocument.findOne({
+    const userDoc = await UserDocument.findOne({
+      _id: docId,
       user: user._id,
-      originalTemplate: templateId,
     });
 
-    // ===============================
-    // FIRST TIME → CLONE TEMPLATE
-    // ===============================
     if (!userDoc) {
-      console.log("🆕 First-time open — cloning template");
-
-      const template = await LetterTemplate.findById(templateId);
-      if (!template) return res.status(404).json({ success: false, message: "Template not found" });
-
-      const newName = template.file.fileName.replace(".ocx", ".docx");
-
-      const newFileId = await gridFsService.duplicateFile(template.file.fileId, newName);
-
-      userDoc = await UserDocument.create({
-        user: user._id,
-        originalTemplate: templateId,
-        name: `${template.name} (My Document)`,
-        file: {
-          fileId: newFileId,
-          fileName: newName,
-          fileSize: template.file.fileSize,
-          fileType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        },
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Document not found" });
+    }
+    if (!userDoc.file || !userDoc.file.fileName) {
+      return res
+        .status(500)
+        .json({ success: false, message: "User document file missing" });
     }
 
-    // ===============================
-    // EXISTING DOC
-    // ===============================
-    else {
-      console.log("♻️ Using existing document:", userDoc._id.toString());
-    }
-
-    // ===============================
-    // BUILD CONFIG
-    // ===============================
-    const { documentType, fileType } = extToDocTypeAndFileType(userDoc.file.fileName);
-
+    const { documentType, fileType } = extToDocTypeAndFileType(
+      userDoc.file.fileName
+    );
     console.log("🧩 Clean file type:", fileType);
 
-   const fileUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/file?token=${token}`;
-const callbackUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/save?token=${token}`;
-
+    const fileUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/file?token=${token}`;
+    const callbackUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/save?token=${token}`;
 
     const configPayload = {
       type: "desktop",
@@ -165,7 +234,7 @@ const callbackUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/save?
         title: userDoc.name,
         fileType,
         url: fileUrl,
-        key: `${userDoc._id}_${Date.now()}`,
+        key: `${userDoc._id}_${userDoc.updatedAt.getTime()}`,
       },
       editorConfig: {
         callbackUrl,
@@ -174,10 +243,18 @@ const callbackUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/save?
           id: String(user._id),
           name: user.email,
         },
+        customization: {
+          about: false,
+          feedback: false,
+          support: false,
+          logo: { image: "", imageEmbedded: "", url: "" },
+        },
       },
     };
 
-    const tokenForDS = jwt.sign(configPayload, DS_JWT_SECRET, { expiresIn: "24h" });
+    const tokenForDS = jwt.sign(configPayload, DS_JWT_SECRET, {
+      expiresIn: "24h",
+    });
 
     return res.json({
       success: true,
@@ -187,12 +264,14 @@ const callbackUrl = `${APP_INTERNAL_URL}/api/editor/userdoc/${userDoc._id}/save?
     });
   } catch (error) {
     console.error("❌ CONFIG ERROR:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res
+      .status(500)
+      .json({ success: false, message: error.message || "Server error" });
   }
 };
 
 // =========================
-// FILE LOAD
+// GET FILE (OnlyOffice loads)
 // =========================
 exports.getFile = async (req, res) => {
   try {
@@ -200,39 +279,90 @@ exports.getFile = async (req, res) => {
     const { user, ds } = await verifyToken(req, true);
     const docId = req.params.id;
 
+    if (!mongoose.Types.ObjectId.isValid(docId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid document ID" });
+    }
+
     const userDoc = await UserDocument.findById(docId);
-    if (!ds && userDoc.user.toString() !== user._id.toString())
-      return res.status(403).json({ success: false, message: "Forbidden" });
+    if (!userDoc || !userDoc.file?.fileId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Document not found" });
+    }
+
+    if (!ds && userDoc.user.toString() !== user._id.toString()) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Access denied" });
+    }
 
     const stream = await gridFsService.getFileStream(userDoc.file.fileId);
 
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-    res.setHeader("Content-Disposition", `inline; filename="${userDoc.file.fileName}"`);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${userDoc.file.fileName || "document.docx"}"`
+    );
     stream.pipe(res);
   } catch (error) {
     console.error("❌ getFile ERROR:", error);
-    return res.status(500).json({ success: false, message: "File load failed" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to stream file" });
   }
 };
 
 // =========================
-// FILE SAVE
+// SAVE FILE (OnlyOffice callback)
 // =========================
 exports.saveFile = async (req, res) => {
   try {
     initializeEnv();
     const { user, ds } = await verifyToken(req, true);
-
-    const { status, url } = req.body;
     const docId = req.params.id;
+    const { status, url } = req.body;
 
-    if (![2].includes(Number(status)))
-      return res.json({ error: 0 });
+    console.log("💾 Save callback:", { docId, status, url });
+
+    if (!mongoose.Types.ObjectId.isValid(docId)) {
+      return res.json({ error: 1, message: "Invalid document ID" });
+    }
 
     const userDoc = await UserDocument.findById(docId);
-    const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
+    if (!userDoc) return res.json({ error: 1, message: "Document not found" });
+
+    if (!ds && userDoc.user.toString() !== user._id.toString()) {
+      return res.json({ error: 1, message: "Access denied" });
+    }
+
+    // Only save on status 2 (document is ready for saving)
+    // Status 4 = closed without changes → ignore
+    if (![2, 4].includes(Number(status))) {
+      console.log("📝 No changes to save, status:", status);
+      return res.json({ error: 0 });
+    }
+    if (Number(status) === 4) {
+      console.log("📝 Document closed without changes");
+      return res.json({ error: 0 });
+    }
+
+    const fetch = (...args) =>
+      import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
     const response = await fetch(url);
+    if (!response.ok) {
+      console.error("❌ Failed to download updated file from OnlyOffice");
+      return res.json({
+        error: 1,
+        message: "Failed to download updated file",
+      });
+    }
+
     const newFileId = await gridFsService.replaceFile(
       userDoc.file.fileId,
       response.body,
@@ -241,11 +371,59 @@ exports.saveFile = async (req, res) => {
     );
 
     userDoc.file.fileId = newFileId;
-    await userDoc.save();
+    await userDoc.save(); // timestamps:true → updatedAt auto updated
 
+    console.log(`✅ Document saved successfully for user ${user.email}`);
     return res.json({ error: 0 });
   } catch (error) {
     console.error("❌ SAVE ERROR:", error);
-    return res.json({ error: 1, message: error.message });
+    return res.json({ error: 1, message: "Failed to save document" });
+  }
+};
+
+// =========================
+// GET USER DOCUMENTS (RECENT LETTERS)
+// =========================
+// GET /api/editor/user/documents?page=&limit=&category=
+exports.getUserDocuments = async (req, res) => {
+  try {
+    initializeEnv();
+    const { user } = await verifyToken(req);
+
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+    const categoryId = req.query.category || null;
+
+    const filter = { user: user._id };
+
+    if (categoryId) {
+      const templateIds = await LetterTemplate.find({
+        category: categoryId,
+      }).distinct("_id");
+      filter.originalTemplate = { $in: templateIds };
+    }
+
+    const [docs, total] = await Promise.all([
+      UserDocument.find(filter)
+        .populate("originalTemplate", "name category")
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      UserDocument.countDocuments(filter),
+    ]);
+
+    return res.json({
+      success: true,
+      documents: docs,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+    });
+  } catch (error) {
+    console.error("❌ Get User Documents Error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: error.message || "Server error" });
   }
 };
